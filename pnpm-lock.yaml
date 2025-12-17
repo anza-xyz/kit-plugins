@@ -15,8 +15,8 @@ importers:
         specifier: ^2.29.8
         version: 2.29.8(@types/node@25.0.3)
       '@solana/eslint-config-solana':
-        specifier: ^5.0.0
-        version: 5.0.1(@eslint/js@9.39.2)(@types/eslint@9.6.1)(@types/eslint__js@9.14.0)(eslint-plugin-jest@29.5.0(@typescript-eslint/eslint-plugin@8.50.0(@typescript-eslint/parser@8.50.0(eslint@9.39.2)(typescript@5.9.3))(eslint@9.39.2)(typescript@5.9.3))(eslint@9.39.2)(jest@30.2.0(@types/node@25.0.3))(typescript@5.9.3))(eslint-plugin-react-hooks@7.0.1(eslint@9.39.2))(eslint-plugin-simple-import-sort@12.1.1(eslint@9.39.2))(eslint-plugin-sort-keys-fix@1.1.2)(eslint-plugin-typescript-sort-keys@3.3.0(@typescript-eslint/parser@8.50.0(eslint@9.39.2)(typescript@5.9.3))(eslint@9.39.2)(typescript@5.9.3))(eslint@9.39.2)(globals@14.0.0)(jest@30.2.0(@types/node@25.0.3))(typescript-eslint@8.50.0(eslint@9.39.2)(typescript@5.9.3))(typescript@5.9.3)
+        specifier: ^6.0.0
+        version: 6.0.0(@eslint/js@9.39.2)(@types/eslint@9.6.1)(@types/eslint__js@9.14.0)(eslint-plugin-jest@29.5.0(@typescript-eslint/eslint-plugin@8.50.0(@typescript-eslint/parser@8.50.0(eslint@9.39.2)(typescript@5.9.3))(eslint@9.39.2)(typescript@5.9.3))(eslint@9.39.2)(jest@30.2.0(@types/node@25.0.3))(typescript@5.9.3))(eslint-plugin-react-hooks@7.0.1(eslint@9.39.2))(eslint-plugin-simple-import-sort@12.1.1(eslint@9.39.2))(eslint-plugin-sort-keys-fix@1.1.2)(eslint-plugin-typescript-sort-keys@3.3.0(@typescript-eslint/parser@8.50.0(eslint@9.39.2)(typescript@5.9.3))(eslint@9.39.2)(typescript@5.9.3))(eslint@9.39.2)(globals@14.0.0)(jest@30.2.0(@types/node@25.0.3))(typescript-eslint@8.50.0(eslint@9.39.2)(typescript@5.9.3))(typescript@5.9.3)
       '@solana/prettier-config-solana':
         specifier: 0.0.6
         version: 0.0.6(prettier@3.7.4)
@@ -864,8 +864,8 @@ packages:
     peerDependencies:
       typescript: '>=5.3.3'
 
-  '@solana/eslint-config-solana@5.0.1':
-    resolution: {integrity: sha512-Fnrd5UWTESJmLAwVs7O+VQtQx52E41UoEmW6UGELlxMxZPAH2dQilvJaZXn8CJD1nhFky1YDN/r4BOX0B0hNNw==}
+  '@solana/eslint-config-solana@6.0.0':
+    resolution: {integrity: sha512-tl3C2ZK8buItUQNVCwnveR2iiLALr5XZ8cevswbTDQN1SA29xQWPFRYR/JPyXLd7iOGNAo4HwvIoxNmkLjdZsQ==}
     peerDependencies:
       '@eslint/js': ^9.39.1
       '@types/eslint': ^9.6.1
@@ -1452,8 +1452,8 @@ packages:
   balanced-match@1.0.2:
     resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
 
-  baseline-browser-mapping@2.9.8:
-    resolution: {integrity: sha512-Y1fOuNDowLfgKOypdc9SPABfoWXuZHBOyCS4cD52IeZBhr4Md6CLLs6atcxVrzRmQ06E7hSlm5bHHApPKR/byA==}
+  baseline-browser-mapping@2.9.9:
+    resolution: {integrity: sha512-V8fbOCSeOFvlDj7LLChUcqbZrdKD9RU/VR260piF1790vT0mfLSwGc/Qzxv3IqiTukOpNtItePa0HBpMAj7MDg==}
     hasBin: true
 
   better-path-resolve@1.0.0:
@@ -3930,7 +3930,7 @@ snapshots:
       commander: 14.0.2
       typescript: 5.9.3
 
-  '@solana/eslint-config-solana@5.0.1(@eslint/js@9.39.2)(@types/eslint@9.6.1)(@types/eslint__js@9.14.0)(eslint-plugin-jest@29.5.0(@typescript-eslint/eslint-plugin@8.50.0(@typescript-eslint/parser@8.50.0(eslint@9.39.2)(typescript@5.9.3))(eslint@9.39.2)(typescript@5.9.3))(eslint@9.39.2)(jest@30.2.0(@types/node@25.0.3))(typescript@5.9.3))(eslint-plugin-react-hooks@7.0.1(eslint@9.39.2))(eslint-plugin-simple-import-sort@12.1.1(eslint@9.39.2))(eslint-plugin-sort-keys-fix@1.1.2)(eslint-plugin-typescript-sort-keys@3.3.0(@typescript-eslint/parser@8.50.0(eslint@9.39.2)(typescript@5.9.3))(eslint@9.39.2)(typescript@5.9.3))(eslint@9.39.2)(globals@14.0.0)(jest@30.2.0(@types/node@25.0.3))(typescript-eslint@8.50.0(eslint@9.39.2)(typescript@5.9.3))(typescript@5.9.3)':
+  '@solana/eslint-config-solana@6.0.0(@eslint/js@9.39.2)(@types/eslint@9.6.1)(@types/eslint__js@9.14.0)(eslint-plugin-jest@29.5.0(@typescript-eslint/eslint-plugin@8.50.0(@typescript-eslint/parser@8.50.0(eslint@9.39.2)(typescript@5.9.3))(eslint@9.39.2)(typescript@5.9.3))(eslint@9.39.2)(jest@30.2.0(@types/node@25.0.3))(typescript@5.9.3))(eslint-plugin-react-hooks@7.0.1(eslint@9.39.2))(eslint-plugin-simple-import-sort@12.1.1(eslint@9.39.2))(eslint-plugin-sort-keys-fix@1.1.2)(eslint-plugin-typescript-sort-keys@3.3.0(@typescript-eslint/parser@8.50.0(eslint@9.39.2)(typescript@5.9.3))(eslint@9.39.2)(typescript@5.9.3))(eslint@9.39.2)(globals@14.0.0)(jest@30.2.0(@types/node@25.0.3))(typescript-eslint@8.50.0(eslint@9.39.2)(typescript@5.9.3))(typescript@5.9.3)':
     dependencies:
       '@eslint/js': 9.39.2
       '@types/eslint': 9.6.1
@@ -4693,7 +4693,7 @@ snapshots:
 
   balanced-match@1.0.2: {}
 
-  baseline-browser-mapping@2.9.8: {}
+  baseline-browser-mapping@2.9.9: {}
 
   better-path-resolve@1.0.0:
     dependencies:
@@ -4719,7 +4719,7 @@ snapshots:
 
   browserslist@4.28.1:
     dependencies:
-      baseline-browser-mapping: 2.9.8
+      baseline-browser-mapping: 2.9.9
       caniuse-lite: 1.0.30001760
       electron-to-chromium: 1.5.267
       node-releases: 2.0.27
