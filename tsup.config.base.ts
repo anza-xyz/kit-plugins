@@ -35,6 +35,7 @@ export function getBuildConfig(options: BuildOptions): TsupConfig {
                 };
             }
         },
+        external: ['node:fs', 'node:path'],
         format,
         name: platform,
         outExtension({ format }) {
