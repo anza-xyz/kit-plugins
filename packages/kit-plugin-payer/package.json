@@ -1,0 +1,70 @@
+{
+    "name": "@solana/kit-plugin-payer",
+    "version": "0.1.0",
+    "description": "Payer helpers for Kit clients",
+    "exports": {
+        "types": "./dist/types/index.d.ts",
+        "react-native": "./dist/index.react-native.mjs",
+        "browser": {
+            "import": "./dist/index.browser.mjs",
+            "require": "./dist/index.browser.cjs"
+        },
+        "node": {
+            "import": "./dist/index.node.mjs",
+            "require": "./dist/index.node.cjs"
+        }
+    },
+    "browser": {
+        "./dist/index.node.cjs": "./dist/index.browser.cjs",
+        "./dist/index.node.mjs": "./dist/index.browser.mjs"
+    },
+    "main": "./dist/index.node.cjs",
+    "module": "./dist/index.node.mjs",
+    "react-native": "./dist/index.react-native.mjs",
+    "types": "./dist/types/index.d.ts",
+    "type": "commonjs",
+    "files": [
+        "./dist/types",
+        "./dist/index.*"
+    ],
+    "sideEffects": false,
+    "keywords": [
+        "solana",
+        "kit",
+        "plugin",
+        "signer",
+        "payer"
+    ],
+    "scripts": {
+        "build": "rimraf dist && tsup && tsc -p ./tsconfig.declarations.json",
+        "dev": "vitest --project node",
+        "lint": "eslint . && prettier --check .",
+        "lint:fix": "eslint --fix . && prettier --write .",
+        "test": "pnpm test:types && pnpm test:treeshakability && pnpm test:unit",
+        "test:treeshakability": "for file in dist/index.*.mjs; do agadoo $file; done",
+        "test:types": "tsc --noEmit",
+        "test:unit": "vitest run"
+    },
+    "peerDependencies": {
+        "@solana/kit": "^5.1.0"
+    },
+    "dependencies": {
+        "@solana/kit-plugin-airdrop": "workspace:*"
+    },
+    "devDependencies": {
+        "@solana/kit": "^5.1.0",
+        "@solana/plugin-core": "workspace:*"
+    },
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/anza-xyz/kit-plugins"
+    },
+    "bugs": {
+        "url": "http://github.com/anza-xyz/kit-plugins/issues"
+    },
+    "browserslist": [
+        "supports bigint and not dead",
+        "maintained node versions"
+    ]
+}

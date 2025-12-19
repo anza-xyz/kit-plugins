@@ -85,6 +85,19 @@ importers:
         specifier: workspace:*
         version: link:../plugin-core
 
+  packages/kit-plugin-payer:
+    dependencies:
+      '@solana/kit-plugin-airdrop':
+        specifier: workspace:*
+        version: link:../kit-plugin-airdrop
+    devDependencies:
+      '@solana/kit':
+        specifier: ^5.1.0
+        version: 5.1.0(typescript@5.9.3)(ws@8.18.3)
+      '@solana/plugin-core':
+        specifier: workspace:*
+        version: link:../plugin-core
+
   packages/kit-plugin-rpc:
     devDependencies:
       '@solana/kit':
