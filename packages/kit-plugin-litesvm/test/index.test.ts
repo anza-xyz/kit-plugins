@@ -1,6 +1,7 @@
 import { LiteSVM } from '@loris-sandbox/litesvm-kit';
 import {
     address,
+    createEmptyClient,
     generateKeyPairSigner,
     GetAccountInfoApi,
     GetLatestBlockhashApi,
@@ -8,7 +9,6 @@ import {
     lamports,
     Rpc,
 } from '@solana/kit';
-import { createEmptyClient } from '@solana/plugin-core';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import { litesvm } from '../src';

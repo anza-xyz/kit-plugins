@@ -1,5 +1,4 @@
-import { generateKeyPairSigner, KeyPairSigner, lamports } from '@solana/kit';
-import { createEmptyClient } from '@solana/plugin-core';
+import { createEmptyClient, generateKeyPairSigner, KeyPairSigner, lamports } from '@solana/kit';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 import { generatedPayer, generatedPayerWithSol, payer, payerFromFile } from '../src';

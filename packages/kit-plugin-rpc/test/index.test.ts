@@ -1,5 +1,4 @@
-import { mainnet } from '@solana/kit';
-import { createEmptyClient } from '@solana/plugin-core';
+import { createEmptyClient, mainnet } from '@solana/kit';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import { localhostRpc, rpc } from '../src';

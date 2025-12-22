@@ -45,14 +45,10 @@
         "test:unit": "vitest run"
     },
     "peerDependencies": {
-        "@solana/kit": "^5.1.0"
+        "@solana/kit": "5.2.0-canary-20251219213520"
     },
     "dependencies": {
         "@loris-sandbox/litesvm-kit": "^0.5.0"
-    },
-    "devDependencies": {
-        "@solana/kit": "^5.1.0",
-        "@solana/plugin-core": "workspace:*"
     },
     "license": "MIT",
     "repository": {

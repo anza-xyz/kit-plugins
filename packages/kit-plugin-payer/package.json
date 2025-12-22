@@ -46,14 +46,10 @@
         "test:unit": "vitest run"
     },
     "peerDependencies": {
-        "@solana/kit": "^5.1.0"
+        "@solana/kit": "5.2.0-canary-20251219213520"
     },
     "dependencies": {
         "@solana/kit-plugin-airdrop": "workspace:*"
-    },
-    "devDependencies": {
-        "@solana/kit": "^5.1.0",
-        "@solana/plugin-core": "workspace:*"
     },
     "license": "MIT",
     "repository": {

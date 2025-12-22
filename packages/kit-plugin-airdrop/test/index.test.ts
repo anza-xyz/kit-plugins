@@ -1,7 +1,6 @@
-import { address, lamports, mainnet } from '@solana/kit';
+import { address, createEmptyClient, lamports, mainnet } from '@solana/kit';
 import { litesvm } from '@solana/kit-plugin-litesvm';
 import { localhostRpc, rpc } from '@solana/kit-plugin-rpc';
-import { createEmptyClient } from '@solana/plugin-core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { airdrop } from '../src';
