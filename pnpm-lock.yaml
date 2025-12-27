@@ -73,6 +73,22 @@ importers:
         specifier: workspace:*
         version: link:../kit-plugin-rpc
 
+  packages/kit-plugin-instuction-plan:
+    dependencies:
+      '@solana-program/compute-budget':
+        specifier: ^0.11.0
+        version: 0.11.0(@solana/kit@5.2.0-canary-20251219213520(typescript@5.9.3)(ws@8.18.3))
+      '@solana/kit':
+        specifier: 5.2.0-canary-20251219213520
+        version: 5.2.0-canary-20251219213520(typescript@5.9.3)(ws@8.18.3)
+    devDependencies:
+      '@solana/kit-plugin-litesvm':
+        specifier: workspace:*
+        version: link:../kit-plugin-litesvm
+      '@solana/kit-plugin-rpc':
+        specifier: workspace:*
+        version: link:../kit-plugin-rpc
+
   packages/kit-plugin-litesvm:
     dependencies:
       '@loris-sandbox/litesvm-kit':
@@ -105,9 +121,15 @@ importers:
       '@solana/kit-plugin-airdrop':
         specifier: workspace:*
         version: link:../kit-plugin-airdrop
+      '@solana/kit-plugin-instruction-plan':
+        specifier: workspace:*
+        version: link:../kit-plugin-instuction-plan
       '@solana/kit-plugin-litesvm':
         specifier: workspace:*
         version: link:../kit-plugin-litesvm
+      '@solana/kit-plugin-payer':
+        specifier: workspace:*
+        version: link:../kit-plugin-payer
       '@solana/kit-plugin-rpc':
         specifier: workspace:*
         version: link:../kit-plugin-rpc
@@ -886,6 +908,11 @@ packages:
 
   '@sinonjs/fake-timers@13.0.5':
     resolution: {integrity: sha512-36/hTbH2uaWuGVERyC6da9YwGWnzUZXuPro/F2LfsdOsLnCojz/iSH8MxUt/FD2S5XBSVPhmArFUXcpCQ2Hkiw==}
+
+  '@solana-program/compute-budget@0.11.0':
+    resolution: {integrity: sha512-7f1ePqB/eURkTwTOO9TNIdUXZcyrZoX3Uy2hNo7cXMfNhPFWp9AVgIyRNBc2jf15sdUa9gNpW+PfP2iV8AYAaw==}
+    peerDependencies:
+      '@solana/kit': ^5.0
 
   '@solana-program/system@0.10.0':
     resolution: {integrity: sha512-Go+LOEZmqmNlfr+Gjy5ZWAdY5HbYzk2RBewD9QinEU/bBSzpFfzqDRT55JjFRBGJUvMgf3C2vfXEGT4i8DSI4g==}
@@ -4278,6 +4305,10 @@ snapshots:
   '@sinonjs/fake-timers@13.0.5':
     dependencies:
       '@sinonjs/commons': 3.0.1
+
+  '@solana-program/compute-budget@0.11.0(@solana/kit@5.2.0-canary-20251219213520(typescript@5.9.3)(ws@8.18.3))':
+    dependencies:
+      '@solana/kit': 5.2.0-canary-20251219213520(typescript@5.9.3)(ws@8.18.3)
 
   '@solana-program/system@0.10.0(@solana/kit@5.1.0(typescript@5.9.3)(ws@8.18.3))':
     dependencies:

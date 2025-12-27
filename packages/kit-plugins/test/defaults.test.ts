@@ -4,26 +4,26 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
     AirdropFunction,
     createDefaultLiteSVMClient,
-    createDefaultLocalhostClient,
+    createDefaultLocalhostRpcClient,
     type LiteSVM,
     RpcFromLiteSVM,
 } from '../src';
 
-describe('createDefaultLocalhostClient', () => {
+describe('createDefaultLocalhostRpcClient', () => {
     it('it offers an RPC client', () => {
-        const client = createDefaultLocalhostClient();
+        const client = createDefaultLocalhostRpcClient();
         expect(client.rpc).toBeTypeOf('object');
         expectTypeOf(client.rpc).toEqualTypeOf<Rpc<SolanaRpcApi>>();
     });
 
     it('it offers an RPC Subscriptions client', () => {
-        const client = createDefaultLocalhostClient();
+        const client = createDefaultLocalhostRpcClient();
         expect(client.rpcSubscriptions).toBeTypeOf('object');
         expectTypeOf(client.rpcSubscriptions).toEqualTypeOf<RpcSubscriptions<SolanaRpcSubscriptionsApi>>();
     });
 
     it('it offers an airdrop function', () => {
-        const client = createDefaultLocalhostClient();
+        const client = createDefaultLocalhostRpcClient();
         expect(client.airdrop).toBeTypeOf('function');
         expectTypeOf(client.airdrop).toEqualTypeOf<AirdropFunction>();
     });
@@ -43,7 +43,7 @@ describe('createDefaultLiteSVMClient', () => {
     });
 
     it('it offers an airdrop function', () => {
-        const client = createDefaultLocalhostClient();
+        const client = createDefaultLocalhostRpcClient();
         expect(client.airdrop).toBeTypeOf('function');
         expectTypeOf(client.airdrop).toEqualTypeOf<AirdropFunction>();
     });

@@ -1,7 +1,7 @@
 {
-    "name": "@solana/kit-plugins",
+    "name": "@solana/kit-plugin-instruction-plan",
     "version": "0.1.0",
-    "description": "TODO",
+    "description": "Plan and execute transactions in your Kit clients",
     "exports": {
         "types": "./dist/types/index.d.ts",
         "react-native": "./dist/index.react-native.mjs",
@@ -18,9 +18,6 @@
         "./dist/index.node.cjs": "./dist/index.browser.cjs",
         "./dist/index.node.mjs": "./dist/index.browser.mjs"
     },
-    "jsdelivr": "./dist/index.production.min.js",
-    "umd": "./dist/index.production.min.js",
-    "unpkg": "./dist/index.production.min.js",
     "main": "./dist/index.node.cjs",
     "module": "./dist/index.node.mjs",
     "react-native": "./dist/index.react-native.mjs",
@@ -34,7 +31,9 @@
     "keywords": [
         "solana",
         "kit",
-        "plugins"
+        "plugin",
+        "instruction",
+        "transaction"
     ],
     "scripts": {
         "build": "rimraf dist && tsup && tsc -p ./tsconfig.declarations.json",
@@ -49,11 +48,8 @@
     "peerDependencies": {
         "@solana/kit": "5.2.0-canary-20251219213520"
     },
-    "dependencies": {
-        "@solana/kit-plugin-airdrop": "workspace:*",
-        "@solana/kit-plugin-instruction-plan": "workspace:*",
+    "devDependencies": {
         "@solana/kit-plugin-litesvm": "workspace:*",
-        "@solana/kit-plugin-payer": "workspace:*",
         "@solana/kit-plugin-rpc": "workspace:*"
     },
     "license": "MIT",
@@ -67,5 +63,8 @@
     "browserslist": [
         "supports bigint and not dead",
         "maintained node versions"
-    ]
+    ],
+    "dependencies": {
+        "@solana-program/compute-budget": "^0.11.0"
+    }
 }
