@@ -14,10 +14,25 @@ import {
     SolanaRpcResponse,
 } from '@solana/kit';
 
-// Re-export the LiteSVM type to make the `litesvm` type-portable.
+// Re-export the LiteSVM type to make the `litesvm` plugin type-portable.
 export type { LiteSVM } from '@loris-sandbox/litesvm-kit';
 
-/** The RPC subset provided by the LiteSVM plugin. */
+/**
+ * The RPC subset provided by the LiteSVM plugin.
+ *
+ * This type represents a limited RPC interface that only includes
+ * the essential operations supported by LiteSVM.
+ *
+ * @example
+ * ```ts
+ * import { litesvm, RpcFromLiteSVM } from '@solana/kit-plugins';
+ * import { createEmptyClient } from '@solana/kit';
+ *
+ * const client = createEmptyClient().use(litesvm());
+ * client.rpc satisfies RpcFromLiteSVM;
+ * const accountInfo = await client.rpc.getAccountInfo(myAddress).send();
+ * ```
+ */
 export type RpcFromLiteSVM = Rpc<GetAccountInfoApi & GetLatestBlockhashApi & GetMultipleAccountsApi>;
 
 /**

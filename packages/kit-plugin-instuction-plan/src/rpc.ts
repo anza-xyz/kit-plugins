@@ -152,7 +152,11 @@ export function defaultTransactionPlannerAndExecutorFromRpc(
 }
 
 /**
- * This utility function limits the number of concurrent executions of an asynchronous function.
+ * Limits the number of concurrent executions of an asynchronous function.
+ *
+ * This utility creates a wrapper around an async function that enforces
+ * a maximum concurrency limit. When the limit is reached, additional
+ * calls are queued and executed when capacity becomes available.
  *
  * @param fn - The asynchronous function to be limited.
  * @param maxConcurrency - The maximum number of concurrent executions allowed.

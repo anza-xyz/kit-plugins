@@ -1,7 +1,7 @@
 {
     "name": "@solana/kit-plugins",
     "version": "0.1.0",
-    "description": "TODO",
+    "description": "Essential plugins and plugin presets for Solana Kit.",
     "exports": {
         "types": "./dist/types/index.d.ts",
         "react-native": "./dist/index.react-native.mjs",
