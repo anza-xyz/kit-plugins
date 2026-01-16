@@ -60,6 +60,18 @@ importers:
         specifier: ^8.19.0
         version: 8.19.0
 
+  examples/transfer-lamports:
+    dependencies:
+      '@solana-program/system':
+        specifier: ^0.10.0
+        version: 0.10.0(@solana/kit@5.3.0(typescript@5.9.3))
+      '@solana/kit':
+        specifier: ^5.3.0
+        version: 5.3.0(typescript@5.9.3)
+      '@solana/kit-plugins':
+        specifier: workspace:*
+        version: link:../../packages/kit-plugins
+
   packages/kit-plugin-airdrop:
     dependencies:
       '@solana/kit':
