@@ -1,12 +1,9 @@
 import {
     generateKeyPairSigner,
-    getSolanaErrorFromTransactionError,
     isSolanaError,
     lamports,
     SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN,
-    SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_COMPUTE_LIMIT,
     summarizeTransactionPlanResult,
-    type TransactionError,
     type TransactionPlanResult,
 } from '@solana/kit';
 import { createDefaultLocalhostRpcClient } from '@solana/kit-plugins';
@@ -43,20 +40,14 @@ try {
     }
 } catch (e) {
     if (isSolanaError(e, SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN)) {
-        if (isSolanaError(e.cause, SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_COMPUTE_LIMIT)) {
-            const transactionPlanResult = e.context.transactionPlanResult as TransactionPlanResult;
-            const summary = summarizeTransactionPlanResult(transactionPlanResult);
-            const transactionMessage = summary.failedTransactions[0].message;
+        const transactionPlanResult = e.context.transactionPlanResult as TransactionPlanResult;
+        const summary = summarizeTransactionPlanResult(transactionPlanResult);
+        const transactionMessage = summary.failedTransactions[0].message;
 
-            const transactionError = e.cause.cause as TransactionError;
-            const nestedError = getSolanaErrorFromTransactionError(transactionError);
-
-            if (isSystemError(nestedError, transactionMessage)) {
-                console.error(getSystemErrorMessage(nestedError.context.code));
-                process.exit(1);
-            }
+        if (isSystemError(e.cause, transactionMessage)) {
+            console.error(getSystemErrorMessage(e.cause.context.code));
+            process.exit(1);
         }
-        throw e.cause;
     }
     throw e;
 }
