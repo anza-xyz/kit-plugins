@@ -1,8 +1,14 @@
 import {
+    getSolanaErrorFromTransactionError,
     Instruction,
     InstructionPlan,
+    isSolanaError,
     sequentialInstructionPlan,
     singleInstructionPlan,
+    SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN,
+    SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_COMPUTE_LIMIT,
+    SolanaError,
+    TransactionError,
     TransactionPlan,
     TransactionPlanExecutor,
     TransactionPlanner,
@@ -89,7 +95,7 @@ export function sendInstructionPlans() {
             const transactionPlan = await transactionPlanner(instructionPlan, innerConfig);
             config?.abortSignal?.throwIfAborted();
             const transactionPlanExecutor = config.transactionPlanExecutor ?? client.transactionPlanExecutor;
-            return await transactionPlanExecutor(transactionPlan, innerConfig);
+            return await transactionPlanExecutor(transactionPlan, innerConfig).catch(unwrapSimulationError);
         },
     });
 }
@@ -116,7 +122,12 @@ export function sendTransaction() {
 
             config?.abortSignal?.throwIfAborted();
             const transactionPlanExecutor = config.transactionPlanExecutor ?? client.transactionPlanExecutor;
-            const result = await transactionPlanExecutor(transactionPlan, innerConfig);
+            const result = await transactionPlanExecutor(transactionPlan, innerConfig)
+                // TODO: we probably want a custom error type here, that unwraps
+                // `SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN`:
+                // - Get the `transactionMessage` from the first failed transaction
+                // - Return `e.cause` + `transactionMessage` with a named SendTransactionError
+                .catch(unwrapSimulationError);
             // TODO: can we tighten the types in Kit so that single transaction plan -> single transaction plan result? Does that hold?
             if (result.kind === 'single') {
                 return result.status;
@@ -142,4 +153,19 @@ function assertIsSingleTransactionPlan(
         // TODO: how should we do errors in kit-plugins?
         throw new Error('Instructions do not fit in a single transaction. Use `send` instead.');
     }
+}
+
+function unwrapSimulationError(e: unknown): never {
+    if (isSolanaError(e, SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN)) {
+        if (isSolanaError(e.cause, SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_COMPUTE_LIMIT)) {
+            const transactionError = e.cause.cause as TransactionError;
+            const nestedError = getSolanaErrorFromTransactionError(transactionError);
+
+            throw new SolanaError(SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN, {
+                cause: nestedError,
+                transactionPlanResult: e.context.transactionPlanResult,
+            });
+        }
+    }
+    throw e;
 }
