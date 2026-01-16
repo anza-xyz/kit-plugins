@@ -3,6 +3,7 @@ import {
     InstructionPlan,
     sequentialInstructionPlan,
     singleInstructionPlan,
+    TransactionPlan,
     TransactionPlanExecutor,
     TransactionPlanner,
 } from '@solana/kit';
@@ -93,8 +94,52 @@ export function sendInstructionPlans() {
     });
 }
 
+export function sendTransaction() {
+    return <T extends { transactionPlanExecutor: TransactionPlanExecutor; transactionPlanner: TransactionPlanner }>(
+        client: T,
+    ) => ({
+        ...client,
+        sendTransaction: async (
+            instructions: Instruction | Instruction[] | InstructionPlan,
+            config: {
+                abortSignal?: AbortSignal;
+                transactionPlanExecutor?: TransactionPlanExecutor;
+                transactionPlanner?: TransactionPlanner;
+            } = {},
+        ) => {
+            const innerConfig = { abortSignal: config.abortSignal };
+            const instructionPlan = getInstructionPlan(instructions);
+            config?.abortSignal?.throwIfAborted();
+            const transactionPlanner = config.transactionPlanner ?? client.transactionPlanner;
+            const transactionPlan = await transactionPlanner(instructionPlan, innerConfig);
+            assertIsSingleTransactionPlan(transactionPlan);
+
+            config?.abortSignal?.throwIfAborted();
+            const transactionPlanExecutor = config.transactionPlanExecutor ?? client.transactionPlanExecutor;
+            const result = await transactionPlanExecutor(transactionPlan, innerConfig);
+            // TODO: can we tighten the types in Kit so that single transaction plan -> single transaction plan result? Does that hold?
+            if (result.kind === 'single') {
+                return result.status;
+            } else {
+                // TODO: can this happen other than by a type mismatch?
+                // Whatever error this throws should include the result, since some/all transactions may have been executed
+                throw new Error('Unexpected multiple transaction plan result for single transaction plan.');
+            }
+        },
+    });
+}
+
 function getInstructionPlan(instructions: Instruction | Instruction[] | InstructionPlan): InstructionPlan {
     if ('kind' in instructions) return instructions;
     if (Array.isArray(instructions)) return sequentialInstructionPlan(instructions);
     return singleInstructionPlan(instructions);
+}
+
+function assertIsSingleTransactionPlan(
+    transactionPlan: TransactionPlan,
+): asserts transactionPlan is TransactionPlan & { kind: 'single' } {
+    if (transactionPlan.kind !== 'single') {
+        // TODO: how should we do errors in kit-plugins?
+        throw new Error('Instructions do not fit in a single transaction. Use `send` instead.');
+    }
 }

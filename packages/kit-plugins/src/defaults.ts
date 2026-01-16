@@ -10,6 +10,7 @@ import {
     defaultTransactionPlannerAndExecutorFromLitesvm,
     defaultTransactionPlannerAndExecutorFromRpc,
     sendInstructionPlans,
+    sendTransaction,
 } from '@solana/kit-plugin-instruction-plan';
 import { litesvm } from '@solana/kit-plugin-litesvm';
 import { generatedPayerWithSol, payer } from '@solana/kit-plugin-payer';
@@ -49,7 +50,8 @@ export function createDefaultRpcClient<TClusterUrl extends ClusterUrl>(config: {
         .use(rpc<TClusterUrl>(config.url, config.rpcSubscriptionsConfig))
         .use(payer(config.payer))
         .use(defaultTransactionPlannerAndExecutorFromRpc())
-        .use(sendInstructionPlans());
+        .use(sendInstructionPlans())
+        .use(sendTransaction());
 }
 
 /**
@@ -90,7 +92,8 @@ export function createDefaultLocalhostRpcClient(config: { payer?: TransactionSig
         .use(airdrop())
         .use(payerOrGeneratedPayer(config.payer))
         .use(defaultTransactionPlannerAndExecutorFromRpc())
-        .use(sendInstructionPlans());
+        .use(sendInstructionPlans())
+        .use(sendTransaction());
 }
 
 /**
@@ -135,7 +138,8 @@ export function createDefaultLiteSVMClient(config: { payer?: TransactionSigner }
         .use(airdrop())
         .use(payerOrGeneratedPayer(config.payer))
         .use(defaultTransactionPlannerAndExecutorFromLitesvm())
-        .use(sendInstructionPlans());
+        .use(sendInstructionPlans())
+        .use(sendTransaction());
 }
 
 /**
