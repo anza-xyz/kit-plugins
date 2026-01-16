@@ -120,7 +120,7 @@ Each of these packages offers one or more plugins. You can import these plugins 
 | [`@solana/kit-plugin-payer`](./packages/kit-plugin-payer)                      | Manage transaction fee payers      | `payer`, `payerFromFile`, `generatedPayer`, `generatedPayerWithSol`                                                                                                      |
 | [`@solana/kit-plugin-airdrop`](./packages/kit-plugin-airdrop)                  | Request SOL from faucets           | `airdrop`                                                                                                                                                                |
 | [`@solana/kit-plugin-litesvm`](./packages/kit-plugin-litesvm)                  | LiteSVM support                    | `litesvm`                                                                                                                                                                |
-| [`@solana/kit-plugin-instruction-plan`](./packages/kit-plugin-instuction-plan) | Transaction planning and execution | `transactionPlanner`, `transactionPlanExecutor`, `sendInstructionPlans`,`defaultTransactionPlannerAndExecutorFromRpc`, `defaultTransactionPlannerAndExecutorFromLitesvm` |
+| [`@solana/kit-plugin-instruction-plan`](./packages/kit-plugin-instruction-plan) | Transaction planning and execution | `transactionPlanner`, `transactionPlanExecutor`, `sendInstructionPlans`,`defaultTransactionPlannerAndExecutorFromRpc`, `defaultTransactionPlannerAndExecutorFromLitesvm` |
 
 ## Community Plugins
 

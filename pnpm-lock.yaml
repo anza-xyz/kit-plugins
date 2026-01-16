@@ -73,7 +73,7 @@ importers:
         specifier: workspace:*
         version: link:../kit-plugin-rpc
 
-  packages/kit-plugin-instuction-plan:
+  packages/kit-plugin-instruction-plan:
     dependencies:
       '@solana-program/compute-budget':
         specifier: ^0.11.0
@@ -123,7 +123,7 @@ importers:
         version: link:../kit-plugin-airdrop
       '@solana/kit-plugin-instruction-plan':
         specifier: workspace:*
-        version: link:../kit-plugin-instuction-plan
+        version: link:../kit-plugin-instruction-plan
       '@solana/kit-plugin-litesvm':
         specifier: workspace:*
         version: link:../kit-plugin-litesvm
