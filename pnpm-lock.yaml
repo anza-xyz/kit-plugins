@@ -63,6 +63,21 @@ importers:
         specifier: ^8.19.0
         version: 8.19.0
 
+  examples/token-airdrop:
+    dependencies:
+      '@solana-program/system':
+        specifier: ^0.10.0
+        version: 0.10.0(@solana/kit@5.4.0(typescript@5.9.3))
+      '@solana-program/token':
+        specifier: ^0.9.0
+        version: 0.9.0(@solana/kit@5.4.0(typescript@5.9.3))
+      '@solana/kit':
+        specifier: ^5.4.0
+        version: 5.4.0(typescript@5.9.3)
+      '@solana/kit-plugins':
+        specifier: workspace:*
+        version: link:../../packages/kit-plugins
+
   examples/transfer-lamports:
     dependencies:
       '@solana-program/system':
