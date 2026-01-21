@@ -1,13 +1,10 @@
 import {
     generateKeyPairSigner,
-    getSolanaErrorFromTransactionError,
     isSolanaError,
     parallelInstructionPlan,
     sequentialInstructionPlan,
     SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN,
-    SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_COMPUTE_LIMIT,
     summarizeTransactionPlanResult,
-    type TransactionError,
     type TransactionPlanResult,
 } from '@solana/kit';
 import { createDefaultLocalhostRpcClient } from '@solana/kit-plugins';
@@ -63,11 +60,11 @@ const instructionPlan = sequentialInstructionPlan([
         await Promise.all(
             destinationAddresses.map(address => {
                 return getMintToATAInstructionPlanAsync({
-                    amount: 1_000_000_000n,
                     // 1,000 tokens, with 6 decimals
+                    amount: 1_000_000_000n,
                     decimals: 6,
                     mint: tokenMint.address,
-                    mintAuthority: payer, // Simulate a failure on the 81st address
+                    mintAuthority: payer,
                     owner: address,
                     payer,
                 });
@@ -91,9 +88,9 @@ try {
     } else {
         const successfulTransactions = summary.successfulTransactions.length;
         if (summary.failedTransactions.length > 0) {
-            console.error(`Airdrop failed after ${successfulTransactions} successful transactions`);
+            console.error(`Airdrop failed with ${successfulTransactions} successful transactions`);
         } else if (summary.canceledTransactions.length > 0) {
-            console.error(`Airdrop was cancelled after ${successfulTransactions} successful transactions`);
+            console.error(`Airdrop was cancelled with ${successfulTransactions} successful transactions`);
         }
     }
 } catch (e) {
@@ -103,31 +100,29 @@ try {
         const successfulTransactions = summary.successfulTransactions.length;
 
         if (summary.failedTransactions.length > 0) {
-            console.error(`Airdrop failed after ${successfulTransactions} successful transactions`);
+            console.error(`Airdrop failed with ${successfulTransactions} successful transactions`);
         } else if (summary.canceledTransactions.length > 0) {
-            console.error(`Airdrop was cancelled after ${successfulTransactions} successful transactions`);
+            console.error(`Airdrop was cancelled with ${successfulTransactions} successful transactions`);
         }
 
         if (summary.failedTransactions.length > 0) {
             for (const failure of summary.failedTransactions) {
                 const error = failure.status.error;
+                const transactionMessage = failure.message;
 
-                if (isSolanaError(error, SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_COMPUTE_LIMIT)) {
-                    // Failure from a nested simulation error, we can access the transaction error
-                    const transactionMessage = failure.message;
+                if (isSolanaError(error)) {
+                    const cause = e.cause;
 
-                    const transactionError = error.cause as TransactionError;
-                    const nestedError = getSolanaErrorFromTransactionError(transactionError);
-
-                    if (isSystemError(nestedError, transactionMessage)) {
-                        console.error(getSystemErrorMessage(nestedError.context.code), {
-                            instruction: transactionMessage.instructions[nestedError.context.index],
+                    if (isSystemError(cause, transactionMessage)) {
+                        console.error(getSystemErrorMessage(cause.context.code), {
+                            instruction: transactionMessage.instructions[cause.context.index],
                         });
-                    }
-                    if (isTokenError(nestedError, transactionMessage)) {
-                        console.error(getTokenErrorMessage(nestedError.context.code), {
-                            instruction: transactionMessage.instructions[nestedError.context.index],
+                    } else if (isTokenError(cause, transactionMessage)) {
+                        console.error(getTokenErrorMessage(cause.context.code), {
+                            instruction: transactionMessage.instructions[cause.context.index],
                         });
+                    } else {
+                        throw e;
                     }
                 } else {
                     throw e;

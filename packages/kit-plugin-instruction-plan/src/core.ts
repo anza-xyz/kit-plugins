@@ -12,6 +12,7 @@ import {
     TransactionPlan,
     TransactionPlanExecutor,
     TransactionPlanner,
+    TransactionPlanResult,
 } from '@solana/kit';
 
 /**
@@ -95,7 +96,9 @@ export function sendInstructionPlans() {
             const transactionPlan = await transactionPlanner(instructionPlan, innerConfig);
             config?.abortSignal?.throwIfAborted();
             const transactionPlanExecutor = config.transactionPlanExecutor ?? client.transactionPlanExecutor;
-            return await transactionPlanExecutor(transactionPlan, innerConfig).catch(unwrapSimulationError);
+            return await transactionPlanExecutor(transactionPlan, innerConfig)
+                .then(convertPlanResult)
+                .catch(rethrowWithConvertedSimulationError);
         },
     });
 }
@@ -127,7 +130,8 @@ export function sendTransaction() {
                 // `SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN`:
                 // - Get the `transactionMessage` from the first failed transaction
                 // - Return `e.cause` + `transactionMessage` with a named SendTransactionError
-                .catch(unwrapSimulationError);
+                .then(convertPlanResult)
+                .catch(rethrowWithConvertedSimulationError);
             // TODO: can we tighten the types in Kit so that single transaction plan -> single transaction plan result? Does that hold?
             if (result.kind === 'single') {
                 return result.status;
@@ -155,17 +159,51 @@ function assertIsSingleTransactionPlan(
     }
 }
 
-function unwrapSimulationError(e: unknown): never {
+function rethrowWithConvertedSimulationError(e: unknown): never {
+    if (isSolanaError(e)) {
+        throw convertSimulationError(e);
+    }
+    throw e;
+}
+
+function convertPlanResult(result: TransactionPlanResult): TransactionPlanResult {
+    switch (result.kind) {
+        case 'single': {
+            if (result.status.kind === 'failed' && isSolanaError(result.status.error)) {
+                return {
+                    ...result,
+                    status: {
+                        error: convertSimulationError(result.status.error),
+                        kind: 'failed',
+                    },
+                };
+            }
+            return result;
+        }
+        case 'sequential':
+            return {
+                ...result,
+                plans: result.plans.map(convertPlanResult),
+            };
+        case 'parallel':
+            return {
+                ...result,
+                plans: result.plans.map(convertPlanResult),
+            };
+    }
+}
+
+function convertSimulationError(e: SolanaError): SolanaError {
     if (isSolanaError(e, SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN)) {
         if (isSolanaError(e.cause, SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_COMPUTE_LIMIT)) {
             const transactionError = e.cause.cause as TransactionError;
             const nestedError = getSolanaErrorFromTransactionError(transactionError);
 
-            throw new SolanaError(SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN, {
+            return new SolanaError(SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN, {
                 cause: nestedError,
-                transactionPlanResult: e.context.transactionPlanResult,
+                transactionPlanResult: convertPlanResult(e.context.transactionPlanResult as TransactionPlanResult),
             });
         }
     }
-    throw e;
+    return e;
 }
