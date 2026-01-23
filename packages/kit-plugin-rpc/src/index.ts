@@ -65,6 +65,6 @@ export function rpc<TClusterUrl extends ClusterUrl>(
  *
  * @see {@link rpc}
  */
-export function localhostRpc() {
-    return rpc('http://127.0.0.1:8899', { url: 'ws://127.0.0.1:8900' });
+export function localhostRpc(url?: string, rpcSubscriptionsConfig?: { url: string }) {
+    return rpc(url ?? 'http://127.0.0.1:8899', rpcSubscriptionsConfig ?? { url: 'ws://127.0.0.1:8900' });
 }

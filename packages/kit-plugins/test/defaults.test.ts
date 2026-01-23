@@ -156,6 +156,17 @@ describe('createDefaultLocalhostRpcClient', () => {
         expect(client.sendTransactions).toBeTypeOf('function');
         expect(client.sendTransaction).toBeTypeOf('function');
     });
+
+    it('it uses a custom url and subscriptions url', async () => {
+        const airdropFn = vi.fn().mockResolvedValue('MockSignature');
+        (airdropFactory as Mock).mockReturnValueOnce(airdropFn);
+
+        const client = await createDefaultLocalhostRpcClient({
+            rpcSubscriptionsConfig: { url: 'ws://host.docker.internal:8900' },
+            url: 'http://host.docker.internal:8899',
+        });
+        expect(client.airdrop).toBeTypeOf('function');
+    });
 });
 
 describe('createDefaultLiteSVMClient', () => {
