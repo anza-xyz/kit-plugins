@@ -16,6 +16,7 @@ import {
     createDefaultLocalhostRpcClient,
     createDefaultRpcClient,
     type LiteSVM,
+    rpc,
     RpcFromLiteSVM,
 } from '../src';
 
@@ -153,6 +154,16 @@ describe('createDefaultLocalhostRpcClient', () => {
 
         const client = await createDefaultLocalhostRpcClient();
         expect(client.send).toBeTypeOf('function');
+    });
+
+    it('it uses a custom rpc', async () => {
+        const airdropFn = vi.fn().mockResolvedValue('MockSignature');
+        (airdropFactory as Mock).mockReturnValueOnce(airdropFn);
+
+        const client = await createDefaultLocalhostRpcClient({
+            rpc: rpc('http://host.docker.internal:8899', { url: 'ws://host.docker.internal:8900' }),
+        });
+        expect(client.airdrop).toBeTypeOf('function');
     });
 });
 

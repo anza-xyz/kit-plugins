@@ -84,9 +84,11 @@ export function createDefaultRpcClient<TClusterUrl extends ClusterUrl>(config: {
  * const client = await createDefaultLocalhostRpcClient({ payer: customPayer });
  * ```
  */
-export function createDefaultLocalhostRpcClient(config: { payer?: TransactionSigner } = {}) {
+export function createDefaultLocalhostRpcClient(
+    config: { payer?: TransactionSigner; rpc?: ReturnType<typeof localhostRpc> } = {},
+) {
     return createEmptyClient()
-        .use(localhostRpc())
+        .use(config.rpc ?? localhostRpc())
         .use(airdrop())
         .use(payerOrGeneratedPayer(config.payer))
         .use(defaultTransactionPlannerAndExecutorFromRpc())
