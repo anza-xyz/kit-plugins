@@ -1,6 +1,6 @@
 {
     "name": "@solana/kit-plugins",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "description": "Essential plugins and plugin presets for Solana Kit.",
     "exports": {
         "types": "./dist/types/index.d.ts",

@@ -1,6 +1,6 @@
 {
     "name": "@solana/kit-plugin-instruction-plan",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "description": "Plan and execute transactions in your Kit clients",
     "exports": {
         "types": "./dist/types/index.d.ts",
