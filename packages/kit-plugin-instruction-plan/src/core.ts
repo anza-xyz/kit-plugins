@@ -48,7 +48,7 @@ export function transactionPlanExecutor(transactionPlanExecutor: TransactionPlan
 }
 
 /**
- * A plugin that adds a `send` function on the client to
+ * A plugin that adds a `sendTransactions` function on the client to
  * plan and execute instruction plans in one call.
  *
  * This expects the client to have both a `transactionPlanner`
@@ -59,21 +59,21 @@ export function transactionPlanExecutor(transactionPlanExecutor: TransactionPlan
  * import { createEmptyClient } from '@solana/kit';
  * import { transactionPlanExecutor } from '@solana/kit-plugins';
  *
- * // Install the sendInstructionPlans plugin and its requirements.
+ * // Install the sendTransactions plugin and its requirements.
  * const client = createEmptyClient()
  *     .use(transactionPlanner(myTransactionPlanner))
  *     .use(transactionPlanExecutor(myTransactionPlanExecutor))
- *     .use(sendInstructionPlans());
+ *     .use(sendTransactions());
  *
- * // Use the send function.
- * const transactionPlanResult = await client.send(myInstructionPlan);
+ * // Use the sendTransactions function.
+ * const result = await client.sendTransactions(myInstructionPlan);
  */
-export function sendInstructionPlans() {
+export function sendTransactions() {
     return <T extends { transactionPlanExecutor: TransactionPlanExecutor; transactionPlanner: TransactionPlanner }>(
         client: T,
     ) => ({
         ...client,
-        send: async (
+        sendTransactions: async (
             instructions: Instruction | Instruction[] | InstructionPlan,
             config: {
                 abortSignal?: AbortSignal;

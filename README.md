@@ -16,7 +16,7 @@ A plugin library for [Solana Kit](https://github.com/anza-xyz/kit) that provides
 
 - ✨ **Ready-to-use clients** for production, local development, and local testing.
 - ✨ **Modular plugin system** to build custom clients by combining individual plugins.
-- ✨ Default **transaction planning and execution** logic built-in, just call `client.send(myInstructions)`.
+- ✨ Default **transaction planning and execution** logic built-in, just call `client.sendTransactions(myInstructions)`.
 - ✨ Various **useful plugins** for RPC connectivity, payer management, SOL airdrops, LiteSVM support and more.
 
 ## Installation
@@ -43,7 +43,7 @@ const payer = await generateKeyPairSigner();
 const client = createDefaultRpcClient({ payer, url: 'https://api.devnet.solana.com' });
 
 // Send transactions
-await client.send([myInstruction]);
+await client.sendTransactions([myInstruction]);
 ```
 
 [See all features and configuration options](./packages/kit-plugins/README.md#createdefaultrpcclient).
@@ -60,7 +60,7 @@ const client = await createDefaultLocalhostRpcClient();
 
 // Payer is auto-generated and funded with SOL
 console.log('Payer address:', client.payer.address);
-await client.send([myInstruction]);
+await client.sendTransactions([myInstruction]);
 ```
 
 [See all features and configuration options](./packages/kit-plugins/README.md#createdefaultlocalhostrpcclient).
@@ -79,7 +79,7 @@ client.svm.setAccount(myTestAccount);
 client.svm.addProgramFromFile(myProgramAddress, 'program.so');
 
 // Execute transactions locally
-await client.send([myInstruction]);
+await client.sendTransactions([myInstruction]);
 ```
 
 [See all features and configuration options](./packages/kit-plugins/README.md#createdefaultlitesvmclient).
@@ -94,7 +94,7 @@ import {
     rpc,
     payerFromFile,
     airdrop,
-    sendInstructionPlans,
+    sendTransactions,
     defaultTransactionPlannerAndExecutorFromRpc,
 } from '@solana/kit-plugins';
 
@@ -103,7 +103,7 @@ const client = await createEmptyClient() // An empty client with a `use` method 
     .use(payerFromFile('path/to/keypair.json')) // Adds `client.payer` using a local keypair file.
     .use(airdrop()) // Adds `client.airdrop` to request SOL from faucets.
     .use(defaultTransactionPlannerAndExecutorFromRpc()) // Adds `client.transactionPlanner` and `client.transactionPlanExecutor`.
-    .use(sendInstructionPlans()); // Adds `client.send` to send instructions or instruction plans.
+    .use(sendTransactions()); // Adds `client.sendTransaction(s)` to send instructions, instruction plans or transaction messages.
 ```
 
 Note that since plugins are defined in `@solana/kit` itself, you're not limited to the plugins in this package! You can use [community plugins](#community-plugins) or even [create your own](#create-your-own-plugins).
@@ -114,21 +114,21 @@ Note that since plugins are defined in `@solana/kit` itself, you're not limited 
 
 Each of these packages offers one or more plugins. You can import these plugins directly from `@solana/kit-plugins` or install the individual packages if you want more granular control over your dependencies. You can learn more about each package by following the links to their READMEs below.
 
-| Package                                                                        | Description                        | Plugins                                                                                                                                                                  |
-| ------------------------------------------------------------------------------ | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [`@solana/kit-plugin-rpc`](./packages/kit-plugin-rpc)                          | Connect to Solana clusters         | `rpc`, `localhostRpc`                                                                                                                                                    |
-| [`@solana/kit-plugin-payer`](./packages/kit-plugin-payer)                      | Manage transaction fee payers      | `payer`, `payerFromFile`, `generatedPayer`, `generatedPayerWithSol`                                                                                                      |
-| [`@solana/kit-plugin-airdrop`](./packages/kit-plugin-airdrop)                  | Request SOL from faucets           | `airdrop`                                                                                                                                                                |
-| [`@solana/kit-plugin-litesvm`](./packages/kit-plugin-litesvm)                  | LiteSVM support                    | `litesvm`                                                                                                                                                                |
-| [`@solana/kit-plugin-instruction-plan`](./packages/kit-plugin-instruction-plan) | Transaction planning and execution | `transactionPlanner`, `transactionPlanExecutor`, `sendInstructionPlans`,`defaultTransactionPlannerAndExecutorFromRpc`, `defaultTransactionPlannerAndExecutorFromLitesvm` |
+| Package                                                                         | Description                        | Plugins                                                                                                                                                              |
+| ------------------------------------------------------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`@solana/kit-plugin-rpc`](./packages/kit-plugin-rpc)                           | Connect to Solana clusters         | `rpc`, `localhostRpc`                                                                                                                                                |
+| [`@solana/kit-plugin-payer`](./packages/kit-plugin-payer)                       | Manage transaction fee payers      | `payer`, `payerFromFile`, `generatedPayer`, `generatedPayerWithSol`                                                                                                  |
+| [`@solana/kit-plugin-airdrop`](./packages/kit-plugin-airdrop)                   | Request SOL from faucets           | `airdrop`                                                                                                                                                            |
+| [`@solana/kit-plugin-litesvm`](./packages/kit-plugin-litesvm)                   | LiteSVM support                    | `litesvm`                                                                                                                                                            |
+| [`@solana/kit-plugin-instruction-plan`](./packages/kit-plugin-instruction-plan) | Transaction planning and execution | `transactionPlanner`, `transactionPlanExecutor`, `sendTransactions`,`defaultTransactionPlannerAndExecutorFromRpc`, `defaultTransactionPlannerAndExecutorFromLitesvm` |
 
 ## Community Plugins
 
-| Package | Description | Plugins | Maintainers |
-| ------- | ----------- | ------- | ----------- |
-| [`airdrop-token`](https://github.com/amilz/kit-helpers/tree/main/plugins/airdrop-token) _(unpublished)_ | Create token mints, ATAs, and mint tokens for testing | `airdropToken`, `testTokenPlugin` | [@amilz](https://github.com/amilz) |
-| [`local-validator`](https://github.com/amilz/kit-helpers/tree/main/plugins/local-validator) _(unpublished)_ | Solana test validator lifecycle management (start, stop, restart) | `localValidatorPlugin` | [@amilz](https://github.com/amilz) |
-| [`transaction-builder`](https://github.com/amilz/kit-helpers/tree/main/plugins/transaction-builder) _(unpublished)_ | Transaction builder for constructing, signing, and sending transactions | `transactionBuilderPlugin` | [@amilz](https://github.com/amilz) |
+| Package                                                                                                             | Description                                                             | Plugins                           | Maintainers                        |
+| ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | --------------------------------- | ---------------------------------- |
+| [`airdrop-token`](https://github.com/amilz/kit-helpers/tree/main/plugins/airdrop-token) _(unpublished)_             | Create token mints, ATAs, and mint tokens for testing                   | `airdropToken`, `testTokenPlugin` | [@amilz](https://github.com/amilz) |
+| [`local-validator`](https://github.com/amilz/kit-helpers/tree/main/plugins/local-validator) _(unpublished)_         | Solana test validator lifecycle management (start, stop, restart)       | `localValidatorPlugin`            | [@amilz](https://github.com/amilz) |
+| [`transaction-builder`](https://github.com/amilz/kit-helpers/tree/main/plugins/transaction-builder) _(unpublished)_ | Transaction builder for constructing, signing, and sending transactions | `transactionBuilderPlugin`        | [@amilz](https://github.com/amilz) |
 
 _Do you know any? Please open a PR to add them here!_
 
