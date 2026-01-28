@@ -20,6 +20,7 @@ import {
     SimulateTransactionApi,
     SlotNotificationsApi,
     TransactionSigner,
+    unwrapSimulationError,
 } from '@solana/kit';
 import {
     estimateAndUpdateProvisoryComputeUnitLimitFactory,
@@ -133,17 +134,21 @@ export function defaultTransactionPlannerAndExecutorFromRpc(
 
         const transactionPlanExecutor = createTransactionPlanExecutor({
             executeTransactionMessage: limitFunction(async (transactionMessage, config) => {
-                const { value: latestBlockhash } = await client.rpc.getLatestBlockhash().send(config);
-                const signedTransaction = await pipe(
-                    transactionMessage,
-                    tx => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, tx),
-                    async tx => await estimateAndSetCULimit(tx, config),
-                    async tx => await signTransactionMessageWithSigners(await tx, config),
-                );
+                try {
+                    const { value: latestBlockhash } = await client.rpc.getLatestBlockhash().send(config);
+                    const signedTransaction = await pipe(
+                        transactionMessage,
+                        tx => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, tx),
+                        async tx => await estimateAndSetCULimit(tx, config),
+                        async tx => await signTransactionMessageWithSigners(await tx, config),
+                    );
 
-                assertIsTransactionWithBlockhashLifetime(signedTransaction);
-                await sendAndConfirmTransaction(signedTransaction, { commitment: 'confirmed', ...config });
-                return { transaction: signedTransaction };
+                    assertIsTransactionWithBlockhashLifetime(signedTransaction);
+                    await sendAndConfirmTransaction(signedTransaction, { commitment: 'confirmed', ...config });
+                    return { transaction: signedTransaction };
+                } catch (error) {
+                    throw unwrapSimulationError(error);
+                }
             }, config.maxConcurrency ?? 10),
         });
 

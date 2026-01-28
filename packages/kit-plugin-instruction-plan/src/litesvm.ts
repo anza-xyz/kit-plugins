@@ -11,6 +11,7 @@ import {
     signTransactionMessageWithSigners,
     Transaction,
     TransactionSigner,
+    unwrapSimulationError,
 } from '@solana/kit';
 import {
     fillProvisorySetComputeUnitLimitInstruction,
@@ -85,15 +86,19 @@ export function defaultTransactionPlannerAndExecutorFromLitesvm(
 
         const transactionPlanExecutor = createTransactionPlanExecutor({
             executeTransactionMessage: async (transactionMessage, config) => {
-                const latestBlockhash = client.svm.latestBlockhashLifetime();
-                const signedTransaction = await pipe(
-                    transactionMessage,
-                    tx => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, tx),
-                    async tx => await signTransactionMessageWithSigners(tx, config),
-                );
+                try {
+                    const latestBlockhash = client.svm.latestBlockhashLifetime();
+                    const signedTransaction = await pipe(
+                        transactionMessage,
+                        tx => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, tx),
+                        async tx => await signTransactionMessageWithSigners(tx, config),
+                    );
 
-                client.svm.sendTransaction(signedTransaction);
-                return { transaction: signedTransaction };
+                    client.svm.sendTransaction(signedTransaction);
+                    return { transaction: signedTransaction };
+                } catch (error) {
+                    throw unwrapSimulationError(error);
+                }
             },
         });
 

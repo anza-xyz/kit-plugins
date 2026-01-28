@@ -1,14 +1,20 @@
 import {
     Address,
     createEmptyClient,
+    createTransactionMessage,
     generateKeyPairSigner,
     parallelTransactionPlan,
     Rpc,
     RpcSubscriptions,
     sendAndConfirmTransactionFactory,
+    setTransactionMessageFeePayerSigner,
     singleInstructionPlan,
     SingleTransactionPlan,
+    singleTransactionPlan,
     SingleTransactionPlanResult,
+    SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN,
+    SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_COMPUTE_LIMIT,
+    SolanaError,
     SolanaRpcApi,
     SolanaRpcSubscriptionsApi,
     TransactionSigner,
@@ -17,6 +23,7 @@ import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
 import { defaultTransactionPlannerAndExecutorFromRpc } from '../src';
 
+const MOCK_BLOCKHASH = { blockhash: '11111111111111111111111111111111', lastValidBlockHeight: 0n };
 const MOCK_INSTRUCTION = {
     programAddress: '11111111111111111111111111111111' as Address,
 };
@@ -58,8 +65,7 @@ describe('defaultTransactionPlannerAndExecutorFromRpc', () => {
 
     it('uses the RPC and RPC Subscriptions to send transactions', async () => {
         const payer = await generateKeyPairSigner();
-        const mockBlockhash = { blockhash: '11111111111111111111111111111111', lastValidBlockHeight: 100n };
-        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: mockBlockhash });
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
         const simulateTransaction = vi.fn().mockResolvedValue({ value: { unitsConsumed: 42 } });
         const rpc = {
             getLatestBlockhash: () => ({ send: getLatestBlockhash }),
@@ -84,11 +90,71 @@ describe('defaultTransactionPlannerAndExecutorFromRpc', () => {
         expect(sendAndConfirmTransaction).toHaveBeenCalledOnce();
     });
 
+    it('unwraps simulation errors when executing transactions', async () => {
+        const payer = await generateKeyPairSigner();
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        const simulateTransaction = vi.fn().mockResolvedValue({ value: { unitsConsumed: 42 } });
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: simulateTransaction }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
+        const originalError = new Error('Original transaction error');
+        const sendAndConfirmTransaction = vi.fn().mockRejectedValue(
+            new SolanaError(SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_COMPUTE_LIMIT, {
+                cause: originalError,
+                unitsConsumed: 42,
+            }),
+        );
+        (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
+
+        const client = createEmptyClient()
+            .use(() => ({ payer, rpc, rpcSubscriptions }))
+            .use(defaultTransactionPlannerAndExecutorFromRpc());
+
+        const transactionPlan = singleTransactionPlan(
+            setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 })),
+        );
+        const promise = client.transactionPlanExecutor(transactionPlan);
+        await expect(promise).rejects.toThrowError(
+            new SolanaError(SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN, {
+                cause: originalError,
+            }),
+        );
+    });
+
+    it('does not unwrap non-simulation errors when executing transactions', async () => {
+        const payer = await generateKeyPairSigner();
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        const simulateTransaction = vi.fn().mockResolvedValue({ value: { unitsConsumed: 42 } });
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: simulateTransaction }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
+        const originalError = new Error('Original transaction error');
+        const sendAndConfirmTransaction = vi.fn().mockRejectedValue(originalError);
+        (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
+
+        const client = createEmptyClient()
+            .use(() => ({ payer, rpc, rpcSubscriptions }))
+            .use(defaultTransactionPlannerAndExecutorFromRpc());
+
+        const transactionPlan = singleTransactionPlan(
+            setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 })),
+        );
+        const promise = client.transactionPlanExecutor(transactionPlan);
+        await expect(promise).rejects.toThrowError(
+            new SolanaError(SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN, {
+                cause: originalError,
+            }),
+        );
+    });
+
     it('limits the number of concurrent executions for parallel transaction plans', async () => {
         const payer = await generateKeyPairSigner();
-        const mockBlockhash = { blockhash: '11111111111111111111111111111111', lastValidBlockHeight: 100n };
         const rpc = {
-            getLatestBlockhash: () => ({ send: vi.fn().mockResolvedValue({ value: mockBlockhash }) }),
+            getLatestBlockhash: () => ({ send: vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH }) }),
             simulateTransaction: () => ({ send: vi.fn().mockResolvedValue({ value: { unitsConsumed: 42 } }) }),
         } as unknown as Rpc<SolanaRpcApi>;
         const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
