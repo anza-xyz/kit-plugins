@@ -1,0 +1,21 @@
+{
+    "name": "@solana/examples-transfer-lamports",
+    "private": true,
+    "dependencies": {
+        "@solana-program/system": "^0.10.0",
+        "@solana/kit": "^5.3.0",
+        "@solana/kit-plugins": "workspace:*"
+    },
+    "type": "module",
+    "scripts": {
+        "build": "rimraf dist && tsup && tsc -p ./tsconfig.declarations.json",
+        "lint": "eslint . && prettier --check .",
+        "lint:fix": "eslint --fix . && prettier --write .",
+        "test": "pnpm test:types ",
+        "test:types": "tsc --noEmit",
+        "start": "node src/index.ts"
+    },
+    "engines": {
+        "node": ">=22.18.0"
+    }
+}
