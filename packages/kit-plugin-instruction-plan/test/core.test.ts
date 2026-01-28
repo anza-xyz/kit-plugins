@@ -1,10 +1,15 @@
 import {
+    Address,
     canceledSingleTransactionPlanResult,
     createEmptyClient,
+    createNoopSigner,
+    createTransactionMessage,
     Instruction,
     sequentialInstructionPlan,
     sequentialTransactionPlan,
     sequentialTransactionPlanResult,
+    setTransactionMessageFeePayer,
+    setTransactionMessageFeePayerSigner,
     Signature,
     singleInstructionPlan,
     singleTransactionPlan,
@@ -200,6 +205,61 @@ describe('sendTransactions', () => {
             expect(transactionPlannerOnTheClient).not.toHaveBeenCalledOnce();
             expect(transactionPlanExecutorOnTheClient).not.toHaveBeenCalledOnce();
         });
+
+        it('accepts transaction messages directly as input', async () => {
+            const payer = '1111' as Address;
+            const transaction = setTransactionMessageFeePayer(payer, createTransactionMessage({ version: 0 }));
+            const transactionPlanResult = successfulSingleTransactionPlanResultFromSignature(
+                transaction,
+                'signature' as Signature,
+            );
+            const customTransactionPlanner = vi.fn();
+            const customTransactionPlanExecutor = vi.fn().mockResolvedValue(transactionPlanResult);
+            const client = createEmptyClient()
+                .use(transactionPlanner(customTransactionPlanner))
+                .use(transactionPlanExecutor(customTransactionPlanExecutor))
+                .use(sendTransactions());
+
+            await client.sendTransaction(transaction);
+            expect(customTransactionPlanner).not.toHaveBeenCalledOnce();
+            expect(customTransactionPlanExecutor).toHaveBeenCalledExactlyOnceWith(singleTransactionPlan(transaction), {
+                abortSignal: undefined,
+            });
+        });
+
+        it('accepts transaction messages without fee payer directly as input if the client has a payer set', async () => {
+            const transaction = createTransactionMessage({ version: 0 });
+            const transactionPlanResult = successfulSingleTransactionPlanResultFromSignature(
+                {} as TransactionMessage & TransactionMessageWithFeePayer,
+                'signature' as Signature,
+            );
+
+            const payer = createNoopSigner('1111' as Address);
+            const customTransactionPlanExecutor = vi.fn().mockResolvedValue(transactionPlanResult);
+            const client = createEmptyClient()
+                .use(transactionPlanner(vi.fn()))
+                .use(transactionPlanExecutor(customTransactionPlanExecutor))
+                .use(c => ({ ...c, payer }))
+                .use(sendTransactions());
+
+            await client.sendTransaction(transaction);
+            expect(customTransactionPlanExecutor).toHaveBeenCalledExactlyOnceWith(
+                singleTransactionPlan(setTransactionMessageFeePayerSigner(payer, transaction)),
+                { abortSignal: undefined },
+            );
+        });
+
+        it('throws if a transaction message without fee payer is provided and the client has no payer set', async () => {
+            const transaction = createTransactionMessage({ version: 0 });
+            const client = createEmptyClient()
+                .use(transactionPlanner(vi.fn()))
+                .use(transactionPlanExecutor(vi.fn()))
+                .use(sendTransactions());
+
+            await expect(client.sendTransaction(transaction)).rejects.toThrowError(
+                'A fee payer is required for the provided transaction message.',
+            );
+        });
     });
     describe('client.sendTransactions', () => {
         it('adds a sendTransactions function on the client that plans and executes instructions', async () => {
@@ -273,6 +333,80 @@ describe('sendTransactions', () => {
             expect(overridenTransactionPlanExecutor).toHaveBeenCalledOnce();
             expect(transactionPlannerOnTheClient).not.toHaveBeenCalledOnce();
             expect(transactionPlanExecutorOnTheClient).not.toHaveBeenCalledOnce();
+        });
+
+        it('accepts transaction messages directly as input', async () => {
+            const payer = '1111' as Address;
+            const transaction = setTransactionMessageFeePayer(payer, createTransactionMessage({ version: 0 }));
+            const customTransactionPlanner = vi.fn();
+            const customTransactionPlanExecutor = vi.fn();
+            const client = createEmptyClient()
+                .use(transactionPlanner(customTransactionPlanner))
+                .use(transactionPlanExecutor(customTransactionPlanExecutor))
+                .use(sendTransactions());
+
+            await client.sendTransactions(transaction);
+            expect(customTransactionPlanner).not.toHaveBeenCalledOnce();
+            expect(customTransactionPlanExecutor).toHaveBeenCalledExactlyOnceWith(singleTransactionPlan(transaction), {
+                abortSignal: undefined,
+            });
+        });
+
+        it('accepts multiple transaction messages directly as input', async () => {
+            const transactionA = setTransactionMessageFeePayer(
+                '1111' as Address,
+                createTransactionMessage({ version: 0 }),
+            );
+            const transactionB = setTransactionMessageFeePayer(
+                '2222' as Address,
+                createTransactionMessage({ version: 0 }),
+            );
+            const customTransactionPlanner = vi.fn();
+            const customTransactionPlanExecutor = vi.fn();
+            const client = createEmptyClient()
+                .use(transactionPlanner(customTransactionPlanner))
+                .use(transactionPlanExecutor(customTransactionPlanExecutor))
+                .use(sendTransactions());
+
+            await client.sendTransactions([transactionA, transactionB]);
+            expect(customTransactionPlanner).not.toHaveBeenCalledOnce();
+            expect(customTransactionPlanExecutor).toHaveBeenCalledExactlyOnceWith(
+                sequentialTransactionPlan([transactionA, transactionB]),
+                { abortSignal: undefined },
+            );
+        });
+
+        it('accepts transaction messages without fee payer directly as input if the client has a payer set', async () => {
+            const transaction = createTransactionMessage({ version: 0 });
+            const payer = createNoopSigner('1111' as Address);
+            const customTransactionPlanExecutor = vi.fn();
+            const client = createEmptyClient()
+                .use(transactionPlanner(vi.fn()))
+                .use(transactionPlanExecutor(customTransactionPlanExecutor))
+                .use(c => ({ ...c, payer }))
+                .use(sendTransactions());
+
+            await client.sendTransactions([transaction]);
+            expect(customTransactionPlanExecutor).toHaveBeenCalledExactlyOnceWith(
+                sequentialTransactionPlan([setTransactionMessageFeePayerSigner(payer, transaction)]),
+                { abortSignal: undefined },
+            );
+        });
+
+        it('throws if at least one transaction message without fee payer is provided and the client has no payer set', async () => {
+            const transactionA = createTransactionMessage({ version: 0 });
+            const transactionB = setTransactionMessageFeePayer(
+                '1111' as Address,
+                createTransactionMessage({ version: 0 }),
+            );
+            const client = createEmptyClient()
+                .use(transactionPlanner(vi.fn()))
+                .use(transactionPlanExecutor(vi.fn()))
+                .use(sendTransactions());
+
+            await expect(client.sendTransactions([transactionA, transactionB])).rejects.toThrowError(
+                'A fee payer is required for the provided transaction message.',
+            );
         });
     });
 });
