@@ -9,7 +9,7 @@ import { airdrop, AirdropFunction } from '@solana/kit-plugin-airdrop';
 import {
     defaultTransactionPlannerAndExecutorFromLitesvm,
     defaultTransactionPlannerAndExecutorFromRpc,
-    sendInstructionPlans,
+    sendTransactions,
 } from '@solana/kit-plugin-instruction-plan';
 import { litesvm } from '@solana/kit-plugin-litesvm';
 import { generatedPayerWithSol, payer } from '@solana/kit-plugin-payer';
@@ -37,7 +37,7 @@ import { localhostRpc, rpc } from '@solana/kit-plugin-rpc';
  * });
  *
  * // Use the client
- * const result = await client.send([myInstruction]);
+ * const result = await client.sendTransactions([myInstruction]);
  * ```
  */
 export function createDefaultRpcClient<TClusterUrl extends ClusterUrl>(config: {
@@ -49,7 +49,7 @@ export function createDefaultRpcClient<TClusterUrl extends ClusterUrl>(config: {
         .use(rpc<TClusterUrl>(config.url, config.rpcSubscriptionsConfig))
         .use(payer(config.payer))
         .use(defaultTransactionPlannerAndExecutorFromRpc())
-        .use(sendInstructionPlans());
+        .use(sendTransactions());
 }
 
 /**
@@ -70,7 +70,7 @@ export function createDefaultRpcClient<TClusterUrl extends ClusterUrl>(config: {
  * const client = await createDefaultLocalhostRpcClient();
  *
  * // Use the client
- * const result = await client.send([myInstruction]);
+ * const result = await client.sendTransactions([myInstruction]);
  * console.log('Payer address:', client.payer.address);
  * ```
  *
@@ -90,7 +90,7 @@ export function createDefaultLocalhostRpcClient(config: { payer?: TransactionSig
         .use(airdrop())
         .use(payerOrGeneratedPayer(config.payer))
         .use(defaultTransactionPlannerAndExecutorFromRpc())
-        .use(sendInstructionPlans());
+        .use(sendTransactions());
 }
 
 /**
@@ -116,7 +116,7 @@ export function createDefaultLocalhostRpcClient(config: { payer?: TransactionSig
  * client.svm.addProgramFromFile(myProgramAddress, 'program.so');
  *
  * // Use the client
- * const result = await client.send([myInstruction]);
+ * const result = await client.sendTransactions([myInstruction]);
  * ```
  *
  * @example
@@ -135,7 +135,7 @@ export function createDefaultLiteSVMClient(config: { payer?: TransactionSigner }
         .use(airdrop())
         .use(payerOrGeneratedPayer(config.payer))
         .use(defaultTransactionPlannerAndExecutorFromLitesvm())
-        .use(sendInstructionPlans());
+        .use(sendTransactions());
 }
 
 /**

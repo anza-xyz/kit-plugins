@@ -71,12 +71,12 @@ describe('createDefaultRpcClient', () => {
         expectTypeOf(client.transactionPlanExecutor).toEqualTypeOf<TransactionPlanExecutor>();
     });
 
-    it('it provide a helper function to send instruction plans', () => {
+    it('it provide a helper function to send transactions', () => {
         const client = createDefaultRpcClient({
             payer: {} as TransactionSigner,
             url: 'https://api.mainnet-beta.solana.com',
         });
-        expect(client.send).toBeTypeOf('function');
+        expect(client.sendTransactions).toBeTypeOf('function');
     });
 });
 
@@ -147,12 +147,12 @@ describe('createDefaultLocalhostRpcClient', () => {
         expectTypeOf(client.transactionPlanExecutor).toEqualTypeOf<TransactionPlanExecutor>();
     });
 
-    it('it provide a helper function to send instruction plans', async () => {
+    it('it provide a helper function to send transactions', async () => {
         const airdropFn = vi.fn().mockResolvedValue('MockSignature');
         (airdropFactory as Mock).mockReturnValueOnce(airdropFn);
 
         const client = await createDefaultLocalhostRpcClient();
-        expect(client.send).toBeTypeOf('function');
+        expect(client.sendTransactions).toBeTypeOf('function');
     });
 });
 
@@ -199,8 +199,8 @@ describe('createDefaultLiteSVMClient', () => {
         expectTypeOf(client.transactionPlanExecutor).toEqualTypeOf<TransactionPlanExecutor>();
     });
 
-    it('it provide a helper function to send instruction plans', async () => {
+    it('it provide a helper function to send transactions', async () => {
         const client = await createDefaultLiteSVMClient();
-        expect(client.send).toBeTypeOf('function');
+        expect(client.sendTransactions).toBeTypeOf('function');
     });
 });
