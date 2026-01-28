@@ -64,9 +64,9 @@ const client = createEmptyClient().use(transactionPlanExecutor(myTransactionPlan
     const transactionPlanResult = await client.transactionPlanExecutor(myTransactionPlan);
     ```
 
-## `sendInstructionPlans` plugin
+## `sendTransactions` plugin
 
-The `sendInstructionPlans` plugin adds a `send` function that combines transaction planning and execution in a single call.
+The `sendTransactions` plugin adds a `sendTransactions` function that combines transaction planning and execution in a single call.
 
 ### Installation
 
@@ -74,19 +74,19 @@ This plugin requires both `transactionPlanner` and `transactionPlanExecutor` to 
 
 ```ts
 import { createEmptyClient } from '@solana/kit';
-import { transactionPlanner, transactionPlanExecutor, sendInstructionPlans } from '@solana/kit-plugins';
+import { transactionPlanner, transactionPlanExecutor, sendTransactions } from '@solana/kit-plugins';
 
 const client = createEmptyClient()
     .use(transactionPlanner(myTransactionPlanner))
     .use(transactionPlanExecutor(myTransactionPlanExecutor))
-    .use(sendInstructionPlans());
+    .use(sendTransactions());
 ```
 
 ### Features
 
-- `send`: An asynchronous function that plans and executes instruction plans in one call.
+- `sendTransactions`: An asynchronous function that plans and executes instruction plans in one call.
     ```ts
-    const transactionPlanResult = await client.send(myInstructionPlan);
+    const transactionPlanResult = await client.sendTransactions(myInstructionPlan);
     ```
 
 ## `defaultTransactionPlannerAndExecutorFromRpc` plugin
