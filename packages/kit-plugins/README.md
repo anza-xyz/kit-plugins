@@ -33,7 +33,7 @@ const client = createDefaultRpcClient({
     payer,
 });
 
-await client.sendTransactions([myInstruction]);
+await client.sendTransaction([myInstruction]);
 ```
 
 #### Features
@@ -43,7 +43,8 @@ await client.sendTransactions([myInstruction]);
 - `client.payer`: The main payer signer for transactions.
 - `client.transactionPlanner`: Plans instructions into transaction messages.
 - `client.transactionPlanExecutor`: Executes planned transaction messages.
-- `client.sendTransactions`: Sends instructions or instruction plans to the cluster by using the client's transaction planner and executor.
+- `client.sendTransactions`: Sends transaction messages, instructions or instruction plans to the cluster by using the client's transaction planner and executor.
+- `client.sendTransaction`: Same as `client.sendTransactions` but ensuring only a single transaction is sent.
 
 #### Configuration
 
@@ -65,7 +66,7 @@ const client = await createDefaultLocalhostRpcClient();
 
 // Payer is automatically generated and funded
 console.log('Payer address:', client.payer.address);
-await client.sendTransactions([myInstruction]);
+await client.sendTransaction([myInstruction]);
 
 // Request additional funding
 await client.airdrop(client.payer.address, lamports(5_000_000_000n));
@@ -79,7 +80,8 @@ await client.airdrop(client.payer.address, lamports(5_000_000_000n));
 - `client.airdrop`: Function to request SOL from the local faucet.
 - `client.transactionPlanner`: Plans instructions into transaction messages.
 - `client.transactionPlanExecutor`: Executes planned transaction messages.
-- `client.sendTransactions`: Sends instructions or instruction plans to the cluster by using the client's transaction planner and executor.
+- `client.sendTransactions`: Sends transaction messages, instructions or instruction plans to the cluster by using the client's transaction planner and executor.
+- `client.sendTransaction`: Same as `client.sendTransactions` but ensuring only a single transaction is sent.
 
 #### Configuration
 
@@ -101,7 +103,7 @@ client.svm.setAccount(myTestAccount);
 client.svm.addProgramFromFile(myProgramAddress, 'program.so');
 
 // Execute transactions locally
-await client.sendTransactions([myInstruction]);
+await client.sendTransaction([myInstruction]);
 ```
 
 #### Features
@@ -112,7 +114,8 @@ await client.sendTransactions([myInstruction]);
 - `client.airdrop`: Function to request SOL from the LiteSVM instance.
 - `client.transactionPlanner`: Plans instructions into transaction messages.
 - `client.transactionPlanExecutor`: Executes planned transaction messages.
-- `client.sendTransactions`: Sends instructions or instruction plans to the cluster by using the client's transaction planner and executor.
+- `client.sendTransactions`: Sends transaction messages, instructions or instruction plans to the cluster by using the client's transaction planner and executor.
+- `client.sendTransaction`: Same as `client.sendTransactions` but ensuring only a single transaction is sent.
 
 #### Configuration
 

@@ -66,7 +66,7 @@ const client = createEmptyClient().use(transactionPlanExecutor(myTransactionPlan
 
 ## `sendTransactions` plugin
 
-The `sendTransactions` plugin adds a `sendTransactions` function that combines transaction planning and execution in a single call.
+The `sendTransactions` plugin adds two helper functions, `sendTransaction` and `sendTransactions`, that combine transaction planning and execution in a single call. They accept transaction messages, instructions or instruction plans as input.
 
 ### Installation
 
@@ -84,9 +84,16 @@ const client = createEmptyClient()
 
 ### Features
 
-- `sendTransactions`: An asynchronous function that plans and executes instruction plans in one call.
+- `sendTransactions`: An asynchronous function that plans and executes transaction messages, instructions or instruction plans in one call.
+
     ```ts
     const transactionPlanResult = await client.sendTransactions(myInstructionPlan);
+    ```
+
+- `sendTransaction`: An asynchronous function that plans and executes a single transaction message, instruction plan or multiple instructions in one call. Should the provided instructions or instruction plan result in multiple transactions, an error will be thrown prior to execution.
+
+    ```ts
+    const transactionPlanResult = await client.sendTransaction(myInstructionPlan);
     ```
 
 ## `defaultTransactionPlannerAndExecutorFromRpc` plugin

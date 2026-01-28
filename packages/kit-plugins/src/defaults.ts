@@ -37,7 +37,7 @@ import { localhostRpc, rpc } from '@solana/kit-plugin-rpc';
  * });
  *
  * // Use the client
- * const result = await client.sendTransactions([myInstruction]);
+ * const result = await client.sendTransaction([myInstruction]);
  * ```
  */
 export function createDefaultRpcClient<TClusterUrl extends ClusterUrl>(config: {
@@ -70,7 +70,7 @@ export function createDefaultRpcClient<TClusterUrl extends ClusterUrl>(config: {
  * const client = await createDefaultLocalhostRpcClient();
  *
  * // Use the client
- * const result = await client.sendTransactions([myInstruction]);
+ * const result = await client.sendTransaction([myInstruction]);
  * console.log('Payer address:', client.payer.address);
  * ```
  *
@@ -116,7 +116,7 @@ export function createDefaultLocalhostRpcClient(config: { payer?: TransactionSig
  * client.svm.addProgramFromFile(myProgramAddress, 'program.so');
  *
  * // Use the client
- * const result = await client.sendTransactions([myInstruction]);
+ * const result = await client.sendTransaction([myInstruction]);
  * ```
  *
  * @example

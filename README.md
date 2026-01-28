@@ -16,7 +16,7 @@ A plugin library for [Solana Kit](https://github.com/anza-xyz/kit) that provides
 
 - ✨ **Ready-to-use clients** for production, local development, and local testing.
 - ✨ **Modular plugin system** to build custom clients by combining individual plugins.
-- ✨ Default **transaction planning and execution** logic built-in, just call `client.sendTransactions(myInstructions)`.
+- ✨ Default **transaction planning and execution** logic built-in, just call `client.sendTransaction(myInstructions)`.
 - ✨ Various **useful plugins** for RPC connectivity, payer management, SOL airdrops, LiteSVM support and more.
 
 ## Installation
@@ -43,7 +43,7 @@ const payer = await generateKeyPairSigner();
 const client = createDefaultRpcClient({ payer, url: 'https://api.devnet.solana.com' });
 
 // Send transactions
-await client.sendTransactions([myInstruction]);
+await client.sendTransaction([myInstruction]);
 ```
 
 [See all features and configuration options](./packages/kit-plugins/README.md#createdefaultrpcclient).
@@ -60,7 +60,7 @@ const client = await createDefaultLocalhostRpcClient();
 
 // Payer is auto-generated and funded with SOL
 console.log('Payer address:', client.payer.address);
-await client.sendTransactions([myInstruction]);
+await client.sendTransaction([myInstruction]);
 ```
 
 [See all features and configuration options](./packages/kit-plugins/README.md#createdefaultlocalhostrpcclient).
@@ -103,7 +103,7 @@ const client = await createEmptyClient() // An empty client with a `use` method 
     .use(payerFromFile('path/to/keypair.json')) // Adds `client.payer` using a local keypair file.
     .use(airdrop()) // Adds `client.airdrop` to request SOL from faucets.
     .use(defaultTransactionPlannerAndExecutorFromRpc()) // Adds `client.transactionPlanner` and `client.transactionPlanExecutor`.
-    .use(sendTransactions()); // Adds `client.sendTransaction(s)` to send instructions, instruction plans or transaction messages.
+    .use(sendTransactions()); // Adds `client.sendTransaction(s)` to send transaction messages, instructions or instruction plans.
 ```
 
 Note that since plugins are defined in `@solana/kit` itself, you're not limited to the plugins in this package! You can use [community plugins](#community-plugins) or even [create your own](#create-your-own-plugins).
