@@ -90,6 +90,36 @@ describe('defaultTransactionPlannerAndExecutorFromRpc', () => {
         expect(sendAndConfirmTransaction).toHaveBeenCalledOnce();
     });
 
+    it('does not perform two simulation preflights when executing transactions', async () => {
+        const payer = await generateKeyPairSigner();
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        const simulateTransaction = vi.fn().mockResolvedValue({ value: { unitsConsumed: 42 } });
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: simulateTransaction }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
+        const sendAndConfirmTransaction = vi.fn().mockResolvedValue('MockTransactionSignature');
+        (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
+
+        const client = createEmptyClient()
+            .use(() => ({ payer, rpc, rpcSubscriptions }))
+            .use(defaultTransactionPlannerAndExecutorFromRpc());
+
+        await client.transactionPlanExecutor(
+            singleTransactionPlan(setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }))),
+        );
+
+        // We already performed one simulation when estimating the compute unit limit.
+        expect(simulateTransaction).toHaveBeenCalledOnce();
+
+        // So we should not perform it again when sending the transaction.
+        expect(sendAndConfirmTransaction).toHaveBeenCalledExactlyOnceWith(expect.anything(), {
+            commitment: 'confirmed',
+            skipPreflight: true,
+        });
+    });
+
     it('unwraps simulation errors when executing transactions', async () => {
         const payer = await generateKeyPairSigner();
         const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });

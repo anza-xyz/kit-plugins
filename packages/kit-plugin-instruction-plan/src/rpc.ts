@@ -144,7 +144,11 @@ export function defaultTransactionPlannerAndExecutorFromRpc(
                     );
 
                     assertIsTransactionWithBlockhashLifetime(signedTransaction);
-                    await sendAndConfirmTransaction(signedTransaction, { commitment: 'confirmed', ...config });
+                    await sendAndConfirmTransaction(signedTransaction, {
+                        commitment: 'confirmed',
+                        skipPreflight: true,
+                        ...config,
+                    });
                     return { transaction: signedTransaction };
                 } catch (error) {
                     throw unwrapSimulationError(error);
