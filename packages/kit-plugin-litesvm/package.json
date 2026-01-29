@@ -1,6 +1,6 @@
 {
     "name": "@solana/kit-plugin-litesvm",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "description": "LiteSVM support for Kit clients",
     "exports": {
         "types": "./dist/types/index.d.ts",
