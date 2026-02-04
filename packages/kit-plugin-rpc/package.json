@@ -45,7 +45,7 @@
         "test:unit": "vitest run"
     },
     "peerDependencies": {
-        "@solana/kit": "^5.5.1"
+        "@solana/kit": "^6.0.0"
     },
     "license": "MIT",
     "repository": {

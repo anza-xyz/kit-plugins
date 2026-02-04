@@ -17,7 +17,7 @@ import {
     SOLANA_ERROR__INSTRUCTION_PLANS__UNEXPECTED_TRANSACTION_PLAN_RESULT,
     SolanaError,
     SuccessfulSingleTransactionPlanResult,
-    successfulSingleTransactionPlanResultFromSignature,
+    successfulSingleTransactionPlanResult,
     TransactionMessage,
     TransactionMessageWithFeePayer,
     TransactionPlan,
@@ -50,9 +50,9 @@ describe('sendTransactions', () => {
         it('adds a sendTransaction function on the client that plans and executes instructions', async () => {
             const instruction = {} as Instruction;
             const transactionPlan = singleTransactionPlan({} as TransactionMessage & TransactionMessageWithFeePayer);
-            const transactionPlanResult = successfulSingleTransactionPlanResultFromSignature(
+            const transactionPlanResult = successfulSingleTransactionPlanResult(
                 {} as TransactionMessage & TransactionMessageWithFeePayer,
-                'signature' as Signature,
+                { signature: 'signature' as Signature },
             );
 
             const customTransactionPlanner = vi.fn().mockResolvedValue(transactionPlan);
@@ -101,10 +101,9 @@ describe('sendTransactions', () => {
             const instructionPlan = sequentialInstructionPlan([{} as Instruction]);
             const transactionPlan = singleTransactionPlan({} as TransactionMessage & TransactionMessageWithFeePayer);
             const transactionPlanResult = sequentialTransactionPlanResult([
-                successfulSingleTransactionPlanResultFromSignature(
-                    {} as TransactionMessage & TransactionMessageWithFeePayer,
-                    'signature' as Signature,
-                ),
+                successfulSingleTransactionPlanResult({} as TransactionMessage & TransactionMessageWithFeePayer, {
+                    signature: 'signature' as Signature,
+                }),
             ]);
             const customTransactionPlanner = vi.fn().mockResolvedValue(transactionPlan);
             const customTransactionPlanExecutor = vi.fn().mockResolvedValue(transactionPlanResult);
@@ -148,9 +147,9 @@ describe('sendTransactions', () => {
 
         it('passes the abort signal through the planner and executor', async () => {
             const transactionPlan = singleTransactionPlan({} as TransactionMessage & TransactionMessageWithFeePayer);
-            const transactionPlanResult = successfulSingleTransactionPlanResultFromSignature(
+            const transactionPlanResult = successfulSingleTransactionPlanResult(
                 {} as TransactionMessage & TransactionMessageWithFeePayer,
-                'signature' as Signature,
+                { signature: 'signature' as Signature },
             );
             const customTransactionPlanner = vi.fn().mockResolvedValue(transactionPlan);
             const customTransactionPlanExecutor = vi.fn().mockResolvedValue(transactionPlanResult);
@@ -182,9 +181,9 @@ describe('sendTransactions', () => {
 
         it('can override the planner and executor set on the client', async () => {
             const transactionPlan = singleTransactionPlan({} as TransactionMessage & TransactionMessageWithFeePayer);
-            const transactionPlanResult = successfulSingleTransactionPlanResultFromSignature(
+            const transactionPlanResult = successfulSingleTransactionPlanResult(
                 {} as TransactionMessage & TransactionMessageWithFeePayer,
-                'signature' as Signature,
+                { signature: 'signature' as Signature },
             );
             const transactionPlannerOnTheClient = vi.fn().mockResolvedValue(transactionPlan);
             const transactionPlanExecutorOnTheClient = vi.fn().mockResolvedValue(transactionPlanResult);
@@ -209,10 +208,9 @@ describe('sendTransactions', () => {
         it('accepts transaction messages directly as input', async () => {
             const payer = '1111' as Address;
             const transaction = setTransactionMessageFeePayer(payer, createTransactionMessage({ version: 0 }));
-            const transactionPlanResult = successfulSingleTransactionPlanResultFromSignature(
-                transaction,
-                'signature' as Signature,
-            );
+            const transactionPlanResult = successfulSingleTransactionPlanResult(transaction, {
+                signature: 'signature' as Signature,
+            });
             const customTransactionPlanner = vi.fn();
             const customTransactionPlanExecutor = vi.fn().mockResolvedValue(transactionPlanResult);
             const client = createEmptyClient()
@@ -229,9 +227,9 @@ describe('sendTransactions', () => {
 
         it('accepts transaction messages without fee payer directly as input if the client has a payer set', async () => {
             const transaction = createTransactionMessage({ version: 0 });
-            const transactionPlanResult = successfulSingleTransactionPlanResultFromSignature(
+            const transactionPlanResult = successfulSingleTransactionPlanResult(
                 {} as TransactionMessage & TransactionMessageWithFeePayer,
-                'signature' as Signature,
+                { signature: 'signature' as Signature },
             );
 
             const payer = createNoopSigner('1111' as Address);

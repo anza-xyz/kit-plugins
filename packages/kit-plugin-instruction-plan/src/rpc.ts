@@ -19,6 +19,7 @@ import {
     signTransactionMessageWithSigners,
     SimulateTransactionApi,
     SlotNotificationsApi,
+    TransactionPlanExecutorConfig,
     TransactionSigner,
     unwrapSimulationError,
 } from '@solana/kit';
@@ -133,28 +134,37 @@ export function defaultTransactionPlannerAndExecutorFromRpc(
         });
 
         const transactionPlanExecutor = createTransactionPlanExecutor({
-            executeTransactionMessage: limitFunction(async (transactionMessage, config) => {
+            executeTransactionMessage: limitFunction(async (context, transactionMessage, config) => {
                 try {
                     const { value: latestBlockhash } = await client.rpc.getLatestBlockhash().send(config);
                     const signedTransaction = await pipe(
                         transactionMessage,
                         tx => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, tx),
+                        tx => {
+                            context.message = tx;
+                            return tx;
+                        },
                         async tx => await estimateAndSetCULimit(tx, config),
+                        async tx => {
+                            context.message = await tx;
+                            return await tx;
+                        },
                         async tx => await signTransactionMessageWithSigners(await tx, config),
                     );
 
+                    context.transaction = signedTransaction;
                     assertIsTransactionWithBlockhashLifetime(signedTransaction);
                     await sendAndConfirmTransaction(signedTransaction, {
                         commitment: 'confirmed',
                         skipPreflight: true,
                         ...config,
                     });
-                    return { transaction: signedTransaction };
+                    return signedTransaction;
                 } catch (error) {
                     throw unwrapSimulationError(error);
                 }
             }, config.maxConcurrency ?? 10),
-        });
+        } as TransactionPlanExecutorConfig);
 
         return { ...client, transactionPlanExecutor, transactionPlanner };
     };
