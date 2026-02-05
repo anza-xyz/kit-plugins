@@ -140,15 +140,9 @@ export function defaultTransactionPlannerAndExecutorFromRpc(
                     const signedTransaction = await pipe(
                         transactionMessage,
                         tx => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, tx),
-                        tx => {
-                            context.message = tx;
-                            return tx;
-                        },
+                        tx => (context.message = tx),
                         async tx => await estimateAndSetCULimit(tx, config),
-                        async tx => {
-                            context.message = await tx;
-                            return await tx;
-                        },
+                        async tx => (context.message = await tx),
                         async tx => await signTransactionMessageWithSigners(await tx, config),
                     );
 

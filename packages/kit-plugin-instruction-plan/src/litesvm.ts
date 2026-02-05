@@ -91,10 +91,7 @@ export function defaultTransactionPlannerAndExecutorFromLitesvm(
                     const signedTransaction = await pipe(
                         transactionMessage,
                         tx => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, tx),
-                        tx => {
-                            context.message = tx;
-                            return tx;
-                        },
+                        tx => (context.message = tx),
                         async tx => await signTransactionMessageWithSigners(tx, config),
                     );
 
