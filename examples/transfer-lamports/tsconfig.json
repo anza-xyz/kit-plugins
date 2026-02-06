@@ -1,0 +1,11 @@
+{
+    "$schema": "https://json.schemastore.org/tsconfig",
+    "compilerOptions": {
+        "lib": [],
+        "module": "ESNext",
+        "target": "ESNext"
+    },
+    "display": "@solana/example-transfer-lamports",
+    "extends": "../../tsconfig.json",
+    "include": ["src", "test"]
+}
