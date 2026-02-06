@@ -1,6 +1,6 @@
 {
     "name": "@solana/kit-plugin-rpc",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "description": "RPC support for Kit clients",
     "exports": {
         "types": "./dist/types/index.d.ts",
