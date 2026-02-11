@@ -52,8 +52,10 @@ describe('airdrop', () => {
         expect(client).toHaveProperty('airdrop');
     });
 
-    it('works with a LiteSVM instance', () => {
-        const client = createEmptyClient().use(litesvm()).use(airdrop());
-        expect(client).toHaveProperty('airdrop');
-    });
+    if (__NODEJS__) {
+        it('works with a LiteSVM instance', () => {
+            const client = createEmptyClient().use(litesvm()).use(airdrop());
+            expect(client).toHaveProperty('airdrop');
+        });
+    }
 });

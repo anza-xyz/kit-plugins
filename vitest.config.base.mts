@@ -5,6 +5,8 @@ import { defineConfig } from 'vitest/config';
 export type Platform = 'browser' | 'node' | 'react-native';
 
 export function getVitestConfig(platform: Platform) {
+    const requiresBrowserBuild = platform === 'browser' || platform === 'react-native';
+
     return defineConfig({
         define: {
             __BROWSER__: `${platform === 'browser'}`,
@@ -14,7 +16,7 @@ export function getVitestConfig(platform: Platform) {
             __TEST__: 'true',
             __VERSION__: `"${env.npm_package_version}"`,
         },
-        ssr: platform === 'browser' ? { noExternal: [/@solana\/(?!.*@loris-sandbox\/litesvm-kit)/] } : undefined,
+        ssr: requiresBrowserBuild ? { noExternal: [/@solana\/(?!.*@loris-sandbox\/litesvm-kit)/] } : undefined,
         resolve: {
             conditions:
                 platform === 'browser'
@@ -25,8 +27,8 @@ export function getVitestConfig(platform: Platform) {
         },
         test: {
             name: platform,
-            environment: platform === 'browser' ? 'happy-dom' : 'node',
-            setupFiles: platform === 'browser' ? ['../../vitest.setup-browser.mts'] : undefined,
+            environment: requiresBrowserBuild ? 'happy-dom' : 'node',
+            setupFiles: requiresBrowserBuild ? ['../../vitest.setup-browser.mts'] : undefined,
         },
     });
 }
