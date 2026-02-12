@@ -2,14 +2,12 @@ import {
     Address,
     canceledSingleTransactionPlanResult,
     createEmptyClient,
-    createNoopSigner,
     createTransactionMessage,
     Instruction,
     sequentialInstructionPlan,
     sequentialTransactionPlan,
     sequentialTransactionPlanResult,
     setTransactionMessageFeePayer,
-    setTransactionMessageFeePayerSigner,
     Signature,
     singleInstructionPlan,
     singleTransactionPlan,
@@ -25,7 +23,7 @@ import {
 } from '@solana/kit';
 import { describe, expect, it, vi } from 'vitest';
 
-import { sendTransactions, transactionPlanExecutor, transactionPlanner } from '../src';
+import { planAndSendTransactions, transactionPlanExecutor, transactionPlanner } from '../src';
 
 describe('transactionPlanner', () => {
     it('sets the provided transactionPlanner on the client', () => {
@@ -45,7 +43,178 @@ describe('transactionPlanExecutor', () => {
     });
 });
 
-describe('sendTransactions', () => {
+describe('planAndSendTransactions', () => {
+    describe('client.planTransaction', () => {
+        it('adds a planTransaction function on the client that plans instructions and returns a transaction message', async () => {
+            const instruction = {} as Instruction;
+            const transactionPlan = singleTransactionPlan({} as TransactionMessage & TransactionMessageWithFeePayer);
+
+            const customTransactionPlanner = vi.fn().mockResolvedValue(transactionPlan);
+            const customTransactionPlanExecutor = vi.fn();
+            const client = createEmptyClient()
+                .use(transactionPlanner(customTransactionPlanner))
+                .use(transactionPlanExecutor(customTransactionPlanExecutor))
+                .use(planAndSendTransactions());
+
+            expect(client).toHaveProperty('planTransaction');
+            const result = await client.planTransaction(instruction);
+            result satisfies TransactionMessage & TransactionMessageWithFeePayer;
+
+            expect(result).toBe(transactionPlan.message);
+            expect(customTransactionPlanner).toHaveBeenCalledExactlyOnceWith(singleInstructionPlan(instruction), {
+                abortSignal: undefined,
+            });
+            expect(customTransactionPlanExecutor).not.toHaveBeenCalled();
+        });
+
+        it('fails if the transaction plan is not a single transaction plan', async () => {
+            const instructionPlan = sequentialInstructionPlan([{} as Instruction]);
+            const transactionPlan = sequentialTransactionPlan([
+                {} as TransactionMessage & TransactionMessageWithFeePayer,
+                {} as TransactionMessage & TransactionMessageWithFeePayer,
+            ]);
+            const customTransactionPlanner = vi.fn().mockResolvedValue(transactionPlan);
+            const customTransactionPlanExecutor = vi.fn();
+            const client = createEmptyClient()
+                .use(transactionPlanner(customTransactionPlanner))
+                .use(transactionPlanExecutor(customTransactionPlanExecutor))
+                .use(planAndSendTransactions());
+
+            const promise = client.planTransaction(instructionPlan);
+            await expect(promise).rejects.toThrowError(
+                new SolanaError(SOLANA_ERROR__INSTRUCTION_PLANS__UNEXPECTED_TRANSACTION_PLAN, {
+                    actualKind: 'sequential',
+                    expectedKind: 'single',
+                    transactionPlan,
+                }),
+            );
+        });
+
+        it('passes the abort signal through the planner', async () => {
+            const transactionPlan = singleTransactionPlan({} as TransactionMessage & TransactionMessageWithFeePayer);
+            const customTransactionPlanner = vi.fn().mockResolvedValue(transactionPlan);
+            const customTransactionPlanExecutor = vi.fn();
+            const client = createEmptyClient()
+                .use(transactionPlanner(customTransactionPlanner))
+                .use(transactionPlanExecutor(customTransactionPlanExecutor))
+                .use(planAndSendTransactions());
+
+            const abortSignal = new AbortController().signal;
+            await client.planTransaction({} as Instruction, { abortSignal });
+            expect(customTransactionPlanner).toHaveBeenCalledExactlyOnceWith(expect.any(Object), { abortSignal });
+            expect(customTransactionPlanExecutor).not.toHaveBeenCalled();
+        });
+
+        it('does not call the planner if the abort signal is already triggered', async () => {
+            const customTransactionPlanner = vi.fn();
+            const customTransactionPlanExecutor = vi.fn();
+            const client = createEmptyClient()
+                .use(transactionPlanner(customTransactionPlanner))
+                .use(transactionPlanExecutor(customTransactionPlanExecutor))
+                .use(planAndSendTransactions());
+
+            const abortController = new AbortController();
+            abortController.abort();
+            await client.planTransaction({} as Instruction, { abortSignal: abortController.signal }).catch(() => {});
+            expect(customTransactionPlanner).not.toHaveBeenCalled();
+            expect(customTransactionPlanExecutor).not.toHaveBeenCalled();
+        });
+
+        it('accepts instruction plans directly as input', async () => {
+            const instructionPlan = sequentialInstructionPlan([{} as Instruction, {} as Instruction]);
+            const transactionPlan = singleTransactionPlan({} as TransactionMessage & TransactionMessageWithFeePayer);
+            const customTransactionPlanner = vi.fn().mockResolvedValue(transactionPlan);
+            const customTransactionPlanExecutor = vi.fn();
+            const client = createEmptyClient()
+                .use(transactionPlanner(customTransactionPlanner))
+                .use(transactionPlanExecutor(customTransactionPlanExecutor))
+                .use(planAndSendTransactions());
+
+            await client.planTransaction(instructionPlan);
+            expect(customTransactionPlanner).toHaveBeenCalledExactlyOnceWith(instructionPlan, {
+                abortSignal: undefined,
+            });
+            expect(customTransactionPlanExecutor).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('client.planTransactions', () => {
+        it('adds a planTransactions function on the client that plans instructions and returns a transaction plan', async () => {
+            const instructions = [{} as Instruction, {} as Instruction];
+            const transactionPlan = sequentialTransactionPlan([
+                {} as TransactionMessage & TransactionMessageWithFeePayer,
+                {} as TransactionMessage & TransactionMessageWithFeePayer,
+            ]);
+
+            const customTransactionPlanner = vi.fn().mockResolvedValue(transactionPlan);
+            const customTransactionPlanExecutor = vi.fn();
+            const client = createEmptyClient()
+                .use(transactionPlanner(customTransactionPlanner))
+                .use(transactionPlanExecutor(customTransactionPlanExecutor))
+                .use(planAndSendTransactions());
+
+            expect(client).toHaveProperty('planTransactions');
+            const result = await client.planTransactions(instructions);
+            result satisfies TransactionPlan;
+
+            expect(result).toBe(transactionPlan);
+            expect(customTransactionPlanner).toHaveBeenCalledExactlyOnceWith(sequentialInstructionPlan(instructions), {
+                abortSignal: undefined,
+            });
+            expect(customTransactionPlanExecutor).not.toHaveBeenCalled();
+        });
+
+        it('passes the abort signal through the planner', async () => {
+            const transactionPlan = singleTransactionPlan({} as TransactionMessage & TransactionMessageWithFeePayer);
+            const customTransactionPlanner = vi.fn().mockResolvedValue(transactionPlan);
+            const customTransactionPlanExecutor = vi.fn();
+            const client = createEmptyClient()
+                .use(transactionPlanner(customTransactionPlanner))
+                .use(transactionPlanExecutor(customTransactionPlanExecutor))
+                .use(planAndSendTransactions());
+
+            const abortSignal = new AbortController().signal;
+            await client.planTransactions({} as Instruction, { abortSignal });
+            expect(customTransactionPlanner).toHaveBeenCalledExactlyOnceWith(expect.any(Object), { abortSignal });
+            expect(customTransactionPlanExecutor).not.toHaveBeenCalled();
+        });
+
+        it('does not call the planner if the abort signal is already triggered', async () => {
+            const customTransactionPlanner = vi.fn();
+            const customTransactionPlanExecutor = vi.fn();
+            const client = createEmptyClient()
+                .use(transactionPlanner(customTransactionPlanner))
+                .use(transactionPlanExecutor(customTransactionPlanExecutor))
+                .use(planAndSendTransactions());
+
+            const abortController = new AbortController();
+            abortController.abort();
+            await client.planTransactions({} as Instruction, { abortSignal: abortController.signal }).catch(() => {});
+            expect(customTransactionPlanner).not.toHaveBeenCalled();
+            expect(customTransactionPlanExecutor).not.toHaveBeenCalled();
+        });
+
+        it('accepts instruction plans directly as input', async () => {
+            const instructionPlan = sequentialInstructionPlan([{} as Instruction, {} as Instruction]);
+            const transactionPlan = sequentialTransactionPlan([
+                {} as TransactionMessage & TransactionMessageWithFeePayer,
+                {} as TransactionMessage & TransactionMessageWithFeePayer,
+            ]);
+            const customTransactionPlanner = vi.fn().mockResolvedValue(transactionPlan);
+            const customTransactionPlanExecutor = vi.fn();
+            const client = createEmptyClient()
+                .use(transactionPlanner(customTransactionPlanner))
+                .use(transactionPlanExecutor(customTransactionPlanExecutor))
+                .use(planAndSendTransactions());
+
+            await client.planTransactions(instructionPlan);
+            expect(customTransactionPlanner).toHaveBeenCalledExactlyOnceWith(instructionPlan, {
+                abortSignal: undefined,
+            });
+            expect(customTransactionPlanExecutor).not.toHaveBeenCalled();
+        });
+    });
+
     describe('client.sendTransaction', () => {
         it('adds a sendTransaction function on the client that plans and executes instructions', async () => {
             const instruction = {} as Instruction;
@@ -60,7 +229,7 @@ describe('sendTransactions', () => {
             const client = createEmptyClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
-                .use(sendTransactions());
+                .use(planAndSendTransactions());
 
             expect(client).toHaveProperty('sendTransaction');
             const result = await client.sendTransaction(instruction);
@@ -85,7 +254,7 @@ describe('sendTransactions', () => {
             const client = createEmptyClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
-                .use(sendTransactions());
+                .use(planAndSendTransactions());
 
             const promise = client.sendTransaction(instructionPlan);
             await expect(promise).rejects.toThrowError(
@@ -110,7 +279,7 @@ describe('sendTransactions', () => {
             const client = createEmptyClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
-                .use(sendTransactions());
+                .use(planAndSendTransactions());
 
             const promise = client.sendTransaction(instructionPlan);
             await expect(promise).rejects.toThrowError(
@@ -133,7 +302,7 @@ describe('sendTransactions', () => {
             const client = createEmptyClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
-                .use(sendTransactions());
+                .use(planAndSendTransactions());
 
             const promise = client.sendTransaction(instructionPlan);
             await expect(promise).rejects.toThrowError(
@@ -156,7 +325,7 @@ describe('sendTransactions', () => {
             const client = createEmptyClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
-                .use(sendTransactions());
+                .use(planAndSendTransactions());
 
             const abortSignal = new AbortController().signal;
             await client.sendTransaction({} as Instruction, { abortSignal });
@@ -170,39 +339,35 @@ describe('sendTransactions', () => {
             const client = createEmptyClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
-                .use(sendTransactions());
+                .use(planAndSendTransactions());
 
             const abortController = new AbortController();
             abortController.abort();
             await client.sendTransaction({} as Instruction, { abortSignal: abortController.signal }).catch(() => {});
-            expect(customTransactionPlanner).not.toHaveBeenCalledOnce();
-            expect(customTransactionPlanExecutor).not.toHaveBeenCalledOnce();
+            expect(customTransactionPlanner).not.toHaveBeenCalled();
+            expect(customTransactionPlanExecutor).not.toHaveBeenCalled();
         });
 
-        it('can override the planner and executor set on the client', async () => {
+        it('accepts instruction plans directly as input', async () => {
+            const instructionPlan = sequentialInstructionPlan([{} as Instruction, {} as Instruction]);
             const transactionPlan = singleTransactionPlan({} as TransactionMessage & TransactionMessageWithFeePayer);
-            const transactionPlanResult = successfulSingleTransactionPlanResult(
-                {} as TransactionMessage & TransactionMessageWithFeePayer,
-                { signature: 'signature' as Signature },
-            );
-            const transactionPlannerOnTheClient = vi.fn().mockResolvedValue(transactionPlan);
-            const transactionPlanExecutorOnTheClient = vi.fn().mockResolvedValue(transactionPlanResult);
-            const client = createEmptyClient()
-                .use(transactionPlanner(transactionPlannerOnTheClient))
-                .use(transactionPlanExecutor(transactionPlanExecutorOnTheClient))
-                .use(sendTransactions());
-
-            const overridenTransactionPlanner = vi.fn().mockResolvedValue(transactionPlan);
-            const overridenTransactionPlanExecutor = vi.fn().mockResolvedValue(transactionPlanResult);
-
-            await client.sendTransaction(singleInstructionPlan({} as Instruction), {
-                transactionPlanExecutor: overridenTransactionPlanExecutor,
-                transactionPlanner: overridenTransactionPlanner,
+            const transactionPlanResult = successfulSingleTransactionPlanResult(transactionPlan.message, {
+                signature: 'signature' as Signature,
             });
-            expect(overridenTransactionPlanner).toHaveBeenCalledOnce();
-            expect(overridenTransactionPlanExecutor).toHaveBeenCalledOnce();
-            expect(transactionPlannerOnTheClient).not.toHaveBeenCalledOnce();
-            expect(transactionPlanExecutorOnTheClient).not.toHaveBeenCalledOnce();
+            const customTransactionPlanner = vi.fn().mockResolvedValue(transactionPlan);
+            const customTransactionPlanExecutor = vi.fn().mockResolvedValue(transactionPlanResult);
+            const client = createEmptyClient()
+                .use(transactionPlanner(customTransactionPlanner))
+                .use(transactionPlanExecutor(customTransactionPlanExecutor))
+                .use(planAndSendTransactions());
+
+            await client.sendTransaction(instructionPlan);
+            expect(customTransactionPlanner).toHaveBeenCalledExactlyOnceWith(instructionPlan, {
+                abortSignal: undefined,
+            });
+            expect(customTransactionPlanExecutor).toHaveBeenCalledExactlyOnceWith(transactionPlan, {
+                abortSignal: undefined,
+            });
         });
 
         it('accepts transaction messages directly as input', async () => {
@@ -216,49 +381,38 @@ describe('sendTransactions', () => {
             const client = createEmptyClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
-                .use(sendTransactions());
+                .use(planAndSendTransactions());
 
             await client.sendTransaction(transaction);
-            expect(customTransactionPlanner).not.toHaveBeenCalledOnce();
+            expect(customTransactionPlanner).not.toHaveBeenCalled();
             expect(customTransactionPlanExecutor).toHaveBeenCalledExactlyOnceWith(singleTransactionPlan(transaction), {
                 abortSignal: undefined,
             });
         });
 
-        it('accepts transaction messages without fee payer directly as input if the client has a payer set', async () => {
-            const transaction = createTransactionMessage({ version: 0 });
-            const transactionPlanResult = successfulSingleTransactionPlanResult(
-                {} as TransactionMessage & TransactionMessageWithFeePayer,
-                { signature: 'signature' as Signature },
+        it('accepts single transaction plans directly as input', async () => {
+            const payer = '1111' as Address;
+            const transactionPlan = singleTransactionPlan(
+                setTransactionMessageFeePayer(payer, createTransactionMessage({ version: 0 })),
             );
-
-            const payer = createNoopSigner('1111' as Address);
+            const transactionPlanResult = successfulSingleTransactionPlanResult(transactionPlan.message, {
+                signature: 'signature' as Signature,
+            });
+            const customTransactionPlanner = vi.fn();
             const customTransactionPlanExecutor = vi.fn().mockResolvedValue(transactionPlanResult);
             const client = createEmptyClient()
-                .use(transactionPlanner(vi.fn()))
+                .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
-                .use(c => ({ ...c, payer }))
-                .use(sendTransactions());
+                .use(planAndSendTransactions());
 
-            await client.sendTransaction(transaction);
-            expect(customTransactionPlanExecutor).toHaveBeenCalledExactlyOnceWith(
-                singleTransactionPlan(setTransactionMessageFeePayerSigner(payer, transaction)),
-                { abortSignal: undefined },
-            );
-        });
-
-        it('throws if a transaction message without fee payer is provided and the client has no payer set', async () => {
-            const transaction = createTransactionMessage({ version: 0 });
-            const client = createEmptyClient()
-                .use(transactionPlanner(vi.fn()))
-                .use(transactionPlanExecutor(vi.fn()))
-                .use(sendTransactions());
-
-            await expect(client.sendTransaction(transaction)).rejects.toThrowError(
-                'A fee payer is required for the provided transaction message.',
-            );
+            await client.sendTransaction(transactionPlan);
+            expect(customTransactionPlanner).not.toHaveBeenCalled();
+            expect(customTransactionPlanExecutor).toHaveBeenCalledExactlyOnceWith(transactionPlan, {
+                abortSignal: undefined,
+            });
         });
     });
+
     describe('client.sendTransactions', () => {
         it('adds a sendTransactions function on the client that plans and executes instructions', async () => {
             const instruction = {} as Instruction;
@@ -270,7 +424,7 @@ describe('sendTransactions', () => {
             const client = createEmptyClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
-                .use(sendTransactions());
+                .use(planAndSendTransactions());
 
             expect(client).toHaveProperty('sendTransactions');
             const result = await client.sendTransactions(instruction);
@@ -289,7 +443,7 @@ describe('sendTransactions', () => {
             const client = createEmptyClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
-                .use(sendTransactions());
+                .use(planAndSendTransactions());
 
             const abortSignal = new AbortController().signal;
             await client.sendTransactions({} as Instruction, { abortSignal });
@@ -303,34 +457,35 @@ describe('sendTransactions', () => {
             const client = createEmptyClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
-                .use(sendTransactions());
+                .use(planAndSendTransactions());
 
             const abortController = new AbortController();
             abortController.abort();
             await client.sendTransactions({} as Instruction, { abortSignal: abortController.signal }).catch(() => {});
-            expect(customTransactionPlanner).not.toHaveBeenCalledOnce();
-            expect(customTransactionPlanExecutor).not.toHaveBeenCalledOnce();
+            expect(customTransactionPlanner).not.toHaveBeenCalled();
+            expect(customTransactionPlanExecutor).not.toHaveBeenCalled();
         });
 
-        it('can override the planner and executor set on the client', async () => {
-            const transactionPlannerOnTheClient = vi.fn().mockResolvedValue({});
-            const transactionPlanExecutorOnTheClient = vi.fn().mockResolvedValue({});
+        it('accepts instruction plans directly as input', async () => {
+            const instructionPlan = sequentialInstructionPlan([{} as Instruction, {} as Instruction]);
+            const transactionPlan = sequentialTransactionPlan([
+                {} as TransactionMessage & TransactionMessageWithFeePayer,
+                {} as TransactionMessage & TransactionMessageWithFeePayer,
+            ]);
+            const customTransactionPlanner = vi.fn().mockResolvedValue(transactionPlan);
+            const customTransactionPlanExecutor = vi.fn();
             const client = createEmptyClient()
-                .use(transactionPlanner(transactionPlannerOnTheClient))
-                .use(transactionPlanExecutor(transactionPlanExecutorOnTheClient))
-                .use(sendTransactions());
+                .use(transactionPlanner(customTransactionPlanner))
+                .use(transactionPlanExecutor(customTransactionPlanExecutor))
+                .use(planAndSendTransactions());
 
-            const overridenTransactionPlanner = vi.fn().mockResolvedValue({});
-            const overridenTransactionPlanExecutor = vi.fn().mockResolvedValue({});
-
-            await client.sendTransactions({} as Instruction, {
-                transactionPlanExecutor: overridenTransactionPlanExecutor,
-                transactionPlanner: overridenTransactionPlanner,
+            await client.sendTransactions(instructionPlan);
+            expect(customTransactionPlanner).toHaveBeenCalledExactlyOnceWith(instructionPlan, {
+                abortSignal: undefined,
             });
-            expect(overridenTransactionPlanner).toHaveBeenCalledOnce();
-            expect(overridenTransactionPlanExecutor).toHaveBeenCalledOnce();
-            expect(transactionPlannerOnTheClient).not.toHaveBeenCalledOnce();
-            expect(transactionPlanExecutorOnTheClient).not.toHaveBeenCalledOnce();
+            expect(customTransactionPlanExecutor).toHaveBeenCalledExactlyOnceWith(transactionPlan, {
+                abortSignal: undefined,
+            });
         });
 
         it('accepts transaction messages directly as input', async () => {
@@ -341,10 +496,10 @@ describe('sendTransactions', () => {
             const client = createEmptyClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
-                .use(sendTransactions());
+                .use(planAndSendTransactions());
 
             await client.sendTransactions(transaction);
-            expect(customTransactionPlanner).not.toHaveBeenCalledOnce();
+            expect(customTransactionPlanner).not.toHaveBeenCalled();
             expect(customTransactionPlanExecutor).toHaveBeenCalledExactlyOnceWith(singleTransactionPlan(transaction), {
                 abortSignal: undefined,
             });
@@ -364,47 +519,33 @@ describe('sendTransactions', () => {
             const client = createEmptyClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
-                .use(sendTransactions());
+                .use(planAndSendTransactions());
 
             await client.sendTransactions([transactionA, transactionB]);
-            expect(customTransactionPlanner).not.toHaveBeenCalledOnce();
+            expect(customTransactionPlanner).not.toHaveBeenCalled();
             expect(customTransactionPlanExecutor).toHaveBeenCalledExactlyOnceWith(
                 sequentialTransactionPlan([transactionA, transactionB]),
                 { abortSignal: undefined },
             );
         });
 
-        it('accepts transaction messages without fee payer directly as input if the client has a payer set', async () => {
-            const transaction = createTransactionMessage({ version: 0 });
-            const payer = createNoopSigner('1111' as Address);
+        it('accepts transaction plans directly as input', async () => {
+            const transactionPlan = sequentialTransactionPlan([
+                {} as TransactionMessage & TransactionMessageWithFeePayer,
+                {} as TransactionMessage & TransactionMessageWithFeePayer,
+            ]);
+            const customTransactionPlanner = vi.fn();
             const customTransactionPlanExecutor = vi.fn();
             const client = createEmptyClient()
-                .use(transactionPlanner(vi.fn()))
+                .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
-                .use(c => ({ ...c, payer }))
-                .use(sendTransactions());
+                .use(planAndSendTransactions());
 
-            await client.sendTransactions([transaction]);
-            expect(customTransactionPlanExecutor).toHaveBeenCalledExactlyOnceWith(
-                sequentialTransactionPlan([setTransactionMessageFeePayerSigner(payer, transaction)]),
-                { abortSignal: undefined },
-            );
-        });
-
-        it('throws if at least one transaction message without fee payer is provided and the client has no payer set', async () => {
-            const transactionA = createTransactionMessage({ version: 0 });
-            const transactionB = setTransactionMessageFeePayer(
-                '1111' as Address,
-                createTransactionMessage({ version: 0 }),
-            );
-            const client = createEmptyClient()
-                .use(transactionPlanner(vi.fn()))
-                .use(transactionPlanExecutor(vi.fn()))
-                .use(sendTransactions());
-
-            await expect(client.sendTransactions([transactionA, transactionB])).rejects.toThrowError(
-                'A fee payer is required for the provided transaction message.',
-            );
+            await client.sendTransactions(transactionPlan);
+            expect(customTransactionPlanner).not.toHaveBeenCalled();
+            expect(customTransactionPlanExecutor).toHaveBeenCalledExactlyOnceWith(transactionPlan, {
+                abortSignal: undefined,
+            });
         });
     });
 });
