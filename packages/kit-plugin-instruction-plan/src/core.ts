@@ -1,21 +1,14 @@
 import {
     assertIsSingleTransactionPlan,
     assertIsSuccessfulSingleTransactionPlanResult,
-    Instruction,
-    InstructionPlan,
-    sequentialInstructionPlan,
-    sequentialTransactionPlan,
-    setTransactionMessageFeePayerSigner,
-    singleInstructionPlan,
+    ClientWithTransactionPlanning,
+    ClientWithTransactionSending,
+    isTransactionPlan,
+    parseInstructionOrTransactionPlanInput,
+    parseInstructionPlanInput,
     singleTransactionPlan,
-    SuccessfulSingleTransactionPlanResult,
-    TransactionMessage,
-    TransactionMessageWithFeePayer,
-    TransactionPlan,
     TransactionPlanExecutor,
     TransactionPlanner,
-    TransactionPlanResult,
-    TransactionSigner,
 } from '@solana/kit';
 
 /**
@@ -85,101 +78,50 @@ export function transactionPlanExecutor(transactionPlanExecutor: TransactionPlan
  * const singleResult = await client.sendTransaction(myInstructionPlan);
  * const result = await client.sendTransactions(myInstructionPlan);
  */
-export function sendTransactions() {
-    return <
-        T extends {
-            payer?: TransactionSigner;
-            transactionPlanExecutor: TransactionPlanExecutor;
-            transactionPlanner: TransactionPlanner;
-        },
-    >(
+export function planAndSendTransactions() {
+    return <T extends { transactionPlanExecutor: TransactionPlanExecutor; transactionPlanner: TransactionPlanner }>(
         client: T,
-    ) => ({
+    ): ClientWithTransactionPlanning & ClientWithTransactionSending & T => ({
         ...client,
-        sendTransaction: async (
-            input: Instruction | Instruction[] | InstructionPlan | TransactionMessage,
-            config: {
-                abortSignal?: AbortSignal;
-                transactionPlanExecutor?: TransactionPlanExecutor;
-                transactionPlanner?: TransactionPlanner;
-            } = {},
-        ): Promise<SuccessfulSingleTransactionPlanResult> => {
-            const innerConfig = { abortSignal: config.abortSignal };
-
-            let transactionPlan: TransactionPlan;
-            if (isTransactionMessage(input)) {
-                transactionPlan = singleTransactionPlan(getTransactionMessageWithFeePayer(input, client.payer));
-            } else {
-                const instructionPlan = getInstructionPlan(input);
-                config?.abortSignal?.throwIfAborted();
-                const transactionPlanner = config.transactionPlanner ?? client.transactionPlanner;
-                transactionPlan = await transactionPlanner(instructionPlan, innerConfig);
-                assertIsSingleTransactionPlan(transactionPlan);
-            }
-
-            config?.abortSignal?.throwIfAborted();
-            const transactionPlanExecutor = config.transactionPlanExecutor ?? client.transactionPlanExecutor;
-            const result = await transactionPlanExecutor(transactionPlan, innerConfig);
-            assertIsSuccessfulSingleTransactionPlanResult(result);
-            return result;
-        },
-        sendTransactions: async (
-            input: Instruction | Instruction[] | InstructionPlan | TransactionMessage | TransactionMessage[],
-            config: {
-                abortSignal?: AbortSignal;
-                transactionPlanExecutor?: TransactionPlanExecutor;
-                transactionPlanner?: TransactionPlanner;
-            } = {},
-        ): Promise<TransactionPlanResult> => {
-            const innerConfig = { abortSignal: config.abortSignal };
-
-            let transactionPlan: TransactionPlan;
-            if (isTransactionMessage(input)) {
-                transactionPlan = singleTransactionPlan(getTransactionMessageWithFeePayer(input, client.payer));
-            } else if (isTransactionMessageArray(input)) {
-                transactionPlan = sequentialTransactionPlan(
-                    input.map(m => getTransactionMessageWithFeePayer(m, client.payer)),
-                );
-            } else {
-                const instructionPlan = getInstructionPlan(input);
-                config?.abortSignal?.throwIfAborted();
-                const transactionPlanner = config.transactionPlanner ?? client.transactionPlanner;
-                transactionPlan = await transactionPlanner(instructionPlan, innerConfig);
-            }
-
-            config?.abortSignal?.throwIfAborted();
-            const transactionPlanExecutor = config.transactionPlanExecutor ?? client.transactionPlanExecutor;
-            return await transactionPlanExecutor(transactionPlan, innerConfig);
-        },
+        ...getTransactionPlanningAndSendingFunctions(client),
     });
 }
 
-function getInstructionPlan(input: Instruction | Instruction[] | InstructionPlan): InstructionPlan {
-    if ('kind' in input) return input;
-    if (Array.isArray(input)) return sequentialInstructionPlan(input);
-    return singleInstructionPlan(input);
-}
+function getTransactionPlanningAndSendingFunctions(client: {
+    transactionPlanExecutor: TransactionPlanExecutor;
+    transactionPlanner: TransactionPlanner;
+}): ClientWithTransactionPlanning & ClientWithTransactionSending {
+    const planTransactions: ClientWithTransactionPlanning['planTransactions'] = async (input, config = {}) => {
+        const instructionPlan = parseInstructionPlanInput(input);
+        config?.abortSignal?.throwIfAborted();
+        return await client.transactionPlanner(instructionPlan, config);
+    };
 
-function isTransactionMessage(input: unknown): input is TransactionMessage {
-    return typeof input === 'object' && input !== null && 'instructions' in input;
-}
+    const planTransaction: ClientWithTransactionPlanning['planTransaction'] = async (input, config = {}) => {
+        const transactionPlan = await planTransactions(input, config);
+        assertIsSingleTransactionPlan(transactionPlan);
+        return transactionPlan.message;
+    };
 
-function isTransactionMessageArray(input: unknown): input is TransactionMessage[] {
-    return Array.isArray(input) && (input.length === 0 || isTransactionMessage(input[0]));
-}
+    const sendTransactions: ClientWithTransactionSending['sendTransactions'] = async (input, config = {}) => {
+        const plan = parseInstructionOrTransactionPlanInput(input);
+        config?.abortSignal?.throwIfAborted();
+        const transactionPlan = isTransactionPlan(plan) ? plan : await planTransactions(plan, config);
+        config?.abortSignal?.throwIfAborted();
+        return await client.transactionPlanExecutor(transactionPlan, config);
+    };
 
-function getTransactionMessageWithFeePayer(
-    input: TransactionMessage,
-    payer?: TransactionSigner,
-): TransactionMessage & TransactionMessageWithFeePayer {
-    if ('feePayer' in input) {
-        return input as TransactionMessage & TransactionMessageWithFeePayer;
-    }
-    if (payer) {
-        return setTransactionMessageFeePayerSigner(payer, input);
-    }
-    throw new Error(
-        'A fee payer is required for the provided transaction message. ' +
-            'Please add one to the transaction message or use a `payer` plugin on the client.',
-    );
+    const sendTransaction: ClientWithTransactionSending['sendTransaction'] = async (input, config = {}) => {
+        const plan = parseInstructionOrTransactionPlanInput(input);
+        config?.abortSignal?.throwIfAborted();
+        const transactionPlan = isTransactionPlan(plan)
+            ? plan
+            : singleTransactionPlan(await planTransaction(plan, config));
+        config?.abortSignal?.throwIfAborted();
+        const result = await client.transactionPlanExecutor(transactionPlan, config);
+        assertIsSuccessfulSingleTransactionPlanResult(result);
+        return result;
+    };
+
+    return { planTransaction, planTransactions, sendTransaction, sendTransactions };
 }
