@@ -26,6 +26,9 @@ pnpm install @solana/kit-plugin-litesvm
 
 The LiteSVM plugin starts a new LiteSVM instance within your Kit client, allowing you to simulate Solana programs and accounts locally. Additionally, it derives a small RPC subset that interacts with the LiteSVM instance instead of making network requests.
 
+> [!IMPORTANT]
+> This plugin is only available in Node.js builds. Browser and React Native builds throw an error when calling `litesvm()`.
+
 ### Installation
 
 ```ts

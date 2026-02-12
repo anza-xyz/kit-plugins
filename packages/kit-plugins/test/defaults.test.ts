@@ -170,6 +170,15 @@ describe('createDefaultLocalhostRpcClient', () => {
 });
 
 describe('createDefaultLiteSVMClient', () => {
+    if (!__NODEJS__) {
+        it('it throws in browser builds', () => {
+            expect(() => createDefaultLiteSVMClient()).toThrow(
+                'The `litesvm` plugin is unavailable in browser and react-native',
+            );
+        });
+        return;
+    }
+
     it('it offers a LiteSVM instance', async () => {
         const client = await createDefaultLiteSVMClient();
         expect(client.svm).toBeTypeOf('object');

@@ -11,9 +11,18 @@ import {
 } from '@solana/kit';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
-import { litesvm } from '../src';
+import { litesvm as nodeLitesvm } from '../src/index';
+import { litesvm as browserLitesvm } from '../src/index.browser';
+const litesvm = __NODEJS__ ? nodeLitesvm : browserLitesvm;
 
 describe('litesvm', () => {
+    if (!__NODEJS__) {
+        it('it throws in browser builds', () => {
+            expect(() => litesvm()).toThrow('The `litesvm` plugin is unavailable in browser and react-native');
+        });
+        return;
+    }
+
     it('instantiates and attaches a new LiteSVM client', () => {
         const client = createEmptyClient().use(litesvm());
         expect(client).toHaveProperty('svm');
