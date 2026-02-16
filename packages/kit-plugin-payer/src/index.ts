@@ -1,7 +1,12 @@
 import { readFileSync } from 'node:fs';
 
-import { createKeyPairSignerFromBytes, generateKeyPairSigner, Lamports, TransactionSigner } from '@solana/kit';
-import type { AirdropFunction } from '@solana/kit-plugin-airdrop';
+import {
+    ClientWithAirdrop,
+    createKeyPairSignerFromBytes,
+    generateKeyPairSigner,
+    Lamports,
+    TransactionSigner,
+} from '@solana/kit';
 
 /**
  * Sets the provided `TransactionSigner` as the `payer` property on the client.
@@ -68,7 +73,7 @@ export function generatedPayer() {
  */
 export function generatedPayerWithSol(amount: Lamports) {
     const generatedPayerPlugin = generatedPayer();
-    return async <T extends { airdrop: AirdropFunction }>(client: T) => {
+    return async <T extends ClientWithAirdrop>(client: T) => {
         const clientWithPayer = await generatedPayerPlugin<T>(client);
         if (!clientWithPayer.airdrop) {
             throw new Error('generatedPayerWithSol requires an airdrop function on the client');

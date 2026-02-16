@@ -1,5 +1,6 @@
 import {
     airdropFactory,
+    ClientWithAirdrop,
     Rpc,
     RpcSubscriptions,
     SolanaRpcApi,
@@ -11,7 +12,6 @@ import {
 import { beforeEach, describe, expect, expectTypeOf, it, Mock, vi } from 'vitest';
 
 import {
-    AirdropFunction,
     createDefaultLiteSVMClient,
     createDefaultLocalhostRpcClient,
     createDefaultRpcClient,
@@ -106,7 +106,7 @@ describe('createDefaultLocalhostRpcClient', () => {
 
         const client = await createDefaultLocalhostRpcClient();
         expect(client.airdrop).toBeTypeOf('function');
-        expectTypeOf(client.airdrop).toEqualTypeOf<AirdropFunction>();
+        expectTypeOf(client).toMatchObjectType<ClientWithAirdrop>();
     });
 
     it('it generates a new payer with SOL by default', async () => {
@@ -194,7 +194,7 @@ describe('createDefaultLiteSVMClient', () => {
     it('it offers an airdrop function', async () => {
         const client = await createDefaultLiteSVMClient();
         expect(client.airdrop).toBeTypeOf('function');
-        expectTypeOf(client.airdrop).toEqualTypeOf<AirdropFunction>();
+        expectTypeOf(client).toMatchObjectType<ClientWithAirdrop>();
     });
 
     it('it generates a new payer by default', async () => {

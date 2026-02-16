@@ -133,9 +133,6 @@ importers:
       '@solana/kit':
         specifier: ^6.1.0
         version: 6.1.0(typescript@5.9.3)
-      '@solana/kit-plugin-airdrop':
-        specifier: workspace:*
-        version: link:../kit-plugin-airdrop
 
   packages/kit-plugin-rpc:
     dependencies:
