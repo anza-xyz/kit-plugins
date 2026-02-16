@@ -3,7 +3,7 @@
     "private": true,
     "dependencies": {
         "@solana-program/system": "^0.11.0",
-        "@solana/kit": "^6",
+        "@solana/kit": "^6.1.0",
         "@solana/kit-plugins": "workspace:*"
     },
     "type": "module",

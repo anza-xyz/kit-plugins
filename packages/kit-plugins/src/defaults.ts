@@ -9,7 +9,7 @@ import { airdrop, AirdropFunction } from '@solana/kit-plugin-airdrop';
 import {
     defaultTransactionPlannerAndExecutorFromLitesvm,
     defaultTransactionPlannerAndExecutorFromRpc,
-    sendTransactions,
+    planAndSendTransactions,
 } from '@solana/kit-plugin-instruction-plan';
 import { litesvm } from '@solana/kit-plugin-litesvm';
 import { generatedPayerWithSol, payer } from '@solana/kit-plugin-payer';
@@ -49,7 +49,7 @@ export function createDefaultRpcClient<TClusterUrl extends ClusterUrl>(config: {
         .use(rpc<TClusterUrl>(config.url, config.rpcSubscriptionsConfig))
         .use(payer(config.payer))
         .use(defaultTransactionPlannerAndExecutorFromRpc())
-        .use(sendTransactions());
+        .use(planAndSendTransactions());
 }
 
 /**
@@ -92,7 +92,7 @@ export function createDefaultLocalhostRpcClient(
         .use(airdrop())
         .use(payerOrGeneratedPayer(config.payer))
         .use(defaultTransactionPlannerAndExecutorFromRpc())
-        .use(sendTransactions());
+        .use(planAndSendTransactions());
 }
 
 /**
@@ -137,7 +137,7 @@ export function createDefaultLiteSVMClient(config: { payer?: TransactionSigner }
         .use(airdrop())
         .use(payerOrGeneratedPayer(config.payer))
         .use(defaultTransactionPlannerAndExecutorFromLitesvm())
-        .use(sendTransactions());
+        .use(planAndSendTransactions());
 }
 
 /**
