@@ -48,9 +48,6 @@
     "peerDependencies": {
         "@solana/kit": "^6.1.0"
     },
-    "dependencies": {
-        "@solana/kit-plugin-airdrop": "workspace:*"
-    },
     "license": "MIT",
     "repository": {
         "type": "git",
