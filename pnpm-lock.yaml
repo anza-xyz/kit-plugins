@@ -66,8 +66,8 @@ importers:
   examples/token-airdrop:
     dependencies:
       '@solana-program/system':
-        specifier: ^0.11.0
-        version: 0.11.0(@solana/kit@6.1.0(typescript@5.9.3))
+        specifier: ^0.12.0
+        version: 0.12.0(@solana/kit@6.1.0(typescript@5.9.3))
       '@solana-program/token':
         specifier: ^0.11.0
         version: 0.11.0(@solana/kit@6.1.0(typescript@5.9.3))
@@ -81,8 +81,8 @@ importers:
   examples/transfer-lamports:
     dependencies:
       '@solana-program/system':
-        specifier: ^0.11.0
-        version: 0.11.0(@solana/kit@6.1.0(typescript@5.9.3))
+        specifier: ^0.12.0
+        version: 0.12.0(@solana/kit@6.1.0(typescript@5.9.3))
       '@solana/kit':
         specifier: ^6.1.0
         version: 6.1.0(typescript@5.9.3)
@@ -1070,11 +1070,6 @@ packages:
 
   '@solana-program/system@0.10.0':
     resolution: {integrity: sha512-Go+LOEZmqmNlfr+Gjy5ZWAdY5HbYzk2RBewD9QinEU/bBSzpFfzqDRT55JjFRBGJUvMgf3C2vfXEGT4i8DSI4g==}
-    peerDependencies:
-      '@solana/kit': ^6.1.0
-
-  '@solana-program/system@0.11.0':
-    resolution: {integrity: sha512-SJeQVTkqGZzIXd7XHlCxnfpKpvPZghB1IFwddPPG04ydVXtDLRWp9wLoTR5Prkl9FIWRe/c5VgT4nxyzW1cAuQ==}
     peerDependencies:
       '@solana/kit': ^6.1.0
 
@@ -4481,10 +4476,6 @@ snapshots:
       '@solana/kit': 6.1.0(typescript@5.9.3)
 
   '@solana-program/system@0.10.0(@solana/kit@6.1.0(typescript@5.9.3))':
-    dependencies:
-      '@solana/kit': 6.1.0(typescript@5.9.3)
-
-  '@solana-program/system@0.11.0(@solana/kit@6.1.0(typescript@5.9.3))':
     dependencies:
       '@solana/kit': 6.1.0(typescript@5.9.3)
 

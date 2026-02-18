@@ -2,7 +2,7 @@
     "name": "@solana/examples-token-airdrop",
     "private": true,
     "dependencies": {
-        "@solana-program/system": "^0.11.0",
+        "@solana-program/system": "^0.12.0",
         "@solana-program/token": "^0.11.0",
         "@solana/kit": "^6.1.0",
         "@solana/kit-plugins": "workspace:*"
