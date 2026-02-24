@@ -19,11 +19,11 @@ import { localhostRpc, rpc } from '@solana/kit-plugin-rpc';
  *
  * @example
  * ```ts
- * import { createDefaultRpcClient } from '@solana/kit-client-rpc';
+ * import { createClient } from '@solana/kit-client-rpc';
  * import { generateKeyPairSigner } from '@solana/kit';
  *
  * const payer = await generateKeyPairSigner();
- * const client = createDefaultRpcClient({
+ * const client = createClient({
  *   url: 'https://api.mainnet-beta.solana.com',
  *   payer,
  * });
@@ -32,7 +32,7 @@ import { localhostRpc, rpc } from '@solana/kit-plugin-rpc';
  * const result = await client.sendTransaction([myInstruction]);
  * ```
  */
-export function createDefaultRpcClient<TClusterUrl extends ClusterUrl>(config: {
+export function createClient<TClusterUrl extends ClusterUrl>(config: {
     payer: TransactionSigner;
     rpcSubscriptionsConfig?: DefaultRpcSubscriptionsChannelConfig<TClusterUrl>;
     url: TClusterUrl;
@@ -56,10 +56,10 @@ export function createDefaultRpcClient<TClusterUrl extends ClusterUrl>(config: {
  *
  * @example
  * ```ts
- * import { createDefaultLocalhostRpcClient } from '@solana/kit-client-rpc';
+ * import { createLocalClient } from '@solana/kit-client-rpc';
  *
  * // Creates a client with auto-generated and funded payer
- * const client = await createDefaultLocalhostRpcClient();
+ * const client = await createLocalClient();
  *
  * // Use the client
  * const result = await client.sendTransaction([myInstruction]);
@@ -69,14 +69,14 @@ export function createDefaultRpcClient<TClusterUrl extends ClusterUrl>(config: {
  * @example
  * Using a custom payer.
  * ```ts
- * import { createDefaultLocalhostRpcClient } from '@solana/kit-client-rpc';
+ * import { createLocalClient } from '@solana/kit-client-rpc';
  * import { generateKeyPairSigner } from '@solana/kit';
  *
  * const customPayer = await generateKeyPairSigner();
- * const client = await createDefaultLocalhostRpcClient({ payer: customPayer });
+ * const client = await createLocalClient({ payer: customPayer });
  * ```
  */
-export function createDefaultLocalhostRpcClient(
+export function createLocalClient(
     config: { payer?: TransactionSigner; rpcSubscriptionsConfig?: { url: string }; url?: string } = {},
 ) {
     return createEmptyClient()

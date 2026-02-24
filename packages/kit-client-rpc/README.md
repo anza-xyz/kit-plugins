@@ -15,16 +15,16 @@ This package provides pre-configured RPC clients for Solana Kit. It bundles seve
 pnpm install @solana/kit-client-rpc
 ```
 
-## `createDefaultRpcClient`
+## `createClient`
 
 Pre-configured client for production use with real Solana clusters.
 
 ```ts
-import { createDefaultRpcClient } from '@solana/kit-client-rpc';
+import { createClient } from '@solana/kit-client-rpc';
 import { generateKeyPairSigner } from '@solana/kit';
 
 const payer = await generateKeyPairSigner();
-const client = createDefaultRpcClient({
+const client = createClient({
     url: 'https://api.devnet.solana.com',
     payer,
 });
@@ -50,15 +50,15 @@ await client.sendTransaction([myInstruction]);
 | `payer` (required)       | `TransactionSigner`      | Signer used to pay for transaction fees and on-chain account storage.                          |
 | `rpcSubscriptionsConfig` | `RpcSubscriptionsConfig` | Configuration for RPC subscriptions. Use `rpcSubscriptionsConfig.url` to specify its endpoint. |
 
-## `createDefaultLocalhostRpcClient`
+## `createLocalClient`
 
 Pre-configured client for localhost development with automatic payer funding.
 
 ```ts
-import { createDefaultLocalhostRpcClient } from '@solana/kit-client-rpc';
+import { createLocalClient } from '@solana/kit-client-rpc';
 import { lamports } from '@solana/kit';
 
-const client = await createDefaultLocalhostRpcClient();
+const client = await createLocalClient();
 
 // Payer is automatically generated and funded
 console.log('Payer address:', client.payer.address);

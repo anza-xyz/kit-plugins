@@ -11,7 +11,7 @@ import {
 } from '@solana/kit';
 import { beforeEach, describe, expect, expectTypeOf, it, Mock, vi } from 'vitest';
 
-import { createDefaultLocalhostRpcClient, createDefaultRpcClient } from '../src';
+import { createClient, createLocalClient } from '../src';
 
 vi.mock('@solana/kit', async () => {
     const actual = await vi.importActual('@solana/kit');
@@ -22,9 +22,9 @@ beforeEach(() => {
     vi.clearAllMocks();
 });
 
-describe('createDefaultRpcClient', () => {
+describe('createClient', () => {
     it('it offers an RPC client', () => {
-        const client = createDefaultRpcClient({
+        const client = createClient({
             payer: {} as TransactionSigner,
             url: 'https://api.mainnet-beta.solana.com',
         });
@@ -33,7 +33,7 @@ describe('createDefaultRpcClient', () => {
     });
 
     it('it offers an RPC Subscriptions client', () => {
-        const client = createDefaultRpcClient({
+        const client = createClient({
             payer: {} as TransactionSigner,
             url: 'https://api.mainnet-beta.solana.com',
         });
@@ -43,12 +43,12 @@ describe('createDefaultRpcClient', () => {
 
     it('it uses the provided payer', () => {
         const payer = {} as TransactionSigner;
-        const client = createDefaultRpcClient({ payer, url: 'https://api.mainnet-beta.solana.com' });
+        const client = createClient({ payer, url: 'https://api.mainnet-beta.solana.com' });
         expect(client.payer).toBe(payer);
     });
 
     it('it offers a default transaction planner', () => {
-        const client = createDefaultRpcClient({
+        const client = createClient({
             payer: {} as TransactionSigner,
             url: 'https://api.mainnet-beta.solana.com',
         });
@@ -57,7 +57,7 @@ describe('createDefaultRpcClient', () => {
     });
 
     it('it offers a default transaction plan executor', () => {
-        const client = createDefaultRpcClient({
+        const client = createClient({
             payer: {} as TransactionSigner,
             url: 'https://api.mainnet-beta.solana.com',
         });
@@ -66,7 +66,7 @@ describe('createDefaultRpcClient', () => {
     });
 
     it('it provide helper functions to send transactions', () => {
-        const client = createDefaultRpcClient({
+        const client = createClient({
             payer: {} as TransactionSigner,
             url: 'https://api.mainnet-beta.solana.com',
         });
@@ -75,12 +75,12 @@ describe('createDefaultRpcClient', () => {
     });
 });
 
-describe('createDefaultLocalhostRpcClient', () => {
+describe('createLocalClient', () => {
     it('it offers an RPC client', async () => {
         const airdropFn = vi.fn().mockResolvedValue('MockSignature');
         (airdropFactory as Mock).mockReturnValueOnce(airdropFn);
 
-        const client = await createDefaultLocalhostRpcClient();
+        const client = await createLocalClient();
         expect(client.rpc).toBeTypeOf('object');
         expectTypeOf(client.rpc).toEqualTypeOf<Rpc<SolanaRpcApi>>();
     });
@@ -89,7 +89,7 @@ describe('createDefaultLocalhostRpcClient', () => {
         const airdropFn = vi.fn().mockResolvedValue('MockSignature');
         (airdropFactory as Mock).mockReturnValueOnce(airdropFn);
 
-        const client = await createDefaultLocalhostRpcClient();
+        const client = await createLocalClient();
         expect(client.rpcSubscriptions).toBeTypeOf('object');
         expectTypeOf(client.rpcSubscriptions).toEqualTypeOf<RpcSubscriptions<SolanaRpcSubscriptionsApi>>();
     });
@@ -98,7 +98,7 @@ describe('createDefaultLocalhostRpcClient', () => {
         const airdropFn = vi.fn().mockResolvedValue('MockSignature');
         (airdropFactory as Mock).mockReturnValueOnce(airdropFn);
 
-        const client = await createDefaultLocalhostRpcClient();
+        const client = await createLocalClient();
         expect(client.airdrop).toBeTypeOf('function');
         expectTypeOf(client).toMatchObjectType<ClientWithAirdrop>();
     });
@@ -107,7 +107,7 @@ describe('createDefaultLocalhostRpcClient', () => {
         const airdropFn = vi.fn().mockResolvedValue('MockSignature');
         (airdropFactory as Mock).mockReturnValueOnce(airdropFn);
 
-        const client = await createDefaultLocalhostRpcClient();
+        const client = await createLocalClient();
         expect(client.payer).toBeTypeOf('object');
         expectTypeOf(client.payer).toEqualTypeOf<TransactionSigner>();
 
@@ -120,7 +120,7 @@ describe('createDefaultLocalhostRpcClient', () => {
 
     it('it uses the provided payer', async () => {
         const payer = {} as TransactionSigner;
-        const client = await createDefaultLocalhostRpcClient({ payer });
+        const client = await createLocalClient({ payer });
         expect(client.payer).toBe(payer);
     });
 
@@ -128,7 +128,7 @@ describe('createDefaultLocalhostRpcClient', () => {
         const airdropFn = vi.fn().mockResolvedValue('MockSignature');
         (airdropFactory as Mock).mockReturnValueOnce(airdropFn);
 
-        const client = await createDefaultLocalhostRpcClient();
+        const client = await createLocalClient();
         expect(client.transactionPlanner).toBeTypeOf('function');
         expectTypeOf(client.transactionPlanner).toEqualTypeOf<TransactionPlanner>();
     });
@@ -137,7 +137,7 @@ describe('createDefaultLocalhostRpcClient', () => {
         const airdropFn = vi.fn().mockResolvedValue('MockSignature');
         (airdropFactory as Mock).mockReturnValueOnce(airdropFn);
 
-        const client = await createDefaultLocalhostRpcClient();
+        const client = await createLocalClient();
         expect(client.transactionPlanExecutor).toBeTypeOf('function');
         expectTypeOf(client.transactionPlanExecutor).toEqualTypeOf<TransactionPlanExecutor>();
     });
@@ -146,7 +146,7 @@ describe('createDefaultLocalhostRpcClient', () => {
         const airdropFn = vi.fn().mockResolvedValue('MockSignature');
         (airdropFactory as Mock).mockReturnValueOnce(airdropFn);
 
-        const client = await createDefaultLocalhostRpcClient();
+        const client = await createLocalClient();
         expect(client.sendTransactions).toBeTypeOf('function');
         expect(client.sendTransaction).toBeTypeOf('function');
     });
@@ -155,7 +155,7 @@ describe('createDefaultLocalhostRpcClient', () => {
         const airdropFn = vi.fn().mockResolvedValue('MockSignature');
         (airdropFactory as Mock).mockReturnValueOnce(airdropFn);
 
-        const client = await createDefaultLocalhostRpcClient({
+        const client = await createLocalClient({
             rpcSubscriptionsConfig: { url: 'ws://host.docker.internal:8900' },
             url: 'http://host.docker.internal:8899',
         });

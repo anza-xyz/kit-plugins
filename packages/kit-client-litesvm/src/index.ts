@@ -20,10 +20,10 @@ import { payerOrGeneratedPayer } from '@solana/kit-plugin-payer';
  *
  * @example
  * ```ts
- * import { createDefaultLiteSVMClient } from '@solana/kit-client-litesvm';
+ * import { createClient } from '@solana/kit-client-litesvm';
  *
  * // Creates a client with auto-generated and funded payer
- * const client = await createDefaultLiteSVMClient();
+ * const client = await createClient();
  *
  * // Set up accounts and programs
  * client.svm.setAccount(myAccount);
@@ -36,14 +36,14 @@ import { payerOrGeneratedPayer } from '@solana/kit-plugin-payer';
  * @example
  * Using a custom payer.
  * ```ts
- * import { createDefaultLiteSVMClient } from '@solana/kit-client-litesvm';
+ * import { createClient } from '@solana/kit-client-litesvm';
  * import { generateKeyPairSigner } from '@solana/kit';
  *
  * const customPayer = await generateKeyPairSigner();
- * const client = await createDefaultLiteSVMClient({ payer: customPayer });
+ * const client = await createClient({ payer: customPayer });
  * ```
  */
-export function createDefaultLiteSVMClient(config: { payer?: TransactionSigner } = {}) {
+export function createClient(config: { payer?: TransactionSigner } = {}) {
     return createEmptyClient()
         .use(litesvm())
         .use(airdrop())

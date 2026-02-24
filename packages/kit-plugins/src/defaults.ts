@@ -1,14 +1,14 @@
 /**
- * @deprecated Use `createDefaultRpcClient` from `@solana/kit-client-rpc` instead.
+ * @deprecated Use `createClient` from `@solana/kit-client-rpc` instead.
  */
-export { createDefaultRpcClient } from '@solana/kit-client-rpc';
+export { createClient as createDefaultRpcClient } from '@solana/kit-client-rpc';
 
 /**
- * @deprecated Use `createDefaultLocalhostRpcClient` from `@solana/kit-client-rpc` instead.
+ * @deprecated Use `createLocalClient` from `@solana/kit-client-rpc` instead.
  */
-export { createDefaultLocalhostRpcClient } from '@solana/kit-client-rpc';
+export { createLocalClient as createDefaultLocalhostRpcClient } from '@solana/kit-client-rpc';
 
 /**
- * @deprecated Use `createDefaultLiteSVMClient` from `@solana/kit-client-litesvm` instead.
+ * @deprecated Use `createClient` from `@solana/kit-client-litesvm` instead.
  */
-export { createDefaultLiteSVMClient } from '@solana/kit-client-litesvm';
+export { createClient as createDefaultLiteSVMClient } from '@solana/kit-client-litesvm';

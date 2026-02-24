@@ -18,14 +18,14 @@ This package provides a pre-configured LiteSVM client for Solana Kit. It bundles
 pnpm install @solana/kit-client-litesvm
 ```
 
-## `createDefaultLiteSVMClient`
+## `createClient`
 
 Pre-configured client using LiteSVM for testing without an RPC connection.
 
 ```ts
-import { createDefaultLiteSVMClient } from '@solana/kit-client-litesvm';
+import { createClient } from '@solana/kit-client-litesvm';
 
-const client = await createDefaultLiteSVMClient();
+const client = await createClient();
 
 // Set up test environment
 client.svm.setAccount(myTestAccount);
