@@ -42,3 +42,62 @@ const client = createEmptyClient().use(litesvm());
     ```ts
     const { value: latestBlockhash } = await client.rpc.getLatestBlockhash().send();
     ```
+
+## `litesvmTransactionPlanner` plugin
+
+This plugin provides a default transaction planner that creates transaction messages with a fee payer, a provisory compute unit limit, and optional priority fees.
+
+### Installation
+
+This plugin requires a payer to be set on the client or passed as an option.
+
+```ts
+import { createEmptyClient } from '@solana/kit';
+import { litesvm, litesvmTransactionPlanner, litesvmTransactionPlanExecutor } from '@solana/kit-plugin-litesvm';
+import { generatedPayer } from '@solana/kit-plugin-payer';
+
+const client = await createEmptyClient()
+    .use(litesvm())
+    .use(generatedPayer())
+    .use(litesvmTransactionPlanner())
+    .use(litesvmTransactionPlanExecutor());
+```
+
+### Options
+
+- `payer`: Transaction signer for fees (defaults to client's payer if any).
+- `priorityFees`: Priority fees in micro lamports per compute unit.
+
+### Features
+
+- `transactionPlanner`: A function that plans instructions into transaction messages.
+    ```ts
+    const transactionPlan = await client.transactionPlanner(myInstructionPlan);
+    ```
+
+## `litesvmTransactionPlanExecutor` plugin
+
+This plugin provides a default transaction plan executor that signs and sends transactions to the LiteSVM instance.
+
+### Installation
+
+This plugin requires an `svm` instance to be configured on the client.
+
+```ts
+import { createEmptyClient } from '@solana/kit';
+import { litesvm, litesvmTransactionPlanner, litesvmTransactionPlanExecutor } from '@solana/kit-plugin-litesvm';
+import { generatedPayer } from '@solana/kit-plugin-payer';
+
+const client = await createEmptyClient()
+    .use(litesvm())
+    .use(generatedPayer())
+    .use(litesvmTransactionPlanner())
+    .use(litesvmTransactionPlanExecutor());
+```
+
+### Features
+
+- `transactionPlanExecutor`: A function that executes planned transactions.
+    ```ts
+    const transactionPlanResult = await client.transactionPlanExecutor(myTransactionPlan);
+    ```

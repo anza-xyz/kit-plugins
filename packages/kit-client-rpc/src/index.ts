@@ -1,11 +1,8 @@
 import { ClusterUrl, createEmptyClient, DefaultRpcSubscriptionsChannelConfig, TransactionSigner } from '@solana/kit';
 import { airdrop } from '@solana/kit-plugin-airdrop';
-import {
-    defaultTransactionPlannerAndExecutorFromRpc,
-    planAndSendTransactions,
-} from '@solana/kit-plugin-instruction-plan';
+import { planAndSendTransactions } from '@solana/kit-plugin-instruction-plan';
 import { payer, payerOrGeneratedPayer } from '@solana/kit-plugin-payer';
-import { localhostRpc, rpc } from '@solana/kit-plugin-rpc';
+import { localhostRpc, rpc, rpcTransactionPlanExecutor, rpcTransactionPlanner } from '@solana/kit-plugin-rpc';
 
 /**
  * Creates a default RPC client with all essential plugins configured.
@@ -40,7 +37,8 @@ export function createClient<TClusterUrl extends ClusterUrl>(config: {
     return createEmptyClient()
         .use(rpc<TClusterUrl>(config.url, config.rpcSubscriptionsConfig))
         .use(payer(config.payer))
-        .use(defaultTransactionPlannerAndExecutorFromRpc())
+        .use(rpcTransactionPlanner())
+        .use(rpcTransactionPlanExecutor())
         .use(planAndSendTransactions());
 }
 
@@ -83,6 +81,7 @@ export function createLocalClient(
         .use(localhostRpc(config.url, config.rpcSubscriptionsConfig))
         .use(airdrop())
         .use(payerOrGeneratedPayer(config.payer))
-        .use(defaultTransactionPlannerAndExecutorFromRpc())
+        .use(rpcTransactionPlanner())
+        .use(rpcTransactionPlanExecutor())
         .use(planAndSendTransactions());
 }

@@ -48,10 +48,6 @@
     "peerDependencies": {
         "@solana/kit": "^6.1.0"
     },
-    "devDependencies": {
-        "@solana/kit-plugin-litesvm": "workspace:*",
-        "@solana/kit-plugin-rpc": "workspace:*"
-    },
     "license": "MIT",
     "repository": {
         "type": "git",
@@ -63,8 +59,5 @@
     "browserslist": [
         "supports bigint and not dead",
         "maintained node versions"
-    ],
-    "dependencies": {
-        "@solana-program/compute-budget": "^0.14.0"
-    }
+    ]
 }

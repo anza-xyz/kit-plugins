@@ -1,10 +1,7 @@
 import { createEmptyClient, TransactionSigner } from '@solana/kit';
 import { airdrop } from '@solana/kit-plugin-airdrop';
-import {
-    defaultTransactionPlannerAndExecutorFromLitesvm,
-    planAndSendTransactions,
-} from '@solana/kit-plugin-instruction-plan';
-import { litesvm } from '@solana/kit-plugin-litesvm';
+import { planAndSendTransactions } from '@solana/kit-plugin-instruction-plan';
+import { litesvm, litesvmTransactionPlanExecutor, litesvmTransactionPlanner } from '@solana/kit-plugin-litesvm';
 import { payerOrGeneratedPayer } from '@solana/kit-plugin-payer';
 
 /**
@@ -48,6 +45,7 @@ export function createClient(config: { payer?: TransactionSigner } = {}) {
         .use(litesvm())
         .use(airdrop())
         .use(payerOrGeneratedPayer(config.payer))
-        .use(defaultTransactionPlannerAndExecutorFromLitesvm())
+        .use(litesvmTransactionPlanner())
+        .use(litesvmTransactionPlanExecutor())
         .use(planAndSendTransactions());
 }

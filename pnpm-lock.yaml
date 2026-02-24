@@ -138,25 +138,18 @@ importers:
 
   packages/kit-plugin-instruction-plan:
     dependencies:
-      '@solana-program/compute-budget':
-        specifier: ^0.14.0
-        version: 0.14.0(@solana/kit@6.1.0(typescript@5.9.3))
       '@solana/kit':
         specifier: ^6.1.0
         version: 6.1.0(typescript@5.9.3)
-    devDependencies:
-      '@solana/kit-plugin-litesvm':
-        specifier: workspace:*
-        version: link:../kit-plugin-litesvm
-      '@solana/kit-plugin-rpc':
-        specifier: workspace:*
-        version: link:../kit-plugin-rpc
 
   packages/kit-plugin-litesvm:
     dependencies:
       '@loris-sandbox/litesvm-kit':
         specifier: ^0.5.0
         version: 0.5.0(typescript@5.9.3)
+      '@solana-program/compute-budget':
+        specifier: ^0.14.0
+        version: 0.14.0(@solana/kit@6.1.0(typescript@5.9.3))
       '@solana/kit':
         specifier: ^6.1.0
         version: 6.1.0(typescript@5.9.3)
@@ -169,6 +162,9 @@ importers:
 
   packages/kit-plugin-rpc:
     dependencies:
+      '@solana-program/compute-budget':
+        specifier: ^0.14.0
+        version: 0.14.0(@solana/kit@6.1.0(typescript@5.9.3))
       '@solana/kit':
         specifier: ^6.1.0
         version: 6.1.0(typescript@5.9.3)
