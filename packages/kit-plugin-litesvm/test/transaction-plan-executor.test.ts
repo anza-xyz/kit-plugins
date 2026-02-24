@@ -1,4 +1,4 @@
-import type { LiteSVM } from '@loris-sandbox/litesvm-kit';
+import type { FailedTransactionMetadata, LiteSVM, TransactionMetadata } from '@loris-sandbox/litesvm-kit';
 import {
     Address,
     appendTransactionMessageInstruction,
@@ -7,6 +7,7 @@ import {
     generateKeyPairSigner,
     isSolanaError,
     lamports,
+    passthroughFailedTransactionPlanExecution,
     setTransactionMessageFeePayerSigner,
     singleInstructionPlan,
     singleTransactionPlan,
@@ -55,6 +56,43 @@ describe('litesvmTransactionPlanExecutor', () => {
             expect(transactionPlanResult.kind).toBe('single');
             expect(latestBlockhashLifetime).toHaveBeenCalledOnce();
             expect(sendTransaction).toHaveBeenCalledOnce();
+        });
+
+        it('includes transactionMetadata in the result context on success', async () => {
+            const payer = await generateKeyPairSigner();
+            const latestBlockhashLifetime = vi.fn().mockReturnValueOnce(MOCK_BLOCKHASH);
+            const mockMetadata = { logs: () => ['log1'], signature: () => new Uint8Array(64) };
+            const sendTransaction = vi.fn().mockReturnValue(mockMetadata);
+            const svm = { latestBlockhashLifetime, sendTransaction } as unknown as LiteSVM;
+            const client = createEmptyClient()
+                .use(() => ({ payer, svm }))
+                .use(litesvmTransactionPlanner())
+                .use(litesvmTransactionPlanExecutor());
+
+            const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
+            const transactionPlan = await client.transactionPlanner(instructionPlan);
+            const result = (await client.transactionPlanExecutor(transactionPlan)) as SingleTransactionPlanResult;
+            expect(result.context.transactionMetadata).toBe(mockMetadata);
+        });
+
+        it('includes transactionMetadata in the result context on failure', async () => {
+            const payer = await generateKeyPairSigner();
+            const latestBlockhashLifetime = vi.fn().mockReturnValueOnce(MOCK_BLOCKHASH);
+            const mockMetadata = { err: () => 2 };
+            const sendTransaction = vi.fn().mockReturnValue(mockMetadata);
+            const svm = { latestBlockhashLifetime, sendTransaction } as unknown as LiteSVM;
+            const client = createEmptyClient()
+                .use(() => ({ payer, svm }))
+                .use(litesvmTransactionPlanExecutor());
+
+            const transactionPlan = singleTransactionPlan(
+                setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 })),
+            );
+            const result = (await passthroughFailedTransactionPlanExecution(
+                client.transactionPlanExecutor(transactionPlan),
+            )) as SingleTransactionPlanResult;
+            expect(result.status).toBe('failed');
+            expect(result.context.transactionMetadata).toBe(mockMetadata);
         });
 
         it('throws a SolanaError when the transaction fails', async () => {
@@ -226,6 +264,49 @@ describe('litesvmTransactionPlanExecutor', () => {
                     isSolanaError((error as SolanaError).cause, SOLANA_ERROR__TRANSACTION_ERROR__ACCOUNT_NOT_FOUND),
                 ).toBe(true);
             }
+        });
+
+        it('includes transactionMetadata with expected methods on success', async () => {
+            const payer = await generateKeyPairSigner();
+            const client = createEmptyClient()
+                .use(litesvm())
+                .use(client => ({ ...client, payer }))
+                .use(litesvmTransactionPlanner())
+                .use(litesvmTransactionPlanExecutor());
+            client.svm.airdrop(payer.address, lamports(1_000_000_000n));
+
+            const transactionPlan = singleTransactionPlan(
+                setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 })),
+            );
+            const result = (await client.transactionPlanExecutor(transactionPlan)) as SingleTransactionPlanResult<{
+                transactionMetadata: FailedTransactionMetadata | TransactionMetadata;
+            }>;
+            const metadata = result.context.transactionMetadata as TransactionMetadata;
+            expect(metadata).toBeDefined();
+            expect(metadata.logs()).toEqual(expect.any(Array));
+            expect(metadata.computeUnitsConsumed()).toEqual(expect.any(BigInt));
+            expect(metadata.signature()).toEqual(expect.any(Uint8Array));
+        });
+
+        it('includes transactionMetadata in the result context on failure', async () => {
+            const payer = await generateKeyPairSigner();
+            const client = createEmptyClient()
+                .use(litesvm())
+                .use(client => ({ ...client, payer }))
+                .use(litesvmTransactionPlanner())
+                .use(litesvmTransactionPlanExecutor());
+            // Do NOT airdrop — payer account doesn't exist.
+
+            const transactionPlan = singleTransactionPlan(
+                setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 })),
+            );
+            const result = (await passthroughFailedTransactionPlanExecution(
+                client.transactionPlanExecutor(transactionPlan),
+            )) as SingleTransactionPlanResult<{ transactionMetadata: FailedTransactionMetadata | TransactionMetadata }>;
+            expect(result.status).toBe('failed');
+            const metadata = result.context.transactionMetadata as FailedTransactionMetadata;
+            expect(metadata).toBeDefined();
+            expect(metadata.err()).toBeDefined();
         });
     });
 });

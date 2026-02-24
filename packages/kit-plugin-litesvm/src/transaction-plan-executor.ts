@@ -1,13 +1,12 @@
+import type { FailedTransactionMetadata, LiteSVM, TransactionMetadata } from '@loris-sandbox/litesvm-kit';
 import {
-    Blockhash,
     createTransactionPlanExecutor,
     pipe,
     setTransactionMessageLifetimeUsingBlockhash,
     signTransactionMessageWithSigners,
-    Transaction,
 } from '@solana/kit';
 
-import { type FailedTransactionResult, getSolanaErrorFromLiteSvmFailure } from './transaction-error';
+import { getSolanaErrorFromLiteSvmFailure } from './transaction-error';
 
 /**
  * Checks whether a `sendTransaction` result is a failed transaction.
@@ -16,14 +15,11 @@ import { type FailedTransactionResult, getSolanaErrorFromLiteSvmFailure } from '
  * or `FailedTransactionMetadata` on failure. The failure type has an
  * `err` method while the success type does not.
  */
-function isFailedTransaction(result: unknown): result is FailedTransactionResult {
-    return typeof result === 'object' && result !== null && 'err' in result && typeof result.err === 'function';
+function isFailedTransaction(
+    result: FailedTransactionMetadata | TransactionMetadata,
+): result is FailedTransactionMetadata {
+    return 'err' in result && typeof result.err === 'function';
 }
-
-type LiteSVM = {
-    latestBlockhashLifetime: () => { blockhash: Blockhash; lastValidBlockHeight: bigint };
-    sendTransaction: (signedTransaction: Transaction) => unknown;
-};
 
 /**
  * A plugin that provides a default transaction plan executor using LiteSVM.
@@ -32,6 +28,12 @@ type LiteSVM = {
  * instance. When a transaction fails, the executor throws a `SolanaError`
  * with the same error codes that the RPC executor would produce, allowing
  * consistent error handling across both executors.
+ *
+ * The executor stores the LiteSVM {@link TransactionMetadata} (or
+ * {@link FailedTransactionMetadata} on failure) on
+ * `context.transactionMetadata`, allowing consumers to inspect
+ * transaction logs, compute units consumed, return data, and other
+ * metadata from the plan result.
  *
  * @returns A plugin that adds `transactionPlanExecutor` to the client.
  *
@@ -57,7 +59,9 @@ export function litesvmTransactionPlanExecutor() {
             );
         }
 
-        const transactionPlanExecutor = createTransactionPlanExecutor({
+        const transactionPlanExecutor = createTransactionPlanExecutor<{
+            transactionMetadata: FailedTransactionMetadata | TransactionMetadata;
+        }>({
             executeTransactionMessage: async (context, transactionMessage, config) => {
                 const latestBlockhash = client.svm.latestBlockhashLifetime();
                 const signedTransaction = await pipe(
@@ -69,6 +73,7 @@ export function litesvmTransactionPlanExecutor() {
 
                 context.transaction = signedTransaction;
                 const result = client.svm.sendTransaction(signedTransaction);
+                context.transactionMetadata = result;
                 if (isFailedTransaction(result)) {
                     throw getSolanaErrorFromLiteSvmFailure(result);
                 }

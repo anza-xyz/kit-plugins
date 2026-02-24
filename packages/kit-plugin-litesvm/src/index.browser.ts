@@ -1,3 +1,4 @@
+export type { FailedTransactionMetadata, TransactionMetadata } from '@loris-sandbox/litesvm-kit';
 export type { LiteSVM, LiteSvmRpcApi } from './litesvm';
 
 export function litesvm(): <T extends object>(_client: T) => never {
