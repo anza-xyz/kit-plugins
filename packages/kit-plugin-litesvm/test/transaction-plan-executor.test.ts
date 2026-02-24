@@ -1,20 +1,24 @@
 import type { LiteSVM } from '@loris-sandbox/litesvm-kit';
 import {
     Address,
+    appendTransactionMessageInstruction,
     createEmptyClient,
     createTransactionMessage,
     generateKeyPairSigner,
+    isSolanaError,
+    lamports,
     setTransactionMessageFeePayerSigner,
     singleInstructionPlan,
     singleTransactionPlan,
     SingleTransactionPlanResult,
+    SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_INSTRUCTION_DATA,
     SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN,
-    SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_COMPUTE_LIMIT,
+    SOLANA_ERROR__TRANSACTION_ERROR__ACCOUNT_NOT_FOUND,
     SolanaError,
 } from '@solana/kit';
 import { describe, expect, it, vi } from 'vitest';
 
-import { litesvmTransactionPlanExecutor, litesvmTransactionPlanner } from '../src';
+import { litesvm, litesvmTransactionPlanExecutor, litesvmTransactionPlanner } from '../src';
 
 const MOCK_BLOCKHASH = { blockhash: '11111111111111111111111111111111', lastValidBlockHeight: 0n };
 const MOCK_INSTRUCTION = {
@@ -22,83 +26,184 @@ const MOCK_INSTRUCTION = {
 };
 
 describe('litesvmTransactionPlanExecutor', () => {
-    it('provides a transactionPlanExecutor on the client', () => {
-        const svm = {} as LiteSVM;
-        const client = createEmptyClient()
-            .use(() => ({ svm }))
-            .use(litesvmTransactionPlanExecutor());
-        expect(client).toHaveProperty('transactionPlanExecutor');
+    describe('with mocks', () => {
+        it('provides a transactionPlanExecutor on the client', () => {
+            const svm = {} as LiteSVM;
+            const client = createEmptyClient()
+                .use(() => ({ svm }))
+                .use(litesvmTransactionPlanExecutor());
+            expect(client).toHaveProperty('transactionPlanExecutor');
+        });
+
+        it('uses the SVM instance to send transactions', async () => {
+            const payer = await generateKeyPairSigner();
+            const latestBlockhashLifetime = vi.fn().mockReturnValueOnce(MOCK_BLOCKHASH);
+            // Return a success result (no `.err` property).
+            const sendTransaction = vi.fn().mockReturnValue({ signature: () => new Uint8Array(64) });
+            const svm = { latestBlockhashLifetime, sendTransaction } as unknown as LiteSVM;
+            const client = createEmptyClient()
+                .use(() => ({ payer, svm }))
+                .use(litesvmTransactionPlanner())
+                .use(litesvmTransactionPlanExecutor());
+
+            const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
+            const transactionPlan = await client.transactionPlanner(instructionPlan);
+            const transactionPlanResult = (await client.transactionPlanExecutor(
+                transactionPlan,
+            )) as SingleTransactionPlanResult;
+            expect(transactionPlanResult.kind).toBe('single');
+            expect(latestBlockhashLifetime).toHaveBeenCalledOnce();
+            expect(sendTransaction).toHaveBeenCalledOnce();
+        });
+
+        it('throws a SolanaError when the transaction fails', async () => {
+            const payer = await generateKeyPairSigner();
+            const latestBlockhashLifetime = vi.fn().mockReturnValueOnce(MOCK_BLOCKHASH);
+            // Return a failed result with a fieldless error (AccountNotFound = 2).
+            const sendTransaction = vi.fn().mockReturnValue({ err: () => 2 });
+            const svm = { latestBlockhashLifetime, sendTransaction } as unknown as LiteSVM;
+            const client = createEmptyClient()
+                .use(() => ({ payer, svm }))
+                .use(litesvmTransactionPlanExecutor());
+
+            const transactionPlan = singleTransactionPlan(
+                setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 })),
+            );
+            try {
+                await client.transactionPlanExecutor(transactionPlan);
+                expect.unreachable();
+            } catch (error) {
+                expect(isSolanaError(error, SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN)).toBe(
+                    true,
+                );
+                expect(
+                    isSolanaError((error as SolanaError).cause, SOLANA_ERROR__TRANSACTION_ERROR__ACCOUNT_NOT_FOUND),
+                ).toBe(true);
+            }
+        });
+
+        it('throws a SolanaError for instruction errors', async () => {
+            const payer = await generateKeyPairSigner();
+            const latestBlockhashLifetime = vi.fn().mockReturnValueOnce(MOCK_BLOCKHASH);
+            // Return a failed result with an instruction error.
+            const instructionError = {
+                constructor: { name: 'TransactionErrorInstructionError' },
+                err: () => 2, // InstructionErrorFieldless.InvalidInstructionData
+                index: 0,
+            };
+            const sendTransaction = vi.fn().mockReturnValue({ err: () => instructionError });
+            const svm = { latestBlockhashLifetime, sendTransaction } as unknown as LiteSVM;
+            const client = createEmptyClient()
+                .use(() => ({ payer, svm }))
+                .use(litesvmTransactionPlanExecutor());
+
+            const transactionPlan = singleTransactionPlan(
+                setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 })),
+            );
+            try {
+                await client.transactionPlanExecutor(transactionPlan);
+                expect.unreachable();
+            } catch (error) {
+                expect(isSolanaError(error, SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN)).toBe(
+                    true,
+                );
+                expect(
+                    isSolanaError(
+                        (error as SolanaError).cause,
+                        SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_INSTRUCTION_DATA,
+                    ),
+                ).toBe(true);
+            }
+        });
+
+        it('requires an svm instance on the client', () => {
+            // @ts-expect-error Missing svm instance on the client.
+            expect(() => createEmptyClient().use(litesvmTransactionPlanExecutor())).toThrow();
+        });
     });
 
-    it('uses the SVM instance to send transactions', async () => {
-        const payer = await generateKeyPairSigner();
-        const latestBlockhashLifetime = vi.fn().mockReturnValueOnce(MOCK_BLOCKHASH);
-        const sendTransaction = vi.fn();
-        const svm = { latestBlockhashLifetime, sendTransaction } as unknown as LiteSVM;
-        const client = createEmptyClient()
-            .use(() => ({ payer, svm }))
-            .use(litesvmTransactionPlanner())
-            .use(litesvmTransactionPlanExecutor());
-
-        const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
-        const transactionPlan = await client.transactionPlanner(instructionPlan);
-        const transactionPlanResult = (await client.transactionPlanExecutor(
-            transactionPlan,
-        )) as SingleTransactionPlanResult;
-        expect(transactionPlanResult.kind).toBe('single');
-        expect(latestBlockhashLifetime).toHaveBeenCalledOnce();
-        expect(sendTransaction).toHaveBeenCalledOnce();
-    });
-
-    it('unwraps simulation errors when executing transactions', async () => {
-        const payer = await generateKeyPairSigner();
-        const latestBlockhashLifetime = vi.fn().mockReturnValueOnce(MOCK_BLOCKHASH);
-        const originalError = new Error('Original transaction error');
-        const sendTransaction = vi.fn().mockImplementation(() => {
-            throw new SolanaError(SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_COMPUTE_LIMIT, {
-                cause: originalError,
-                unitsConsumed: 42,
+    describe('with a real LiteSVM instance', () => {
+        if (!__NODEJS__) {
+            it('is skipped in non-Node environments', () => {
+                expect(true).toBe(true);
             });
+            return;
+        }
+
+        it('sends a real transaction successfully', async () => {
+            const payer = await generateKeyPairSigner();
+            const client = createEmptyClient()
+                .use(litesvm())
+                .use(client => ({ ...client, payer }))
+                .use(litesvmTransactionPlanner())
+                .use(litesvmTransactionPlanExecutor());
+            client.svm.airdrop(payer.address, lamports(1_000_000_000n));
+
+            const transactionPlan = singleTransactionPlan(
+                setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 })),
+            );
+            const result = (await client.transactionPlanExecutor(transactionPlan)) as SingleTransactionPlanResult;
+            expect(result.kind).toBe('single');
         });
-        const svm = { latestBlockhashLifetime, sendTransaction } as unknown as LiteSVM;
-        const client = createEmptyClient()
-            .use(() => ({ payer, svm }))
-            .use(litesvmTransactionPlanExecutor());
 
-        const transactionPlan = singleTransactionPlan(
-            setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 })),
-        );
-        await expect(client.transactionPlanExecutor(transactionPlan)).rejects.toThrowError(
-            new SolanaError(SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN, {
-                cause: originalError,
-            }),
-        );
-    });
+        it('throws a SolanaError when a real transaction fails with an instruction error', async () => {
+            const payer = await generateKeyPairSigner();
+            const client = createEmptyClient()
+                .use(litesvm())
+                .use(client => ({ ...client, payer }))
+                .use(litesvmTransactionPlanner())
+                .use(litesvmTransactionPlanExecutor());
+            client.svm.airdrop(payer.address, lamports(1_000_000_000n));
 
-    it('does not unwrap non-simulation errors when executing transactions', async () => {
-        const payer = await generateKeyPairSigner();
-        const latestBlockhashLifetime = vi.fn().mockReturnValueOnce(MOCK_BLOCKHASH);
-        const originalError = new Error('Original transaction error');
-        const sendTransaction = vi.fn().mockImplementation(() => {
-            throw originalError;
+            // Send an instruction with invalid data to the system program.
+            const transactionMessage = appendTransactionMessageInstruction(
+                {
+                    accounts: [{ address: payer.address, role: 3 as const }],
+                    data: new Uint8Array([255, 255, 255, 255]),
+                    programAddress: '11111111111111111111111111111111' as Address,
+                },
+                setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 })),
+            );
+            const transactionPlan = singleTransactionPlan(transactionMessage);
+            try {
+                await client.transactionPlanExecutor(transactionPlan);
+                expect.unreachable();
+            } catch (error) {
+                expect(isSolanaError(error, SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN)).toBe(
+                    true,
+                );
+                expect(
+                    isSolanaError(
+                        (error as SolanaError).cause,
+                        SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_INSTRUCTION_DATA,
+                    ),
+                ).toBe(true);
+            }
         });
-        const svm = { latestBlockhashLifetime, sendTransaction } as unknown as LiteSVM;
-        const client = createEmptyClient()
-            .use(() => ({ payer, svm }))
-            .use(litesvmTransactionPlanExecutor());
 
-        const transactionPlan = singleTransactionPlan(
-            setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 })),
-        );
-        await expect(client.transactionPlanExecutor(transactionPlan)).rejects.toThrowError(
-            new SolanaError(SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN, {
-                cause: originalError,
-            }),
-        );
-    });
+        it('throws a SolanaError when the payer has no account', async () => {
+            const payer = await generateKeyPairSigner();
+            const client = createEmptyClient()
+                .use(litesvm())
+                .use(client => ({ ...client, payer }))
+                .use(litesvmTransactionPlanner())
+                .use(litesvmTransactionPlanExecutor());
+            // Do NOT airdrop — payer account doesn't exist.
 
-    it('requires an svm instance on the client', () => {
-        // @ts-expect-error Missing svm instance on the client.
-        expect(() => createEmptyClient().use(litesvmTransactionPlanExecutor())).toThrow();
+            const transactionPlan = singleTransactionPlan(
+                setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 })),
+            );
+            try {
+                await client.transactionPlanExecutor(transactionPlan);
+                expect.unreachable();
+            } catch (error) {
+                expect(isSolanaError(error, SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN)).toBe(
+                    true,
+                );
+                expect(
+                    isSolanaError((error as SolanaError).cause, SOLANA_ERROR__TRANSACTION_ERROR__ACCOUNT_NOT_FOUND),
+                ).toBe(true);
+            }
+        });
     });
 });
