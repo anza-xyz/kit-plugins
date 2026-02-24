@@ -114,6 +114,7 @@ const client = await createEmptyClient()
 - `maxConcurrency`: Maximum number of concurrent executions (default: 10).
 - `payer`: Transaction signer for fees (defaults to client's payer if any).
 - `priorityFees`: Priority fees in micro lamports per compute unit.
+- `skipPreflight`: Whether to skip the preflight simulation when sending transactions (default: `false`).
 
 ```ts
 const client = await createEmptyClient()
@@ -126,6 +127,21 @@ const client = await createEmptyClient()
         }),
     );
 ```
+
+### Preflight and Compute Unit Estimation
+
+By default, the executor estimates compute units by simulating the transaction before sending it. When estimation is performed, preflight is skipped to avoid a redundant second simulation. When the transaction has an explicit compute unit limit (no estimation needed), preflight runs as the only simulation.
+
+Setting `skipPreflight: true` changes the behavior:
+
+- Preflight is always skipped regardless of whether estimation was performed.
+- If the compute unit estimation simulation fails, the consumed units from the failed simulation are used to set the compute unit limit (with a 10% buffer) so the transaction still reaches the validator. This is useful for debugging failed transactions in an explorer.
+
+| Scenario            | `skipPreflight: false` (default) | `skipPreflight: true`           |
+| ------------------- | -------------------------------- | ------------------------------- |
+| Estimation succeeds | Set CU, skip preflight           | Set CU, skip preflight          |
+| Estimation fails    | Throw                            | Use consumed CU, skip preflight |
+| Explicit CU limit   | Run preflight                    | Skip preflight                  |
 
 ### Features
 
