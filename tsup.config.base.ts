@@ -47,7 +47,14 @@ export function getBuildConfig(options: BuildOptions): TsupConfig {
         publicDir: true,
         pure: ['process'],
         sourcemap: format !== 'iife',
-        treeshake: true,
+        treeshake: {
+            moduleSideEffects: id => {
+                // This prevents tsup/Rollup from keeping bare `import 'fs'` in browser/RN builds.
+                // @see https://github.com/anza-xyz/kit-plugins/pull/95
+                const bare = id.startsWith('node:') ? id.slice(5) : id;
+                return !['fs', 'path'].includes(bare);
+            },
+        },
     };
 }
 
