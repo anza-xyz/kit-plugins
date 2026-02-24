@@ -8,17 +8,13 @@ import {
     setTransactionMessageFeePayerSigner,
     TransactionSigner,
 } from '@solana/kit';
-import {
-    fillProvisorySetComputeUnitLimitInstruction,
-    getSetComputeUnitPriceInstruction,
-} from '@solana-program/compute-budget';
+import { getSetComputeUnitPriceInstruction } from '@solana-program/compute-budget';
 
 /**
  * A plugin that provides a default transaction planner using LiteSVM.
  *
  * The planner creates transaction messages with:
  * - The configured fee payer.
- * - A provisory compute unit limit (to be estimated later by the executor).
  * - Optional priority fees.
  *
  * @param config - Optional configuration for the planner.
@@ -65,7 +61,6 @@ export function litesvmTransactionPlanner(
                 return pipe(
                     createTransactionMessage({ version: 0 }),
                     tx => setTransactionMessageFeePayerSigner(payer, tx),
-                    tx => fillProvisorySetComputeUnitLimitInstruction(tx),
                     tx =>
                         config.priorityFees
                             ? appendTransactionMessageInstruction(
