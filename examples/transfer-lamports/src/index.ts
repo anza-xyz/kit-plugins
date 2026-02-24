@@ -7,7 +7,7 @@ import {
     SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN,
     type TransactionPlanResult,
 } from '@solana/kit';
-import { createDefaultLocalhostRpcClient } from '@solana/kit-plugins';
+import { createLocalClient } from '@solana/kit-client-rpc';
 import {
     getSystemErrorMessage,
     getTransferSolInstruction,
@@ -19,7 +19,7 @@ import {
 // Use `pnpm start --fail` to make the example fail and see error handling
 const shouldFail = process.argv.includes('--fail');
 
-const client = await createDefaultLocalhostRpcClient();
+const client = await createLocalClient();
 
 // Generate a random recipient address
 const destinationAccountAddress = (await generateKeyPairSigner()).address;

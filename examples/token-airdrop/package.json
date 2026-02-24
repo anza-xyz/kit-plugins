@@ -5,7 +5,7 @@
         "@solana-program/system": "^0.12.0",
         "@solana-program/token": "^0.11.0",
         "@solana/kit": "^6.1.0",
-        "@solana/kit-plugins": "workspace:*"
+        "@solana/kit-client-rpc": "workspace:*"
     },
     "type": "module",
     "scripts": {
