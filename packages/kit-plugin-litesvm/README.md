@@ -15,13 +15,6 @@ This package provides a plugin that adds LiteSVM functionality to your Kit clien
 pnpm install @solana/kit-plugin-litesvm
 ```
 
-> [!NOTE]
-> This package is included in the main [`@solana/kit-plugins`](../kit-plugins) package.
->
-> ```sh
-> pnpm install @solana/kit-plugins
-> ```
-
 ## `litesvm` plugin
 
 The LiteSVM plugin starts a new LiteSVM instance within your Kit client, allowing you to simulate Solana programs and accounts locally. Additionally, it derives a small RPC subset that interacts with the LiteSVM instance instead of making network requests.

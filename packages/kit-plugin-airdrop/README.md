@@ -15,13 +15,6 @@ This package provides a plugin that adds an `airdrop` helper function to your Ki
 pnpm install @solana/kit-plugin-airdrop
 ```
 
-> [!NOTE]
-> This package is included in the main [`@solana/kit-plugins`](../kit-plugins) package.
->
-> ```sh
-> pnpm install @solana/kit-plugins
-> ```
-
 ## `airdrop` plugin
 
 The `airdrop` plugin provides an `airdrop` function that allows you to request SOL airdrops to a specified account.

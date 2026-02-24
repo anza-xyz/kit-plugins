@@ -87,6 +87,42 @@ importers:
         specifier: workspace:*
         version: link:../../packages/kit-plugins
 
+  packages/kit-client-litesvm:
+    dependencies:
+      '@solana/kit':
+        specifier: ^6.1.0
+        version: 6.1.0(typescript@5.9.3)
+      '@solana/kit-plugin-airdrop':
+        specifier: workspace:*
+        version: link:../kit-plugin-airdrop
+      '@solana/kit-plugin-instruction-plan':
+        specifier: workspace:*
+        version: link:../kit-plugin-instruction-plan
+      '@solana/kit-plugin-litesvm':
+        specifier: workspace:*
+        version: link:../kit-plugin-litesvm
+      '@solana/kit-plugin-payer':
+        specifier: workspace:*
+        version: link:../kit-plugin-payer
+
+  packages/kit-client-rpc:
+    dependencies:
+      '@solana/kit':
+        specifier: ^6.1.0
+        version: 6.1.0(typescript@5.9.3)
+      '@solana/kit-plugin-airdrop':
+        specifier: workspace:*
+        version: link:../kit-plugin-airdrop
+      '@solana/kit-plugin-instruction-plan':
+        specifier: workspace:*
+        version: link:../kit-plugin-instruction-plan
+      '@solana/kit-plugin-payer':
+        specifier: workspace:*
+        version: link:../kit-plugin-payer
+      '@solana/kit-plugin-rpc':
+        specifier: workspace:*
+        version: link:../kit-plugin-rpc
+
   packages/kit-plugin-airdrop:
     dependencies:
       '@solana/kit':
@@ -142,6 +178,12 @@ importers:
       '@solana/kit':
         specifier: ^6.1.0
         version: 6.1.0(typescript@5.9.3)
+      '@solana/kit-client-litesvm':
+        specifier: workspace:*
+        version: link:../kit-client-litesvm
+      '@solana/kit-client-rpc':
+        specifier: workspace:*
+        version: link:../kit-client-rpc
       '@solana/kit-plugin-airdrop':
         specifier: workspace:*
         version: link:../kit-plugin-airdrop

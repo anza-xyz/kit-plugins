@@ -15,13 +15,6 @@ This package provides plugins that add transaction planning and execution to you
 pnpm install @solana/kit-plugin-instruction-plan
 ```
 
-> [!NOTE]
-> This package is included in the main [`@solana/kit-plugins`](../kit-plugins) package.
->
-> ```sh
-> pnpm install @solana/kit-plugins
-> ```
-
 ## `transactionPlanner` plugin
 
 The `transactionPlanner` plugin sets a custom transaction planner on the client.

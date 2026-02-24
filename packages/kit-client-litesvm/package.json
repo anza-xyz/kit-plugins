@@ -1,7 +1,7 @@
 {
-    "name": "@solana/kit-plugins",
-    "version": "0.5.0",
-    "description": "Essential plugins and plugin presets for Solana Kit.",
+    "name": "@solana/kit-client-litesvm",
+    "version": "0.0.0",
+    "description": "Pre-configured LiteSVM client for Solana Kit",
     "exports": {
         "types": "./dist/types/index.d.ts",
         "react-native": "./dist/index.react-native.mjs",
@@ -31,7 +31,8 @@
     "keywords": [
         "solana",
         "kit",
-        "plugins"
+        "client",
+        "LiteSVM"
     ],
     "scripts": {
         "build": "rimraf dist && tsup && tsc -p ./tsconfig.declarations.json",
@@ -47,13 +48,10 @@
         "@solana/kit": "^6.1.0"
     },
     "dependencies": {
-        "@solana/kit-client-litesvm": "workspace:*",
-        "@solana/kit-client-rpc": "workspace:*",
         "@solana/kit-plugin-airdrop": "workspace:*",
         "@solana/kit-plugin-instruction-plan": "workspace:*",
         "@solana/kit-plugin-litesvm": "workspace:*",
-        "@solana/kit-plugin-payer": "workspace:*",
-        "@solana/kit-plugin-rpc": "workspace:*"
+        "@solana/kit-plugin-payer": "workspace:*"
     },
     "license": "MIT",
     "repository": {
