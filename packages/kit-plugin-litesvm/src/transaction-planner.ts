@@ -1,5 +1,6 @@
 import {
     appendTransactionMessageInstruction,
+    ClientWithPayer,
     createTransactionMessage,
     createTransactionPlanner,
     MicroLamports,
@@ -50,7 +51,7 @@ export function litesvmTransactionPlanner(
         priorityFees?: MicroLamports;
     } = {},
 ) {
-    return <T extends { payer?: TransactionSigner }>(client: T) => {
+    return <T extends Partial<ClientWithPayer>>(client: T) => {
         const payer = config.payer ?? client.payer;
         if (!payer) {
             throw new Error(
