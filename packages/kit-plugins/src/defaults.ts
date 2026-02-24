@@ -1,11 +1,4 @@
-import {
-    ClientWithAirdrop,
-    ClusterUrl,
-    createEmptyClient,
-    DefaultRpcSubscriptionsChannelConfig,
-    lamports,
-    TransactionSigner,
-} from '@solana/kit';
+import { ClusterUrl, createEmptyClient, DefaultRpcSubscriptionsChannelConfig, TransactionSigner } from '@solana/kit';
 import { airdrop } from '@solana/kit-plugin-airdrop';
 import {
     defaultTransactionPlannerAndExecutorFromLitesvm,
@@ -13,7 +6,7 @@ import {
     planAndSendTransactions,
 } from '@solana/kit-plugin-instruction-plan';
 import { litesvm } from '@solana/kit-plugin-litesvm';
-import { generatedPayerWithSol, payer } from '@solana/kit-plugin-payer';
+import { payer, payerOrGeneratedPayer } from '@solana/kit-plugin-payer';
 import { localhostRpc, rpc } from '@solana/kit-plugin-rpc';
 
 /**
@@ -139,17 +132,4 @@ export function createDefaultLiteSVMClient(config: { payer?: TransactionSigner }
         .use(payerOrGeneratedPayer(config.payer))
         .use(defaultTransactionPlannerAndExecutorFromLitesvm())
         .use(planAndSendTransactions());
-}
-
-/**
- * Helper function that uses the provided payer if any,
- * otherwise generates a new payer and funds it with 100 SOL.
- */
-function payerOrGeneratedPayer(explicitPayer: TransactionSigner | undefined) {
-    return <T extends ClientWithAirdrop>(client: T): Promise<T & { payer: TransactionSigner }> => {
-        if (explicitPayer) {
-            return Promise.resolve(payer(explicitPayer)(client));
-        }
-        return generatedPayerWithSol(lamports(100_000_000_000n))(client);
-    };
 }

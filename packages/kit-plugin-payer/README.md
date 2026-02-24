@@ -86,6 +86,32 @@ const client = await createEmptyClient()
 
 _See the `payer` plugin for available features_.
 
+## `payerOrGeneratedPayer` plugin
+
+This asynchronous plugin uses the provided `TransactionSigner` as the payer if one is given. Otherwise, it generates a new random `KeyPairSigner`, airdrops 100 SOL to it, and sets it as the `payer` property on the client. This is useful when you want to optionally accept a payer from the caller but fall back to a generated and funded payer for convenience (e.g. in testing or local development).
+
+### Installation
+
+When no explicit payer is given, this plugin requires the `airdrop` plugin to be installed on the client beforehand which itself either requires an RPC connection or a LiteSVM instance.
+
+```ts
+import { createEmptyClient } from '@solana/kit';
+import { airdrop, localhostRpc, payerOrGeneratedPayer } from '@solana/kit-plugins';
+
+// With an explicit payer — no airdrop needed.
+const client = await createEmptyClient().use(payerOrGeneratedPayer(mySigner));
+
+// Without a payer — generates one and airdrops 100 SOL.
+const client = await createEmptyClient()
+    .use(localhostRpc()) // or .use(litesvm())
+    .use(airdrop())
+    .use(payerOrGeneratedPayer(undefined));
+```
+
+### Features
+
+_See the `payer` plugin for available features_.
+
 ## `payerFromFile` plugin
 
 This plugin loads a `KeyPairSigner` from a local file and sets it as the `payer` property on the client.
