@@ -9,7 +9,7 @@ For every change you make, verify the following before presenting the changes to
 - **Docblocks**: All exported symbols (functions, types, interfaces, constants) must have JSDoc docblocks. Use the `/docblocks` skill for the full style guide.
 - **Tests**: New features and bug fixes need tests. Tests use Vitest and run in three environments (Node.js, browser, React Native). Run `pnpm test:unit` in the relevant package directory to verify.
 - **README**: When adding a new public API, add a section to the package's `README.md` following the existing structure. When modifying an existing API, keep the README in sync.
-- **Umbrella package**: The umbrella package (`packages/kit-plugins`) re-exports everything from sub-packages via `export *`. If code in the umbrella (e.g. `defaults.ts`) duplicates logic that now exists in a sub-package, consolidate it by importing from the sub-package instead.
+- **Umbrella package**: The umbrella package (`packages/kit-plugins`) re-exports all `kit-plugin-*` packages via `export *`. Client factory functions from `kit-client-*` packages are re-exported in `defaults.ts` with `@deprecated` tags. New client factories should live in their own `kit-client-*` package, not in the umbrella.
 - **Guidelines**: When adding new packages, renaming public APIs, or changing the monorepo structure, check whether `CLAUDE.md` and `CONTRIBUTING.md` need updates to stay in sync (e.g. package tables, workflow descriptions, naming conventions).
 
 ## Shipping protocol

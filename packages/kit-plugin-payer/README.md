@@ -15,13 +15,6 @@ This package offers plugins that set up the main "payer" signer on your Kit clie
 pnpm install @solana/kit-plugin-payer
 ```
 
-> [!NOTE]
-> This package is included in the main [`@solana/kit-plugins`](../kit-plugins) package.
->
-> ```sh
-> pnpm install @solana/kit-plugins
-> ```
-
 ## `payer` plugin
 
 This plugin simply accepts a `TransactionSigner` and sets it as the `payer` property on the client.

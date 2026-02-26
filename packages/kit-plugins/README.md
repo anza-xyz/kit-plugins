@@ -15,113 +15,16 @@ Essential plugins and plugin presets for Solana Kit that provide RPC connectivit
 pnpm install @solana/kit-plugins
 ```
 
-## Default Clients
+## Default Clients (deprecated)
 
-This package provides three plugin presets that create ready-to-use Kit clients for different use cases: production, localhost development, and local blockchain simulation.
-
-### `createDefaultRpcClient`
-
-Pre-configured client for production use with real Solana clusters.
-
-```ts
-import { createDefaultRpcClient } from '@solana/kit-plugins';
-import { generateKeyPairSigner } from '@solana/kit';
-
-const payer = await generateKeyPairSigner();
-const client = createDefaultRpcClient({
-    url: 'https://api.devnet.solana.com',
-    payer,
-});
-
-await client.sendTransaction([myInstruction]);
-```
-
-#### Features
-
-- `client.rpc`: RPC methods for interacting with the Solana cluster.
-- `client.rpcSubscriptions`: Subscription methods for real-time updates.
-- `client.payer`: The main payer signer for transactions.
-- `client.transactionPlanner`: Plans instructions into transaction messages.
-- `client.transactionPlanExecutor`: Executes planned transaction messages.
-- `client.sendTransactions`: Sends transaction messages, instructions or instruction plans to the cluster by using the client's transaction planner and executor.
-- `client.sendTransaction`: Same as `client.sendTransactions` but ensuring only a single transaction is sent.
-
-#### Configuration
-
-| Option                   | Type                     | Description                                                                                    |
-| ------------------------ | ------------------------ | ---------------------------------------------------------------------------------------------- |
-| `url` (required)         | `string`                 | URL of the Solana RPC endpoint.                                                                |
-| `payer` (required)       | `TransactionSigner`      | Signer used to pay for transaction fees and on-chain account storage.                          |
-| `rpcSubscriptionsConfig` | `RpcSubscriptionsConfig` | Configuration for RPC subscriptions. Use `rpcSubscriptionsConfig.url` to specify its endpoint. |
-
-### `createDefaultLocalhostRpcClient`
-
-Pre-configured client for localhost development with automatic payer funding.
-
-```ts
-import { createDefaultLocalhostRpcClient } from '@solana/kit-plugins';
-import { lamports } from '@solana/kit';
-
-const client = await createDefaultLocalhostRpcClient();
-
-// Payer is automatically generated and funded
-console.log('Payer address:', client.payer.address);
-await client.sendTransaction([myInstruction]);
-
-// Request additional funding
-await client.airdrop(client.payer.address, lamports(5_000_000_000n));
-```
-
-#### Features
-
-- `client.rpc`: RPC methods for interacting with the local validator (i.e. `http://127.0.0.1:8899`).
-- `client.rpcSubscriptions`: Subscription methods for real-time updates from the local validator (i.e. `ws://127.0.0.1:8900`).
-- `client.payer`: The main payer signer for transactions.
-- `client.airdrop`: Function to request SOL from the local faucet.
-- `client.transactionPlanner`: Plans instructions into transaction messages.
-- `client.transactionPlanExecutor`: Executes planned transaction messages.
-- `client.sendTransactions`: Sends transaction messages, instructions or instruction plans to the cluster by using the client's transaction planner and executor.
-- `client.sendTransaction`: Same as `client.sendTransactions` but ensuring only a single transaction is sent.
-
-#### Configuration
-
-| Option  | Type                | Description                                                                                                     |
-| ------- | ------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `payer` | `TransactionSigner` | Signer used to pay for transaction fees and on-chain account storage. Defaults to a generated and funded payer. |
-
-### `createDefaultLiteSVMClient`
-
-Pre-configured client using LiteSVM for testing without an RPC connection.
-
-```ts
-import { createDefaultLiteSVMClient } from '@solana/kit-plugins';
-
-const client = await createDefaultLiteSVMClient();
-
-// Set up test environment
-client.svm.setAccount(myTestAccount);
-client.svm.addProgramFromFile(myProgramAddress, 'program.so');
-
-// Execute transactions locally
-await client.sendTransaction([myInstruction]);
-```
-
-#### Features
-
-- `client.svm`: Embedded LiteSVM instance for local blockchain simulation.
-- `client.rpc`: Subset of RPC methods that delegate to the LiteSVM instance.
-- `client.payer`: The main payer signer for transactions.
-- `client.airdrop`: Function to request SOL from the LiteSVM instance.
-- `client.transactionPlanner`: Plans instructions into transaction messages.
-- `client.transactionPlanExecutor`: Executes planned transaction messages.
-- `client.sendTransactions`: Sends transaction messages, instructions or instruction plans to the cluster by using the client's transaction planner and executor.
-- `client.sendTransaction`: Same as `client.sendTransactions` but ensuring only a single transaction is sent.
-
-#### Configuration
-
-| Option  | Type                | Description                                                                                                     |
-| ------- | ------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `payer` | `TransactionSigner` | Signer used to pay for transaction fees and on-chain account storage. Defaults to a generated and funded payer. |
+> [!WARNING]
+> The default client factories have moved to dedicated packages. The re-exports below are deprecated and will be removed in a future release.
+>
+> | Function                          | New package                                           |
+> | --------------------------------- | ----------------------------------------------------- |
+> | `createDefaultRpcClient`          | [`@solana/kit-client-rpc`](../kit-client-rpc)         |
+> | `createDefaultLocalhostRpcClient` | [`@solana/kit-client-rpc`](../kit-client-rpc)         |
+> | `createDefaultLiteSVMClient`      | [`@solana/kit-client-litesvm`](../kit-client-litesvm) |
 
 ## Individual Plugins
 

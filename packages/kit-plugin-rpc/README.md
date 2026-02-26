@@ -15,13 +15,6 @@ This package provides plugins that add RPC functionality to your Kit clients.
 pnpm install @solana/kit-plugin-rpc
 ```
 
-> [!NOTE]
-> This package is included in the main [`@solana/kit-plugins`](../kit-plugins) package.
->
-> ```sh
-> pnpm install @solana/kit-plugins
-> ```
-
 ## `rpc` plugin
 
 The RPC plugin adds `rpc` and `rpcSubscriptions` objects to your Kit client, allowing you to call RPC methods and subscribe to RPC notifications.

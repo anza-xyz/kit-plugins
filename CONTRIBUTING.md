@@ -8,16 +8,18 @@ Thank you for your interest in contributing to Kit Plugins! This guide covers ev
 
 This is a monorepo managed with [pnpm](https://pnpm.io/) and [Turborepo](https://turbo.build/). It contains the following packages:
 
-| Package                                                                         | Description                                                                     |
-| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| [`@solana/kit-plugins`](./packages/kit-plugins)                                 | Umbrella package that re-exports all plugins and provides ready-to-use clients. |
-| [`@solana/kit-plugin-rpc`](./packages/kit-plugin-rpc)                           | RPC connection plugins.                                                         |
-| [`@solana/kit-plugin-payer`](./packages/kit-plugin-payer)                       | Transaction fee payer plugins.                                                  |
-| [`@solana/kit-plugin-airdrop`](./packages/kit-plugin-airdrop)                   | SOL airdrop plugin.                                                             |
-| [`@solana/kit-plugin-litesvm`](./packages/kit-plugin-litesvm)                   | LiteSVM support plugin.                                                         |
-| [`@solana/kit-plugin-instruction-plan`](./packages/kit-plugin-instruction-plan) | Transaction planning and execution plugins.                                     |
+| Package                                                                         | Description                                   |
+| ------------------------------------------------------------------------------- | --------------------------------------------- |
+| [`@solana/kit-plugins`](./packages/kit-plugins)                                 | Umbrella package that re-exports all plugins. |
+| [`@solana/kit-client-rpc`](./packages/kit-client-rpc)                           | Pre-configured RPC client factory.            |
+| [`@solana/kit-client-litesvm`](./packages/kit-client-litesvm)                   | Pre-configured LiteSVM client factory.        |
+| [`@solana/kit-plugin-rpc`](./packages/kit-plugin-rpc)                           | RPC connection plugins.                       |
+| [`@solana/kit-plugin-payer`](./packages/kit-plugin-payer)                       | Transaction fee payer plugins.                |
+| [`@solana/kit-plugin-airdrop`](./packages/kit-plugin-airdrop)                   | SOL airdrop plugin.                           |
+| [`@solana/kit-plugin-litesvm`](./packages/kit-plugin-litesvm)                   | LiteSVM support plugin.                       |
+| [`@solana/kit-plugin-instruction-plan`](./packages/kit-plugin-instruction-plan) | Transaction planning and execution plugins.   |
 
-The umbrella package (`@solana/kit-plugins`) re-exports everything from the individual plugin packages via `export *` statements. When you add a new export to a sub-package, it is automatically available through the umbrella package.
+The umbrella package (`@solana/kit-plugins`) re-exports everything from the individual plugin packages via `export *` statements. When you add a new export to a sub-package, it is automatically available through the umbrella package. The `kit-client-*` client factory functions are also re-exported from the umbrella with `@deprecated` tags — consumers should import them from their dedicated packages instead.
 
 ## Getting started
 
@@ -82,7 +84,7 @@ When adding a new public API to a package, update that package's `README.md` wit
 
 ### Umbrella package
 
-When modifying exports in a sub-package, check whether the umbrella package (`packages/kit-plugins`) needs updates. The `export *` re-exports are automatic, but if code in the umbrella package (e.g. `defaults.ts`) duplicates logic that now exists in a sub-package, consolidate it.
+When modifying exports in a `kit-plugin-*` sub-package, the umbrella package picks them up automatically via `export *`. The `kit-client-*` client factory functions are re-exported separately with `@deprecated` tags in `defaults.ts` — new client factories should live in their own `kit-client-*` package rather than in the umbrella.
 
 ## Pull request workflow
 
