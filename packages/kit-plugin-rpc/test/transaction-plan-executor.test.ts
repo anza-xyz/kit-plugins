@@ -10,7 +10,6 @@ import {
     sendAndConfirmTransactionFactory,
     setTransactionMessageFeePayerSigner,
     singleInstructionPlan,
-    SingleTransactionPlan,
     singleTransactionPlan,
     SingleTransactionPlanResult,
     SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN,
@@ -18,12 +17,11 @@ import {
     SolanaError,
     SolanaRpcApi,
     SolanaRpcSubscriptionsApi,
-    TransactionSigner,
 } from '@solana/kit';
 import { updateOrAppendSetComputeUnitLimitInstruction } from '@solana-program/compute-budget';
 import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
-import { defaultTransactionPlannerAndExecutorFromRpc } from '../src';
+import { rpcTransactionPlanExecutor, rpcTransactionPlanner } from '../src';
 
 const MOCK_BLOCKHASH = { blockhash: '11111111111111111111111111111111', lastValidBlockHeight: 0n };
 const MOCK_INSTRUCTION = {
@@ -39,30 +37,14 @@ beforeEach(() => {
     vi.clearAllMocks();
 });
 
-describe('defaultTransactionPlannerAndExecutorFromRpc', () => {
-    it('provides a default transactionPlanner and transactionPlanExecutor on the client', () => {
-        const payer = {} as TransactionSigner;
+describe('rpcTransactionPlanExecutor', () => {
+    it('provides a transactionPlanExecutor on the client', () => {
         const rpc = {} as Rpc<SolanaRpcApi>;
         const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
         const client = createEmptyClient()
-            .use(() => ({ payer, rpc, rpcSubscriptions }))
-            .use(defaultTransactionPlannerAndExecutorFromRpc());
-        expect(client).toHaveProperty('transactionPlanner');
+            .use(() => ({ rpc, rpcSubscriptions }))
+            .use(rpcTransactionPlanExecutor());
         expect(client).toHaveProperty('transactionPlanExecutor');
-    });
-
-    it('uses the provided payer as fee payer when planning transactions', async () => {
-        const payer = await generateKeyPairSigner();
-        const rpc = {} as Rpc<SolanaRpcApi>;
-        const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
-        const client = createEmptyClient()
-            .use(() => ({ payer, rpc, rpcSubscriptions }))
-            .use(defaultTransactionPlannerAndExecutorFromRpc());
-
-        const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
-        const transactionPlan = (await client.transactionPlanner(instructionPlan)) as SingleTransactionPlan;
-        expect(transactionPlan.kind).toBe('single');
-        expect(transactionPlan.message.feePayer).toBe(payer);
     });
 
     it('uses the RPC and RPC Subscriptions to send transactions', async () => {
@@ -79,7 +61,8 @@ describe('defaultTransactionPlannerAndExecutorFromRpc', () => {
 
         const client = createEmptyClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
-            .use(defaultTransactionPlannerAndExecutorFromRpc());
+            .use(rpcTransactionPlanner())
+            .use(rpcTransactionPlanExecutor());
 
         const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
         const transactionPlan = await client.transactionPlanner(instructionPlan);
@@ -106,7 +89,7 @@ describe('defaultTransactionPlannerAndExecutorFromRpc', () => {
 
         const client = createEmptyClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
-            .use(defaultTransactionPlannerAndExecutorFromRpc());
+            .use(rpcTransactionPlanExecutor());
 
         await client.transactionPlanExecutor(
             singleTransactionPlan(setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }))),
@@ -136,7 +119,7 @@ describe('defaultTransactionPlannerAndExecutorFromRpc', () => {
 
         const client = createEmptyClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
-            .use(defaultTransactionPlannerAndExecutorFromRpc());
+            .use(rpcTransactionPlanExecutor());
 
         // Create a transaction message with an explicit (non-provisory) compute unit limit.
         const txMessage = pipe(
@@ -170,7 +153,7 @@ describe('defaultTransactionPlannerAndExecutorFromRpc', () => {
 
         const client = createEmptyClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
-            .use(defaultTransactionPlannerAndExecutorFromRpc({ skipPreflight: true }));
+            .use(rpcTransactionPlanExecutor({ skipPreflight: true }));
 
         // Create a transaction message with an explicit (non-provisory) compute unit limit.
         const txMessage = pipe(
@@ -193,8 +176,6 @@ describe('defaultTransactionPlannerAndExecutorFromRpc', () => {
     it('throws when CU estimation simulation fails and skipPreflight is false', async () => {
         const payer = await generateKeyPairSigner();
         const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
-        // Return a simulation result with an error to trigger
-        // SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_COMPUTE_LIMIT.
         const simulateTransaction = vi
             .fn()
             .mockResolvedValue({ value: { err: 'AccountNotFound', unitsConsumed: 200n } });
@@ -208,7 +189,7 @@ describe('defaultTransactionPlannerAndExecutorFromRpc', () => {
 
         const client = createEmptyClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
-            .use(defaultTransactionPlannerAndExecutorFromRpc());
+            .use(rpcTransactionPlanExecutor());
 
         const txMessage = setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }));
         const promise = client.transactionPlanExecutor(singleTransactionPlan(txMessage));
@@ -223,8 +204,6 @@ describe('defaultTransactionPlannerAndExecutorFromRpc', () => {
     it('sends the transaction when CU estimation simulation fails and skipPreflight is true', async () => {
         const payer = await generateKeyPairSigner();
         const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
-        // Return a simulation result with an error to trigger
-        // SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_COMPUTE_LIMIT.
         const simulateTransaction = vi
             .fn()
             .mockResolvedValue({ value: { err: 'AccountNotFound', unitsConsumed: 200n } });
@@ -238,7 +217,7 @@ describe('defaultTransactionPlannerAndExecutorFromRpc', () => {
 
         const client = createEmptyClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
-            .use(defaultTransactionPlannerAndExecutorFromRpc({ skipPreflight: true }));
+            .use(rpcTransactionPlanExecutor({ skipPreflight: true }));
 
         const txMessage = setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }));
         await client.transactionPlanExecutor(singleTransactionPlan(txMessage));
@@ -270,7 +249,7 @@ describe('defaultTransactionPlannerAndExecutorFromRpc', () => {
 
         const client = createEmptyClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
-            .use(defaultTransactionPlannerAndExecutorFromRpc());
+            .use(rpcTransactionPlanExecutor());
 
         const transactionPlan = singleTransactionPlan(
             setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 })),
@@ -298,7 +277,7 @@ describe('defaultTransactionPlannerAndExecutorFromRpc', () => {
 
         const client = createEmptyClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
-            .use(defaultTransactionPlannerAndExecutorFromRpc());
+            .use(rpcTransactionPlanExecutor());
 
         const transactionPlan = singleTransactionPlan(
             setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 })),
@@ -328,15 +307,11 @@ describe('defaultTransactionPlannerAndExecutorFromRpc', () => {
 
         const client = createEmptyClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
-            .use(defaultTransactionPlannerAndExecutorFromRpc({ maxConcurrency: 2 }));
+            .use(rpcTransactionPlanner())
+            .use(rpcTransactionPlanExecutor({ maxConcurrency: 2 }));
 
-        const singleTransactionPlan = await client.transactionPlanner(singleInstructionPlan(MOCK_INSTRUCTION));
-        const transactionPlan = parallelTransactionPlan([
-            singleTransactionPlan,
-            singleTransactionPlan,
-            singleTransactionPlan,
-            singleTransactionPlan,
-        ]);
+        const singlePlan = await client.transactionPlanner(singleInstructionPlan(MOCK_INSTRUCTION));
+        const transactionPlan = parallelTransactionPlan([singlePlan, singlePlan, singlePlan, singlePlan]);
         const promise = client.transactionPlanExecutor(transactionPlan).catch(() => {});
 
         // First, only two transactions are executed in parallel.
@@ -365,7 +340,7 @@ describe('defaultTransactionPlannerAndExecutorFromRpc', () => {
             createEmptyClient()
                 .use(() => ({ rpcSubscriptions }))
                 // @ts-expect-error Missing RPC on the client.
-                .use(defaultTransactionPlannerAndExecutorFromRpc()),
+                .use(rpcTransactionPlanExecutor()),
         ).toThrow();
     });
 
@@ -375,42 +350,7 @@ describe('defaultTransactionPlannerAndExecutorFromRpc', () => {
             createEmptyClient()
                 .use(() => ({ rpc }))
                 // @ts-expect-error Missing RPC Subscriptions on the client.
-                .use(defaultTransactionPlannerAndExecutorFromRpc()),
+                .use(rpcTransactionPlanExecutor()),
         ).toThrow();
-    });
-
-    it('requires a payer on the client by default', () => {
-        const rpc = {} as Rpc<SolanaRpcApi>;
-        const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
-        expect(() =>
-            createEmptyClient()
-                .use(() => ({ rpc, rpcSubscriptions }))
-                .use(defaultTransactionPlannerAndExecutorFromRpc()),
-        ).toThrow();
-    });
-
-    it('also accepts a payer directly', () => {
-        const payer = {} as TransactionSigner;
-        const rpc = {} as Rpc<SolanaRpcApi>;
-        const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
-        expect(() =>
-            createEmptyClient()
-                .use(() => ({ rpc, rpcSubscriptions }))
-                .use(defaultTransactionPlannerAndExecutorFromRpc({ payer })),
-        ).not.toThrow();
-    });
-
-    it('uses the provided payer over the one set on the client', async () => {
-        const [clientPayer, explicitPayer] = await Promise.all([generateKeyPairSigner(), generateKeyPairSigner()]);
-        const rpc = {} as Rpc<SolanaRpcApi>;
-        const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
-        const client = createEmptyClient()
-            .use(() => ({ payer: clientPayer, rpc, rpcSubscriptions }))
-            .use(defaultTransactionPlannerAndExecutorFromRpc({ payer: explicitPayer }));
-
-        const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
-        const transactionPlan = (await client.transactionPlanner(instructionPlan)) as SingleTransactionPlan;
-        expect(transactionPlan.kind).toBe('single');
-        expect(transactionPlan.message.feePayer).toBe(explicitPayer);
     });
 });

@@ -1,20 +1,15 @@
 import {
-    appendTransactionMessageInstruction,
     assertIsTransactionWithBlockhashLifetime,
-    createTransactionMessage,
     createTransactionPlanExecutor,
-    createTransactionPlanner,
     GetEpochInfoApi,
     GetLatestBlockhashApi,
     GetSignatureStatusesApi,
     isSolanaError,
-    MicroLamports,
     pipe,
     Rpc,
     RpcSubscriptions,
     sendAndConfirmTransactionFactory,
     SendTransactionApi,
-    setTransactionMessageFeePayerSigner,
     setTransactionMessageLifetimeUsingBlockhash,
     SignatureNotificationsApi,
     signTransactionMessageWithSigners,
@@ -22,65 +17,46 @@ import {
     SlotNotificationsApi,
     SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_COMPUTE_LIMIT,
     TransactionPlanExecutorConfig,
-    TransactionSigner,
     unwrapSimulationError,
 } from '@solana/kit';
 import {
     estimateComputeUnitLimitFactory,
-    fillProvisorySetComputeUnitLimitInstruction,
     findSetComputeUnitLimitInstructionIndexAndUnits,
-    getSetComputeUnitPriceInstruction,
     MAX_COMPUTE_UNIT_LIMIT,
     PROVISORY_COMPUTE_UNIT_LIMIT,
     updateOrAppendSetComputeUnitLimitInstruction,
 } from '@solana-program/compute-budget';
 
 /**
- * A plugin that provides a default transactionPlanner and transactionPlanExecutor
- * using existing RPC and RPC Subscriptions instances on the client.
+ * A plugin that provides a default transaction plan executor using RPC.
  *
- * It requires a payer to be provided either in the config or set on the client.
+ * The executor handles compute unit estimation, transaction signing, and
+ * sending via RPC. A concurrency limit can be set to avoid hitting rate
+ * limits when sending many transactions in parallel.
  *
- * A concurrency limit can also be set to limit the number of concurrent
- * executions of the transaction plan executor. This can be useful to avoid
- * hitting rate limits on the RPC provider when sending many transactions in parallel.
- *
- * @param config - Optional configuration for the planner and executor.
- * @returns A plugin that adds `transactionPlanner` and `transactionPlanExecutor` to the client.
+ * @param config - Optional configuration for the executor.
+ * @returns A plugin that adds `transactionPlanExecutor` to the client.
  *
  * @example
  * ```ts
- * import { createEmptyClient, createTransactionPlanner } from '@solana/kit';
- * import { transactionPlanner } from '@solana/kit-plugins';
+ * import { createEmptyClient } from '@solana/kit';
+ * import { rpc, rpcTransactionPlanner, rpcTransactionPlanExecutor } from '@solana/kit-plugin-rpc';
+ * import { generatedPayer } from '@solana/kit-plugin-payer';
  *
- * // Install the RPC instruction plan plugin and its requirements.
  * const client = await createEmptyClient()
- *     .use(rpc("https://api.mainnet-beta.solana.com"));
- *     .use(generatedPayer());
- *     .use(defaultTransactionPlannerAndExecutorFromRpc());
- *
- * // Use the transaction planner and executor.
- * const transactionPlan = await client.transactionPlanner(myInstructionPlan);
- * const transactionPlanResult = await client.transactionPlanExecutor(myTransactionPlan);
+ *     .use(rpc('https://api.mainnet-beta.solana.com'))
+ *     .use(generatedPayer())
+ *     .use(rpcTransactionPlanner())
+ *     .use(rpcTransactionPlanExecutor());
  * ```
  */
-export function defaultTransactionPlannerAndExecutorFromRpc(
+export function rpcTransactionPlanExecutor(
     config: {
         /**
          * The maximum number of concurrent executions allowed.
          * Defaults to 10.
          */
         maxConcurrency?: number;
-        /**
-         * The transaction signer who will pay for the transaction fees.
-         * Defaults to the client's payer or throws if not present.
-         */
-        payer?: TransactionSigner;
-        /**
-         * The priority fees to be set on the transaction in micro lamports per compute unit.
-         * Defaults to using no priority fees.
-         */
-        priorityFees?: MicroLamports;
         /**
          * Whether to skip the preflight simulation when sending transactions.
          *
@@ -102,7 +78,6 @@ export function defaultTransactionPlannerAndExecutorFromRpc(
 ) {
     return <
         T extends {
-            payer?: TransactionSigner;
             rpc: Rpc<
                 GetEpochInfoApi &
                     GetLatestBlockhashApi &
@@ -117,7 +92,7 @@ export function defaultTransactionPlannerAndExecutorFromRpc(
     ) => {
         if (!client.rpc || !client.rpcSubscriptions) {
             throw new Error(
-                'A RPC instance with subscriptions is required on the client to create a default transaction planner and executor. ' +
+                'An RPC instance with subscriptions is required on the client to create the RPC transaction plan executor. ' +
                     'Please add the RPC plugin to your client before using this plugin.',
             );
         }
@@ -127,31 +102,6 @@ export function defaultTransactionPlannerAndExecutorFromRpc(
             rpcSubscriptions: client.rpcSubscriptions,
         });
         const estimateCULimit = estimateComputeUnitLimitFactory({ rpc: client.rpc });
-
-        const payer = config.payer ?? client.payer;
-        if (!payer) {
-            throw new Error(
-                'A payer is required to create the default transaction planner and executor. ' +
-                    'Please provide one in the config of this plugin or on the client under `payer`.',
-            );
-        }
-
-        const transactionPlanner = createTransactionPlanner({
-            createTransactionMessage: () => {
-                return pipe(
-                    createTransactionMessage({ version: 0 }),
-                    tx => setTransactionMessageFeePayerSigner(payer, tx),
-                    tx => fillProvisorySetComputeUnitLimitInstruction(tx),
-                    tx =>
-                        config.priorityFees
-                            ? appendTransactionMessageInstruction(
-                                  getSetComputeUnitPriceInstruction({ microLamports: config.priorityFees }),
-                                  tx,
-                              )
-                            : tx,
-                );
-            },
-        });
 
         const transactionPlanExecutor = createTransactionPlanExecutor({
             executeTransactionMessage: limitFunction(async (context, transactionMessage, executorConfig) => {
@@ -187,7 +137,7 @@ export function defaultTransactionPlannerAndExecutorFromRpc(
             }, config.maxConcurrency ?? 10),
         } as TransactionPlanExecutorConfig);
 
-        return { ...client, transactionPlanExecutor, transactionPlanner };
+        return { ...client, transactionPlanExecutor };
     };
 }
 

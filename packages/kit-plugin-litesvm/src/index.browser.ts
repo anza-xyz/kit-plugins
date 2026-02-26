@@ -4,3 +4,6 @@ export function litesvm(): <T extends object>(_client: T) => never {
             'Use this plugin in a node environment instead.',
     );
 }
+
+export * from './transaction-plan-executor';
+export * from './transaction-planner';
