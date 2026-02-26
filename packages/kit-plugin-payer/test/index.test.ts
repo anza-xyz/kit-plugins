@@ -1,7 +1,7 @@
-import { createEmptyClient, generateKeyPairSigner, KeyPairSigner, lamports } from '@solana/kit';
+import { createEmptyClient, generateKeyPairSigner, KeyPairSigner, lamports, TransactionSigner } from '@solana/kit';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 
-import { generatedPayer, generatedPayerWithSol, payer, payerFromFile } from '../src';
+import { generatedPayer, generatedPayerWithSol, payer, payerFromFile, payerOrGeneratedPayer } from '../src';
 
 describe('payer', () => {
     it('sets the payer attribute with the provided signer', async () => {
@@ -33,6 +33,31 @@ describe('generatedPayerWithSol', () => {
         expect(client.payer).toBeTypeOf('object');
         expectTypeOf(client.payer).toEqualTypeOf<KeyPairSigner>();
         expect(airdrop).toHaveBeenCalledExactlyOnceWith(client.payer.address, amount);
+    });
+});
+
+describe('payerOrGeneratedPayer', () => {
+    it('uses the provided payer when one is given', async () => {
+        const signer = await generateKeyPairSigner();
+        const airdrop = vi.fn();
+        const client = await createEmptyClient()
+            .use(() => ({ airdrop }))
+            .use(payerOrGeneratedPayer(signer));
+
+        expect(client.payer).toBe(signer);
+        expect(airdrop).not.toHaveBeenCalled();
+    });
+
+    it('generates a new payer and airdrops 100 SOL when no payer is given', async () => {
+        const airdrop = vi.fn();
+        const client = await createEmptyClient()
+            .use(() => ({ airdrop }))
+            .use(payerOrGeneratedPayer(undefined));
+
+        expect(client).toHaveProperty('payer');
+        expect(client.payer).toBeTypeOf('object');
+        expectTypeOf(client.payer).toEqualTypeOf<TransactionSigner>();
+        expect(airdrop).toHaveBeenCalledExactlyOnceWith(client.payer.address, lamports(100_000_000_000n));
     });
 });
 

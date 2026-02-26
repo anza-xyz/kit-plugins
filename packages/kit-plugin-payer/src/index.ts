@@ -5,6 +5,7 @@ import {
     createKeyPairSignerFromBytes,
     generateKeyPairSigner,
     Lamports,
+    lamports,
     TransactionSigner,
 } from '@solana/kit';
 
@@ -112,5 +113,41 @@ export function payerFromFile(path: string) {
         const bytes = JSON.parse(readFileSync(path, 'utf-8')) as number[];
         const payer = await createKeyPairSignerFromBytes(new Uint8Array(bytes));
         return { ...client, payer };
+    };
+}
+
+/**
+ * Uses the provided `TransactionSigner` as the `payer` if one is given.
+ * Otherwise, generates a new `KeyPairSigner`, funds it with 100 SOL
+ * using the client's `airdrop` function, and sets it as the `payer`.
+ *
+ * This is useful when you want to optionally accept a payer from the
+ * caller but fall back to a generated and funded payer for convenience
+ * (e.g. in testing or local development).
+ *
+ * @param explicitPayer - An optional `TransactionSigner` to use as the payer.
+ *                        When `undefined`, a new payer is generated and airdropped 100 SOL.
+ *
+ * @example
+ * ```ts
+ * import { createEmptyClient } from '@solana/kit';
+ * import { airdrop, localhostRpc, payerOrGeneratedPayer } from '@solana/kit-plugins';
+ *
+ * // With an explicit payer.
+ * const client = await createEmptyClient().use(payerOrGeneratedPayer(mySigner));
+ *
+ * // Without a payer — generates one and airdrops 100 SOL.
+ * const client = await createEmptyClient()
+ *     .use(localhostRpc())
+ *     .use(airdrop())
+ *     .use(payerOrGeneratedPayer(undefined));
+ * ```
+ */
+export function payerOrGeneratedPayer(explicitPayer: TransactionSigner | undefined) {
+    return <T extends ClientWithAirdrop>(client: T): Promise<T & { payer: TransactionSigner }> => {
+        if (explicitPayer) {
+            return Promise.resolve(payer(explicitPayer)(client));
+        }
+        return generatedPayerWithSol(lamports(100_000_000_000n))(client);
     };
 }
