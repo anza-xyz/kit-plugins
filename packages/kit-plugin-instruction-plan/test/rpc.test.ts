@@ -4,6 +4,7 @@ import {
     createTransactionMessage,
     generateKeyPairSigner,
     parallelTransactionPlan,
+    pipe,
     Rpc,
     RpcSubscriptions,
     sendAndConfirmTransactionFactory,
@@ -19,6 +20,7 @@ import {
     SolanaRpcSubscriptionsApi,
     TransactionSigner,
 } from '@solana/kit';
+import { updateOrAppendSetComputeUnitLimitInstruction } from '@solana-program/compute-budget';
 import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
 import { defaultTransactionPlannerAndExecutorFromRpc } from '../src';
@@ -114,6 +116,134 @@ describe('defaultTransactionPlannerAndExecutorFromRpc', () => {
         expect(simulateTransaction).toHaveBeenCalledOnce();
 
         // So we should not perform it again when sending the transaction.
+        expect(sendAndConfirmTransaction).toHaveBeenCalledExactlyOnceWith(expect.anything(), {
+            commitment: 'confirmed',
+            skipPreflight: true,
+        });
+    });
+
+    it('sends with skipPreflight false when the transaction has an explicit compute unit limit', async () => {
+        const payer = await generateKeyPairSigner();
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        const simulateTransaction = vi.fn();
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: simulateTransaction }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
+        const sendAndConfirmTransaction = vi.fn().mockResolvedValue('MockTransactionSignature');
+        (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
+
+        const client = createEmptyClient()
+            .use(() => ({ payer, rpc, rpcSubscriptions }))
+            .use(defaultTransactionPlannerAndExecutorFromRpc());
+
+        // Create a transaction message with an explicit (non-provisory) compute unit limit.
+        const txMessage = pipe(
+            createTransactionMessage({ version: 0 }),
+            tx => setTransactionMessageFeePayerSigner(payer, tx),
+            tx => updateOrAppendSetComputeUnitLimitInstruction(500, tx),
+        );
+        await client.transactionPlanExecutor(singleTransactionPlan(txMessage));
+
+        // No simulation should have been performed.
+        expect(simulateTransaction).not.toHaveBeenCalled();
+
+        // Preflight should run as the only simulation.
+        expect(sendAndConfirmTransaction).toHaveBeenCalledExactlyOnceWith(expect.anything(), {
+            commitment: 'confirmed',
+            skipPreflight: false,
+        });
+    });
+
+    it('sends with skipPreflight true when the transaction has an explicit compute unit limit and skipPreflight is true', async () => {
+        const payer = await generateKeyPairSigner();
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        const simulateTransaction = vi.fn();
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: simulateTransaction }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
+        const sendAndConfirmTransaction = vi.fn().mockResolvedValue('MockTransactionSignature');
+        (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
+
+        const client = createEmptyClient()
+            .use(() => ({ payer, rpc, rpcSubscriptions }))
+            .use(defaultTransactionPlannerAndExecutorFromRpc({ skipPreflight: true }));
+
+        // Create a transaction message with an explicit (non-provisory) compute unit limit.
+        const txMessage = pipe(
+            createTransactionMessage({ version: 0 }),
+            tx => setTransactionMessageFeePayerSigner(payer, tx),
+            tx => updateOrAppendSetComputeUnitLimitInstruction(500, tx),
+        );
+        await client.transactionPlanExecutor(singleTransactionPlan(txMessage));
+
+        // No simulation should have been performed.
+        expect(simulateTransaction).not.toHaveBeenCalled();
+
+        // Preflight should also be skipped.
+        expect(sendAndConfirmTransaction).toHaveBeenCalledExactlyOnceWith(expect.anything(), {
+            commitment: 'confirmed',
+            skipPreflight: true,
+        });
+    });
+
+    it('throws when CU estimation simulation fails and skipPreflight is false', async () => {
+        const payer = await generateKeyPairSigner();
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        // Return a simulation result with an error to trigger
+        // SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_COMPUTE_LIMIT.
+        const simulateTransaction = vi
+            .fn()
+            .mockResolvedValue({ value: { err: 'AccountNotFound', unitsConsumed: 200n } });
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: simulateTransaction }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
+        const sendAndConfirmTransaction = vi.fn().mockResolvedValue('MockTransactionSignature');
+        (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
+
+        const client = createEmptyClient()
+            .use(() => ({ payer, rpc, rpcSubscriptions }))
+            .use(defaultTransactionPlannerAndExecutorFromRpc());
+
+        const txMessage = setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }));
+        const promise = client.transactionPlanExecutor(singleTransactionPlan(txMessage));
+
+        // The executor should throw since skipPreflight is false.
+        await expect(promise).rejects.toThrow();
+
+        // The transaction should not have been sent.
+        expect(sendAndConfirmTransaction).not.toHaveBeenCalled();
+    });
+
+    it('sends the transaction when CU estimation simulation fails and skipPreflight is true', async () => {
+        const payer = await generateKeyPairSigner();
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        // Return a simulation result with an error to trigger
+        // SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_COMPUTE_LIMIT.
+        const simulateTransaction = vi
+            .fn()
+            .mockResolvedValue({ value: { err: 'AccountNotFound', unitsConsumed: 200n } });
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: simulateTransaction }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
+        const sendAndConfirmTransaction = vi.fn().mockResolvedValue('MockTransactionSignature');
+        (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
+
+        const client = createEmptyClient()
+            .use(() => ({ payer, rpc, rpcSubscriptions }))
+            .use(defaultTransactionPlannerAndExecutorFromRpc({ skipPreflight: true }));
+
+        const txMessage = setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }));
+        await client.transactionPlanExecutor(singleTransactionPlan(txMessage));
+
+        // The transaction should have been sent with skipPreflight true.
         expect(sendAndConfirmTransaction).toHaveBeenCalledExactlyOnceWith(expect.anything(), {
             commitment: 'confirmed',
             skipPreflight: true,

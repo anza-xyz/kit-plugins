@@ -7,6 +7,7 @@ import {
     GetEpochInfoApi,
     GetLatestBlockhashApi,
     GetSignatureStatusesApi,
+    isSolanaError,
     MicroLamports,
     pipe,
     Rpc,
@@ -19,15 +20,19 @@ import {
     signTransactionMessageWithSigners,
     SimulateTransactionApi,
     SlotNotificationsApi,
+    SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_COMPUTE_LIMIT,
     TransactionPlanExecutorConfig,
     TransactionSigner,
     unwrapSimulationError,
 } from '@solana/kit';
 import {
-    estimateAndUpdateProvisoryComputeUnitLimitFactory,
     estimateComputeUnitLimitFactory,
     fillProvisorySetComputeUnitLimitInstruction,
+    findSetComputeUnitLimitInstructionIndexAndUnits,
     getSetComputeUnitPriceInstruction,
+    MAX_COMPUTE_UNIT_LIMIT,
+    PROVISORY_COMPUTE_UNIT_LIMIT,
+    updateOrAppendSetComputeUnitLimitInstruction,
 } from '@solana-program/compute-budget';
 
 /**
@@ -40,6 +45,8 @@ import {
  * executions of the transaction plan executor. This can be useful to avoid
  * hitting rate limits on the RPC provider when sending many transactions in parallel.
  *
+ * @param config - Optional configuration for the planner and executor.
+ * @returns A plugin that adds `transactionPlanner` and `transactionPlanExecutor` to the client.
  *
  * @example
  * ```ts
@@ -74,6 +81,23 @@ export function defaultTransactionPlannerAndExecutorFromRpc(
          * Defaults to using no priority fees.
          */
         priorityFees?: MicroLamports;
+        /**
+         * Whether to skip the preflight simulation when sending transactions.
+         *
+         * When `false` (default), preflight is skipped only if a compute unit
+         * estimation simulation was already performed for that transaction.
+         * If the transaction has an explicit compute unit limit (i.e. no
+         * estimation was needed), preflight runs as the only simulation.
+         *
+         * When `true`, preflight is always skipped and the transaction is sent
+         * directly to the validator. Additionally, if the compute unit estimation
+         * simulation fails, the consumed units from the failed simulation are used
+         * to set the compute unit limit so the transaction still reaches the
+         * validator. This is useful for debugging failed transactions in an explorer.
+         *
+         * Defaults to `false`.
+         */
+        skipPreflight?: boolean;
     } = {},
 ) {
     return <
@@ -103,10 +127,6 @@ export function defaultTransactionPlannerAndExecutorFromRpc(
             rpcSubscriptions: client.rpcSubscriptions,
         });
         const estimateCULimit = estimateComputeUnitLimitFactory({ rpc: client.rpc });
-        const estimateAndSetCULimit = estimateAndUpdateProvisoryComputeUnitLimitFactory(
-            // We multiply the simulated limit by 1.1 to add a 10% buffer.
-            async (...args) => Math.ceil((await estimateCULimit(...args)) * 1.1),
-        );
 
         const payer = config.payer ?? client.payer;
         if (!payer) {
@@ -134,24 +154,31 @@ export function defaultTransactionPlannerAndExecutorFromRpc(
         });
 
         const transactionPlanExecutor = createTransactionPlanExecutor({
-            executeTransactionMessage: limitFunction(async (context, transactionMessage, config) => {
+            executeTransactionMessage: limitFunction(async (context, transactionMessage, executorConfig) => {
                 try {
-                    const { value: latestBlockhash } = await client.rpc.getLatestBlockhash().send(config);
+                    const needsCuEstimation = needsComputeUnitEstimation(transactionMessage);
+                    const { value: latestBlockhash } = await client.rpc.getLatestBlockhash().send(executorConfig);
                     const signedTransaction = await pipe(
-                        transactionMessage,
-                        tx => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, tx),
+                        setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, transactionMessage),
                         tx => (context.message = tx),
-                        async tx => await estimateAndSetCULimit(tx, config),
+                        async tx =>
+                            needsCuEstimation
+                                ? await estimateAndSetComputeUnitLimit(
+                                      tx,
+                                      estimateCULimit,
+                                      config.skipPreflight ?? false,
+                                      executorConfig,
+                                  )
+                                : tx,
                         async tx => (context.message = await tx),
-                        async tx => await signTransactionMessageWithSigners(await tx, config),
+                        async tx => await signTransactionMessageWithSigners(await tx, executorConfig),
+                        async tx => (context.transaction = await tx),
                     );
-
-                    context.transaction = signedTransaction;
                     assertIsTransactionWithBlockhashLifetime(signedTransaction);
                     await sendAndConfirmTransaction(signedTransaction, {
                         commitment: 'confirmed',
-                        skipPreflight: true,
-                        ...config,
+                        skipPreflight: config.skipPreflight || needsCuEstimation,
+                        ...executorConfig,
                     });
                     return signedTransaction;
                 } catch (error) {
@@ -162,6 +189,66 @@ export function defaultTransactionPlannerAndExecutorFromRpc(
 
         return { ...client, transactionPlanExecutor, transactionPlanner };
     };
+}
+
+/**
+ * Checks whether a transaction message needs compute unit estimation.
+ *
+ * Estimation is needed when the transaction has no `SetComputeUnitLimit`
+ * instruction, or when it has a provisory (`0`) or maximum (`1,400,000`)
+ * compute unit limit.
+ *
+ * @param transactionMessage - The transaction message to check.
+ * @returns `true` if the transaction needs compute unit estimation, `false` otherwise.
+ */
+function needsComputeUnitEstimation(
+    transactionMessage: Parameters<typeof findSetComputeUnitLimitInstructionIndexAndUnits>[0],
+): boolean {
+    const details = findSetComputeUnitLimitInstructionIndexAndUnits(transactionMessage);
+    return !details || details.units === PROVISORY_COMPUTE_UNIT_LIMIT || details.units === MAX_COMPUTE_UNIT_LIMIT;
+}
+
+/**
+ * Estimates the compute unit limit for a transaction message via simulation
+ * and sets the result on the message with a 10% buffer.
+ *
+ * When `skipPreflight` is `true` and the estimation simulation fails, the consumed
+ * units from the failed simulation are used so the transaction can still reach the
+ * validator for debugging purposes.
+ *
+ * @param transactionMessage - The transaction message to estimate and set the compute unit limit on.
+ * @param estimateCULimit - A function that estimates the compute unit limit via simulation.
+ * @param skipPreflight - Whether to recover from failed simulations using consumed units.
+ * @param config - Optional configuration forwarded to the estimator (e.g. abort signal).
+ * @returns The updated transaction message with the estimated compute unit limit.
+ */
+async function estimateAndSetComputeUnitLimit<
+    TMessage extends Parameters<typeof updateOrAppendSetComputeUnitLimitInstruction>[1],
+>(
+    transactionMessage: TMessage,
+    estimateCULimit: (tx: TMessage, config?: { abortSignal?: AbortSignal }) => Promise<number>,
+    skipPreflight: boolean,
+    config?: { abortSignal?: AbortSignal },
+) {
+    let estimatedUnits;
+    try {
+        estimatedUnits = await estimateCULimit(transactionMessage, config);
+    } catch (error) {
+        if (
+            skipPreflight &&
+            isSolanaError(error, SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_COMPUTE_LIMIT)
+        ) {
+            // Use consumed units from the failed simulation so the
+            // transaction can still reach the validator for debugging.
+            estimatedUnits = error.context.unitsConsumed;
+        } else {
+            throw error;
+        }
+    }
+
+    // Multiply the simulated limit by 1.1 to add a 10% buffer.
+    const units = Math.ceil(estimatedUnits * 1.1);
+    return updateOrAppendSetComputeUnitLimitInstruction(units, transactionMessage);
 }
 
 /**
