@@ -6,7 +6,7 @@ import {
     passthroughFailedTransactionPlanExecution,
     sequentialInstructionPlan,
 } from '@solana/kit';
-import { createDefaultLocalhostRpcClient } from '@solana/kit-plugins';
+import { createLocalClient } from '@solana/kit-client-rpc';
 import {
     getSystemErrorMessage,
     isSystemError,
@@ -25,7 +25,7 @@ import {
 // Use `pnpm start --fail` to make the example fail and see error handling
 const shouldFail = process.argv.includes('--fail');
 
-const client = await createDefaultLocalhostRpcClient();
+const client = await createLocalClient();
 const { payer } = client;
 
 // Generate 100 random recipient addresses
