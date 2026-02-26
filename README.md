@@ -19,14 +19,6 @@ A plugin library for [Solana Kit](https://github.com/anza-xyz/kit) that provides
 - ✨ Default **transaction planning and execution** logic built-in, just call `client.sendTransaction(myInstructions)`.
 - ✨ Various **useful plugins** for RPC connectivity, payer management, SOL airdrops, LiteSVM support and more.
 
-## Installation
-
-Simply install `@solana/kit-plugins` alongside `@solana/kit` like so:
-
-```sh
-pnpm install @solana/kit @solana/kit-plugins
-```
-
 ## Quick Start
 
 Choose from the following three ready-to-use clients!
@@ -35,44 +27,56 @@ Choose from the following three ready-to-use clients!
 
 Pre-configured client for production use with real Solana clusters.
 
+```sh
+pnpm install @solana/kit @solana/kit-client-rpc
+```
+
 ```ts
 import { generateKeyPairSigner } from '@solana/kit';
-import { createDefaultRpcClient } from '@solana/kit-plugins';
+import { createClient } from '@solana/kit-client-rpc';
 
 const payer = await generateKeyPairSigner();
-const client = createDefaultRpcClient({ payer, url: 'https://api.devnet.solana.com' });
+const client = createClient({ payer, url: 'https://api.devnet.solana.com' });
 
 // Send transactions
 await client.sendTransaction([myInstruction]);
 ```
 
-[See all features and configuration options](./packages/kit-plugins/README.md#createdefaultrpcclient).
+[See all features and configuration options](./packages/kit-client-rpc/README.md#createclient).
 
 ### Local Development
 
 Pre-configured client for localhost development with automatic payer funding.
 
+```sh
+pnpm install @solana/kit @solana/kit-client-rpc
+```
+
 ```ts
-import { createDefaultLocalhostRpcClient } from '@solana/kit-plugins';
+import { createLocalClient } from '@solana/kit-client-rpc';
 import { lamports } from '@solana/kit';
 
-const client = await createDefaultLocalhostRpcClient();
+const client = await createLocalClient();
 
 // Payer is auto-generated and funded with SOL
 console.log('Payer address:', client.payer.address);
 await client.sendTransaction([myInstruction]);
 ```
 
-[See all features and configuration options](./packages/kit-plugins/README.md#createdefaultlocalhostrpcclient).
+[See all features and configuration options](./packages/kit-client-rpc/README.md#createlocalclient).
 
 ### Local Testing with LiteSVM
 
 Pre-configured client using LiteSVM for testing without an RPC connection.
 
-```ts
-import { createDefaultLiteSVMClient } from '@solana/kit-plugins';
+```sh
+pnpm install @solana/kit @solana/kit-client-litesvm
+```
 
-const client = await createDefaultLiteSVMClient();
+```ts
+import { createClient } from '@solana/kit-client-litesvm';
+
+const client = await createClient();
 
 // Set up test environment
 client.svm.setAccount(myTestAccount);
@@ -82,7 +86,7 @@ client.svm.addProgramFromFile(myProgramAddress, 'program.so');
 await client.sendTransactions([myInstruction]);
 ```
 
-[See all features and configuration options](./packages/kit-plugins/README.md#createdefaultlitesvmclient).
+[See all features and configuration options](./packages/kit-client-litesvm/README.md#createclient).
 
 ## Build Your Own Client
 
@@ -90,13 +94,10 @@ None of the ready-to-use clients fit your needs? No worries! You can **build you
 
 ```ts
 import { createEmptyClient } from '@solana/kit';
-import {
-    rpc,
-    payerFromFile,
-    airdrop,
-    sendTransactions,
-    defaultTransactionPlannerAndExecutorFromRpc,
-} from '@solana/kit-plugins';
+import { rpc } from '@solana/kit-plugin-rpc';
+import { payerFromFile } from '@solana/kit-plugin-payer';
+import { airdrop } from '@solana/kit-plugin-airdrop';
+import { defaultTransactionPlannerAndExecutorFromRpc, sendTransactions } from '@solana/kit-plugin-instruction-plan';
 
 const client = await createEmptyClient() // An empty client with a `use` method to install plugins.
     .use(rpc('https://api.devnet.solana.com')) // Adds `client.rpc` and `client.rpcSubscriptions`.
@@ -106,13 +107,22 @@ const client = await createEmptyClient() // An empty client with a `use` method 
     .use(sendTransactions()); // Adds `client.sendTransaction(s)` to send transaction messages, instructions or instruction plans.
 ```
 
-Note that since plugins are defined in `@solana/kit` itself, you're not limited to the plugins in this package! You can use [community plugins](#community-plugins) or even [create your own](#create-your-own-plugins).
+Note that since plugins are defined in `@solana/kit` itself, you're not limited to the plugins in this repo! You can use [community plugins](#community-plugins) or even [create your own](#create-your-own-plugins).
+
+## Available Clients
+
+| Package                                                       | Description                   | Exports                             |
+| ------------------------------------------------------------- | ----------------------------- | ----------------------------------- |
+| [`@solana/kit-client-rpc`](./packages/kit-client-rpc)         | Pre-configured RPC client     | `createClient`, `createLocalClient` |
+| [`@solana/kit-client-litesvm`](./packages/kit-client-litesvm) | Pre-configured LiteSVM client | `createClient`                      |
+
+## Community Clients
+
+_Do you know any? Please open a PR to add them here!_
 
 ## Available Plugins
 
-`@solana/kit-plugins` is built on top of the following individual plugin packages.
-
-Each of these packages offers one or more plugins. You can import these plugins directly from `@solana/kit-plugins` or install the individual packages if you want more granular control over your dependencies. You can learn more about each package by following the links to their READMEs below.
+This repo provides the following individual plugin packages. You can learn more about each package by following the links to their READMEs below.
 
 | Package                                                                         | Description                        | Plugins                                                                                                                                                              |
 | ------------------------------------------------------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
