@@ -1,6 +1,5 @@
 import { env } from 'node:process';
 
-import browsersListToEsBuild from 'browserslist-to-esbuild';
 import { Format, Options as TsupConfig } from 'tsup';
 
 type Platform = 'browser' | 'node' | 'react-native';
@@ -9,8 +8,6 @@ type BuildOptions = {
     format: Format;
     platform: Platform;
 };
-
-const BROWSERSLIST_TARGETS = browsersListToEsBuild();
 
 export function getBuildConfig(options: BuildOptions): TsupConfig {
     const { format, platform } = options;
@@ -24,29 +21,22 @@ export function getBuildConfig(options: BuildOptions): TsupConfig {
             __VERSION__: `"${env.npm_package_version}"`,
         },
         entry: [`./src/index.ts`],
-        esbuildOptions(options, context) {
-            if (context.format === 'iife') {
-                options.target = BROWSERSLIST_TARGETS;
-                options.minify = true;
-            } else {
-                options.define = {
-                    ...options.define,
-                    'process.env.NODE_ENV': 'process.env.NODE_ENV',
-                };
-            }
+        esbuildOptions(options) {
+            options.define = {
+                ...options.define,
+                'process.env.NODE_ENV': 'process.env.NODE_ENV',
+            };
         },
         external: ['node:fs', 'node:path'],
         format,
         name: platform,
         outExtension({ format }) {
-            const extension =
-                format === 'iife' ? `.production.min.js` : `.${platform}.${format === 'cjs' ? 'cjs' : 'mjs'}`;
-            return { js: extension };
+            return { js: `.${platform}.${format === 'cjs' ? 'cjs' : 'mjs'}` };
         },
         platform: platform === 'node' ? 'node' : 'browser',
         publicDir: true,
         pure: ['process'],
-        sourcemap: format !== 'iife',
+        sourcemap: true,
         treeshake: {
             moduleSideEffects: id => {
                 // This prevents tsup/Rollup from keeping bare `import 'fs'` in browser/RN builds.

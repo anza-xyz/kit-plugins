@@ -18,9 +18,6 @@
         "./dist/index.node.cjs": "./dist/index.browser.cjs",
         "./dist/index.node.mjs": "./dist/index.browser.mjs"
     },
-    "jsdelivr": "./dist/index.production.min.js",
-    "umd": "./dist/index.production.min.js",
-    "unpkg": "./dist/index.production.min.js",
     "main": "./dist/index.node.cjs",
     "module": "./dist/index.node.mjs",
     "react-native": "./dist/index.react-native.mjs",
