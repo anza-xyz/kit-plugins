@@ -20,11 +20,11 @@ pnpm install @solana/kit-plugins
 > [!WARNING]
 > The default client factories have moved to dedicated packages. The re-exports below are deprecated and will be removed in a future release.
 >
-> | Function                          | New package                                           |
-> | --------------------------------- | ----------------------------------------------------- |
-> | `createDefaultRpcClient`          | [`@solana/kit-client-rpc`](../kit-client-rpc)         |
-> | `createDefaultLocalhostRpcClient` | [`@solana/kit-client-rpc`](../kit-client-rpc)         |
-> | `createDefaultLiteSVMClient`      | [`@solana/kit-client-litesvm`](../kit-client-litesvm) |
+> | Deprecated re-export              | Use instead                                                               |
+> | --------------------------------- | ------------------------------------------------------------------------- |
+> | `createDefaultRpcClient`          | `createClient` from [`@solana/kit-client-rpc`](../kit-client-rpc)         |
+> | `createDefaultLocalhostRpcClient` | `createLocalClient` from [`@solana/kit-client-rpc`](../kit-client-rpc)    |
+> | `createDefaultLiteSVMClient`      | `createClient` from [`@solana/kit-client-litesvm`](../kit-client-litesvm) |
 
 ## Individual Plugins
 
