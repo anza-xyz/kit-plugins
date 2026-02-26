@@ -5,8 +5,20 @@ import {
     setTransactionMessageLifetimeUsingBlockhash,
     signTransactionMessageWithSigners,
     Transaction,
-    unwrapSimulationError,
 } from '@solana/kit';
+
+import { type FailedTransactionResult, getSolanaErrorFromLiteSvmFailure } from './transaction-error';
+
+/**
+ * Checks whether a `sendTransaction` result is a failed transaction.
+ *
+ * LiteSVM's `sendTransaction` returns `TransactionMetadata` on success
+ * or `FailedTransactionMetadata` on failure. The failure type has an
+ * `err` method while the success type does not.
+ */
+function isFailedTransaction(result: unknown): result is FailedTransactionResult {
+    return typeof result === 'object' && result !== null && 'err' in result && typeof result.err === 'function';
+}
 
 type LiteSVM = {
     latestBlockhashLifetime: () => { blockhash: Blockhash; lastValidBlockHeight: bigint };
@@ -16,7 +28,10 @@ type LiteSVM = {
 /**
  * A plugin that provides a default transaction plan executor using LiteSVM.
  *
- * The executor signs transaction messages and sends them to the LiteSVM instance.
+ * The executor signs transaction messages and sends them to the LiteSVM
+ * instance. When a transaction fails, the executor throws a `SolanaError`
+ * with the same error codes that the RPC executor would produce, allowing
+ * consistent error handling across both executors.
  *
  * @returns A plugin that adds `transactionPlanExecutor` to the client.
  *
@@ -44,21 +59,20 @@ export function litesvmTransactionPlanExecutor() {
 
         const transactionPlanExecutor = createTransactionPlanExecutor({
             executeTransactionMessage: async (context, transactionMessage, config) => {
-                try {
-                    const latestBlockhash = client.svm.latestBlockhashLifetime();
-                    const signedTransaction = await pipe(
-                        transactionMessage,
-                        tx => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, tx),
-                        tx => (context.message = tx),
-                        async tx => await signTransactionMessageWithSigners(tx, config),
-                    );
+                const latestBlockhash = client.svm.latestBlockhashLifetime();
+                const signedTransaction = await pipe(
+                    transactionMessage,
+                    tx => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, tx),
+                    tx => (context.message = tx),
+                    async tx => await signTransactionMessageWithSigners(tx, config),
+                );
 
-                    context.transaction = signedTransaction;
-                    client.svm.sendTransaction(signedTransaction);
-                    return signedTransaction;
-                } catch (error) {
-                    throw unwrapSimulationError(error);
+                context.transaction = signedTransaction;
+                const result = client.svm.sendTransaction(signedTransaction);
+                if (isFailedTransaction(result)) {
+                    throw getSolanaErrorFromLiteSvmFailure(result);
                 }
+                return signedTransaction;
             },
         });
 
