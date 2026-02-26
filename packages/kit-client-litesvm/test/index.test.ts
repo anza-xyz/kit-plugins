@@ -5,7 +5,12 @@ import {
     TransactionPlanner,
     TransactionSigner,
 } from '@solana/kit';
-import type { LiteSVM, LiteSvmRpcApi } from '@solana/kit-plugin-litesvm';
+import type {
+    FailedTransactionMetadata,
+    LiteSVM,
+    LiteSvmRpcApi,
+    TransactionMetadata,
+} from '@solana/kit-plugin-litesvm';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import { createClient as nodeCreateClient } from '../src/index';
@@ -61,7 +66,9 @@ describe('createClient', () => {
     it('it offers a default transaction plan executor', async () => {
         const client = await createClient();
         expect(client.transactionPlanExecutor).toBeTypeOf('function');
-        expectTypeOf(client.transactionPlanExecutor).toEqualTypeOf<TransactionPlanExecutor>();
+        expectTypeOf(client.transactionPlanExecutor).toEqualTypeOf<
+            TransactionPlanExecutor<{ transactionMetadata: FailedTransactionMetadata | TransactionMetadata }>
+        >();
     });
 
     it('it provide helper functions to send transactions', async () => {
