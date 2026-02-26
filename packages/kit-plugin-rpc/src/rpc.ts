@@ -45,6 +45,9 @@ export function rpc<TClusterUrl extends ClusterUrl>(
  * Enhances a client with Solana RPC and RPC Subscriptions capabilities
  * using to a local validator.
  *
+ * @param url - Custom RPC URL. Defaults to `http://127.0.0.1:8899`.
+ * @param rpcSubscriptionsConfig - Configuration for RPC subscriptions. Defaults to `{ url: 'ws://127.0.0.1:8900' }`.
+ *
  * @example
  * ```ts
  * import { createEmptyClient } from '@solana/kit';
@@ -65,6 +68,6 @@ export function rpc<TClusterUrl extends ClusterUrl>(
  *
  * @see {@link rpc}
  */
-export function localhostRpc(url?: string, rpcSubscriptionsConfig?: { url: string }) {
-    return rpc(url ?? 'http://127.0.0.1:8899', rpcSubscriptionsConfig ?? { url: 'ws://127.0.0.1:8900' });
+export function localhostRpc(url?: string, rpcSubscriptionsConfig?: DefaultRpcSubscriptionsChannelConfig<string>) {
+    return rpc<string>(url ?? 'http://127.0.0.1:8899', rpcSubscriptionsConfig ?? { url: 'ws://127.0.0.1:8900' });
 }

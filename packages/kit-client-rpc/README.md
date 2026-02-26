@@ -49,6 +49,9 @@ await client.sendTransaction([myInstruction]);
 | `url` (required)         | `string`                 | URL of the Solana RPC endpoint.                                                                |
 | `payer` (required)       | `TransactionSigner`      | Signer used to pay for transaction fees and on-chain account storage.                          |
 | `rpcSubscriptionsConfig` | `RpcSubscriptionsConfig` | Configuration for RPC subscriptions. Use `rpcSubscriptionsConfig.url` to specify its endpoint. |
+| `priorityFees`           | `MicroLamports`          | Priority fees in micro-lamports per compute unit. Defaults to no priority fees.                |
+| `maxConcurrency`         | `number`                 | Maximum number of concurrent transaction executions. Defaults to `10`.                         |
+| `skipPreflight`          | `boolean`                | Whether to skip preflight simulation when sending transactions. Defaults to `false`.           |
 
 ## `createLocalClient`
 
@@ -81,8 +84,11 @@ await client.airdrop(client.payer.address, lamports(5_000_000_000n));
 
 ### Configuration
 
-| Option                   | Type                | Description                                                                                                     |
-| ------------------------ | ------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `payer`                  | `TransactionSigner` | Signer used to pay for transaction fees and on-chain account storage. Defaults to a generated and funded payer. |
-| `url`                    | `string`            | Custom RPC URL. Defaults to `http://127.0.0.1:8899`.                                                            |
-| `rpcSubscriptionsConfig` | `{ url: string }`   | Custom WebSocket URL. Defaults to `ws://127.0.0.1:8900`.                                                        |
+| Option                   | Type                     | Description                                                                                                     |
+| ------------------------ | ------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `payer`                  | `TransactionSigner`      | Signer used to pay for transaction fees and on-chain account storage. Defaults to a generated and funded payer. |
+| `url`                    | `string`                 | Custom RPC URL. Defaults to `http://127.0.0.1:8899`.                                                            |
+| `rpcSubscriptionsConfig` | `RpcSubscriptionsConfig` | Configuration for RPC subscriptions. Defaults to `{ url: 'ws://127.0.0.1:8900' }`.                              |
+| `priorityFees`           | `MicroLamports`          | Priority fees in micro-lamports per compute unit. Defaults to no priority fees.                                 |
+| `maxConcurrency`         | `number`                 | Maximum number of concurrent transaction executions. Defaults to `10`.                                          |
+| `skipPreflight`          | `boolean`                | Whether to skip preflight simulation when sending transactions. Defaults to `false`.                            |
