@@ -153,6 +153,10 @@ importers:
       '@solana/kit':
         specifier: ^6.1.0
         version: 6.1.0(typescript@5.9.3)
+    devDependencies:
+      '@solana-program/system':
+        specifier: ^0.12.0
+        version: 0.12.0(@solana/kit@6.1.0(typescript@5.9.3))
 
   packages/kit-plugin-payer:
     dependencies:

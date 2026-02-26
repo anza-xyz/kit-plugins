@@ -16,6 +16,7 @@ import {
     SOLANA_ERROR__TRANSACTION_ERROR__ACCOUNT_NOT_FOUND,
     SolanaError,
 } from '@solana/kit';
+import { getTransferSolInstruction } from '@solana-program/system';
 import { describe, expect, it, vi } from 'vitest';
 
 import { litesvm, litesvmTransactionPlanExecutor, litesvmTransactionPlanner } from '../src';
@@ -142,6 +143,27 @@ describe('litesvmTransactionPlanExecutor', () => {
             const transactionPlan = singleTransactionPlan(
                 setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 })),
             );
+            const result = (await client.transactionPlanExecutor(transactionPlan)) as SingleTransactionPlanResult;
+            expect(result.kind).toBe('single');
+        });
+
+        it('successfully executes a planned instruction plan', async () => {
+            const payer = await generateKeyPairSigner();
+            const destination = await generateKeyPairSigner();
+            const client = createEmptyClient()
+                .use(litesvm())
+                .use(client => ({ ...client, payer }))
+                .use(litesvmTransactionPlanner())
+                .use(litesvmTransactionPlanExecutor());
+            client.svm.airdrop(payer.address, lamports(1_000_000_000n));
+
+            const instruction = getTransferSolInstruction({
+                amount: lamports(1_000n),
+                destination: destination.address,
+                source: payer,
+            });
+            const instructionPlan = singleInstructionPlan(instruction);
+            const transactionPlan = await client.transactionPlanner(instructionPlan);
             const result = (await client.transactionPlanExecutor(transactionPlan)) as SingleTransactionPlanResult;
             expect(result.kind).toBe('single');
         });
