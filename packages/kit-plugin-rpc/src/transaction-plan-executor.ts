@@ -1,13 +1,13 @@
 import {
     assertIsTransactionWithBlockhashLifetime,
+    ClientWithRpc,
+    ClientWithRpcSubscriptions,
     createTransactionPlanExecutor,
     GetEpochInfoApi,
     GetLatestBlockhashApi,
     GetSignatureStatusesApi,
     isSolanaError,
     pipe,
-    Rpc,
-    RpcSubscriptions,
     sendAndConfirmTransactionFactory,
     SendTransactionApi,
     setTransactionMessageLifetimeUsingBlockhash,
@@ -77,16 +77,14 @@ export function rpcTransactionPlanExecutor(
     } = {},
 ) {
     return <
-        T extends {
-            rpc: Rpc<
-                GetEpochInfoApi &
-                    GetLatestBlockhashApi &
-                    GetSignatureStatusesApi &
-                    SendTransactionApi &
-                    SimulateTransactionApi
-            >;
-            rpcSubscriptions: RpcSubscriptions<SignatureNotificationsApi & SlotNotificationsApi>;
-        },
+        T extends ClientWithRpc<
+            GetEpochInfoApi &
+                GetLatestBlockhashApi &
+                GetSignatureStatusesApi &
+                SendTransactionApi &
+                SimulateTransactionApi
+        > &
+            ClientWithRpcSubscriptions<SignatureNotificationsApi & SlotNotificationsApi>,
     >(
         client: T,
     ) => {

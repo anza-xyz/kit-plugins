@@ -1,6 +1,11 @@
-import { ClientWithAirdrop, TransactionPlanExecutor, TransactionPlanner, TransactionSigner } from '@solana/kit';
-import type { LiteSVM } from '@solana/kit-plugin-litesvm';
-import type { RpcFromLiteSVM } from '@solana/kit-plugin-litesvm';
+import {
+    ClientWithAirdrop,
+    ClientWithRpc,
+    TransactionPlanExecutor,
+    TransactionPlanner,
+    TransactionSigner,
+} from '@solana/kit';
+import type { LiteSVM, LiteSvmRpcApi } from '@solana/kit-plugin-litesvm';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import { createClient as nodeCreateClient } from '../src/index';
@@ -26,7 +31,7 @@ describe('createClient', () => {
     it('it offers an RPC subset', async () => {
         const client = await createClient();
         expect(client.rpc).toBeTypeOf('object');
-        expectTypeOf(client.rpc).toEqualTypeOf<RpcFromLiteSVM>();
+        expectTypeOf(client).toMatchObjectType<ClientWithRpc<LiteSvmRpcApi>>();
     });
 
     it('it offers an airdrop function', async () => {

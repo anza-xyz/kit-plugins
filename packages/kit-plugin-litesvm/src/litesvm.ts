@@ -18,22 +18,24 @@ import {
 export type { LiteSVM } from '@loris-sandbox/litesvm-kit';
 
 /**
- * The RPC subset provided by the LiteSVM plugin.
+ * The RPC API methods available on a LiteSVM-backed client.
  *
- * This type represents a limited RPC interface that only includes
- * the essential operations supported by LiteSVM.
+ * This type represents the subset of Solana RPC methods that
+ * the LiteSVM plugin can serve locally. Use it with
+ * `ClientWithRpc<LiteSvmRpcApi>` to type a client that provides
+ * this RPC interface.
  *
  * @example
  * ```ts
- * import { litesvm, RpcFromLiteSVM } from '@solana/kit-plugin-litesvm';
- * import { createEmptyClient } from '@solana/kit';
+ * import type { LiteSvmRpcApi } from '@solana/kit-plugin-litesvm';
+ * import type { ClientWithRpc } from '@solana/kit';
  *
- * const client = createEmptyClient().use(litesvm());
- * client.rpc satisfies RpcFromLiteSVM;
- * const accountInfo = await client.rpc.getAccountInfo(myAddress).send();
+ * function doSomething(client: ClientWithRpc<LiteSvmRpcApi>) {
+ *     const accountInfo = await client.rpc.getAccountInfo(myAddress).send();
+ * }
  * ```
  */
-export type RpcFromLiteSVM = Rpc<GetAccountInfoApi & GetLatestBlockhashApi & GetMultipleAccountsApi>;
+export type LiteSvmRpcApi = GetAccountInfoApi & GetLatestBlockhashApi & GetMultipleAccountsApi;
 
 /**
  * A Kit plugin that adds LiteSVM functionality to your client.
@@ -69,7 +71,7 @@ export function litesvm() {
 
 type Encoding = 'base58' | 'base64' | 'base64+zstd' | 'jsonParsed';
 
-function createRpcFromSvm(svm: LiteSVM): RpcFromLiteSVM {
+function createRpcFromSvm(svm: LiteSVM): Rpc<LiteSvmRpcApi> {
     const base64Decoder = getBase64Decoder();
     const convertMaybeEncodedAccount = (
         account: MaybeEncodedAccount,
@@ -99,7 +101,7 @@ function createRpcFromSvm(svm: LiteSVM): RpcFromLiteSVM {
             const response = addresses.map(address => convertMaybeEncodedAccount(svm.getAccount(address)));
             return wrapInPendingRpcRequest(wrapInSolanaRpcResponse(response));
         },
-    } as RpcFromLiteSVM;
+    } as Rpc<LiteSvmRpcApi>;
 }
 
 function wrapInPendingRpcRequest<T>(response: T): PendingRpcRequest<T> {

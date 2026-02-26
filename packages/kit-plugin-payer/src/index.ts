@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 
 import {
     ClientWithAirdrop,
+    ClientWithPayer,
     createKeyPairSignerFromBytes,
     generateKeyPairSigner,
     Lamports,
@@ -144,7 +145,7 @@ export function payerFromFile(path: string) {
  * ```
  */
 export function payerOrGeneratedPayer(explicitPayer: TransactionSigner | undefined) {
-    return <T extends ClientWithAirdrop>(client: T): Promise<T & { payer: TransactionSigner }> => {
+    return <T extends ClientWithAirdrop>(client: T): Promise<ClientWithPayer & T> => {
         if (explicitPayer) {
             return Promise.resolve(payer(explicitPayer)(client));
         }
