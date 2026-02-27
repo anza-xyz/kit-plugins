@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "skills": {
+    "changesets": {
+      "source": "lorisleiva/skills",
+      "sourceType": "github",
+      "computedHash": "d3cf32b97909632ddafd1af39de1b66f9b013990e13e78a83ab97abb50094364"
+    },
+    "shipping-git": {
+      "source": "lorisleiva/skills",
+      "sourceType": "github",
+      "computedHash": "bcc495741437bf701ef9a00a3eaf926896ce8c8fc0ed68c818f7a755045fe14a"
+    },
+    "shipping-graphite": {
+      "source": "lorisleiva/skills",
+      "sourceType": "github",
+      "computedHash": "c838aa9b6a4fd0a0475f43bf39be6461f4b9e11c18b7b0d7c906b0e3bb6209d5"
+    },
+    "ts-docblocks": {
+      "source": "lorisleiva/skills",
+      "sourceType": "github",
+      "computedHash": "5aff2666b4cee7cd31cd21ff71a6951c7874b9df3ad3e8ca29367e11877d7824"
+    },
+    "ts-readme": {
+      "source": "lorisleiva/skills",
+      "sourceType": "github",
+      "computedHash": "e693e5a3f3c8a63786ecf52a8c4f8cb0f3870476c7266340ab950c705df08b9f"
+    }
+  }
+}

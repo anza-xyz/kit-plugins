@@ -1,19 +1,25 @@
 ---
-name: docblocks
-description: Add missing JSDoc docblocks to exported symbols in the repository
-argument-hint: '[path] [--all]'
+name: ts-docblocks
+description: Add missing JSDoc docblocks to exported symbols in TypeScript projects. Use when writing new exports or when code is missing documentation.
+argument-hint: "[path] [--all]"
 ---
 
 # Add Missing Docblocks
 
 Scan the specified path (or entire repository if no path given) and add missing docblocks to all exported functions, classes, interfaces, types, and constants.
 
-## Arguments
+## Key Rules
 
-- `$1` (optional): Path to narrow the scope (e.g. `src/utils` or `packages/kit-plugin-rpc/src`).
-- `$2` (optional): Use `--all` flag to include non-exported items.
+- All exported functions, types, interfaces, and constants MUST have JSDoc docblocks.
+- Start with `/**`, use `*` prefix for each line, end with `*/` — each on its own line.
+- Begin with a clear one-to-two line summary. Add a blank line before tags.
+- Include `@param`, `@typeParam`, `@return`, `@throws`, and at least one `@example` when helpful.
+- Use `{@link ...}` to reference related items. Add `@see` tags at the end for related APIs.
+- Do NOT modify real code outside of docblocks. Do NOT modify existing docblocks.
 
-## Docblock Style Guidelines
+## Guidelines
+
+### Style
 
 Use JSDoc format with the following conventions:
 
@@ -35,30 +41,42 @@ Use JSDoc format with the following conventions:
 - Use `{@link ...}` tags to reference other items in the codebase when relevant.
 - Add `@see` tags at the very end when applicable to point to other related items or documentation. Use `@see {@link ...}` format when linking to other code items.
 
-## Examples of Good Docblocks
+### Examples
 
 ````ts
 /**
- * Sets the provided `TransactionSigner` as the `payer` property on the client.
+ * Creates a retry wrapper around an async function.
  *
- * @param payer - The `TransactionSigner` to set as the payer.
+ * Retries the given function up to `maxRetries` times with exponential
+ * backoff between attempts.
+ *
+ * @param fn - The async function to retry.
+ * @param maxRetries - Maximum number of retry attempts.
+ * @param baseDelay - Base delay in milliseconds between retries.
+ * @return A wrapped version of `fn` that retries on failure.
+ * @throws Throws the last error if all retry attempts are exhausted.
  *
  * @example
  * ```ts
- * import { createEmptyClient } from '@solana/kit';
- * import { payer } from '@solana/kit-plugins';
+ * const fetchWithRetry = withRetry(fetchData, 3, 1000);
+ * const data = await fetchWithRetry('/api/users');
+ * ```
  *
- * // Install the payer plugin with your signer.
- * const client = createEmptyClient().use(payer(mySigner));
- *
- * // Use the payer in your client.
- * console.log(client.payer.address);
- * setTransactionFeePayerSigner(client.payer, transactionMessage);
+ * @example
+ * Custom retry configuration for flaky network calls.
+ * ```ts
+ * const resilientFetch = withRetry(
+ *   () => fetch('https://api.example.com/data'),
+ *   5,
+ *   500,
+ * );
  * ```
  */
-export function payer(payer: TransactionSigner) {
-    return <T extends object>(client: T) => ({ ...client, payer });
-}
+export function withRetry<T>(
+    fn: (...args: unknown[]) => Promise<T>,
+    maxRetries: number,
+    baseDelay: number,
+): (...args: unknown[]) => Promise<T>;
 ````
 
 ````ts
@@ -88,50 +106,50 @@ export function payer(payer: TransactionSigner) {
  * //    ^ [0x01, 0x02, 0x00, 0x00]
  * ```
  */
-export const fixBytes = (bytes: ReadonlyUint8Array | Uint8Array, length: number): ReadonlyUint8Array | Uint8Array =>
-    padBytes(bytes.length <= length ? bytes : bytes.slice(0, length), length);
+export const fixBytes = (
+    bytes: ReadonlyUint8Array | Uint8Array,
+    length: number,
+): ReadonlyUint8Array | Uint8Array;
 ````
 
 ````ts
 /**
- * A set of instructions with constraints on how they can be executed.
+ * A tree structure representing a set of instructions with execution constraints.
  *
- * This is structured as a recursive tree of plans in order to allow for
- * parallel execution, sequential execution and combinations of both.
- *
- * Namely the following plans are supported:
- * - {@link SingleInstructionPlan} - A plan that contains a single instruction.
- * - {@link ParallelInstructionPlan} - A plan that contains other plans that
- *   can be executed in parallel.
- * - {@link SequentialInstructionPlan} - A plan that contains other plans that
- *   must be executed sequentially.
- * - {@link MessagePackerInstructionPlan} - A plan that can dynamically pack
- *   instructions into transaction messages.
+ * Supports parallel execution, sequential execution, and combinations of both
+ * through recursive composition of plan nodes.
  *
  * @example
  * ```ts
- * const myInstructionPlan: InstructionPlan = parallelInstructionPlan([
- *    sequentialInstructionPlan([instructionA, instructionB]),
- *    instructionC,
- *    instructionD,
+ * const plan: InstructionPlan = parallelPlan([
+ *     sequentialPlan([instructionA, instructionB]),
+ *     instructionC,
+ *     instructionD,
  * ]);
  * ```
  *
  * @see {@link SingleInstructionPlan}
  * @see {@link ParallelInstructionPlan}
  * @see {@link SequentialInstructionPlan}
- * @see {@link MessagePackerInstructionPlan}
  */
 export type InstructionPlan =
-    | MessagePackerInstructionPlan
     | ParallelInstructionPlan
     | SequentialInstructionPlan
     | SingleInstructionPlan;
 ````
 
-## Process
+## Command Process
 
-1. If `$1` is provided, scan only that path; otherwise scan the entire repository.
+When invoked as a command, follow these steps:
+
+### Arguments
+
+- `[path]` (optional): Narrow the scan to a specific path (e.g. `src/utils` or `packages/my-lib/src`).
+- `[--all]` (optional): Also scan non-exported items.
+
+### Steps
+
+1. If a path argument is provided, scan only that path; otherwise scan the entire repository.
 2. Look for TypeScript/JavaScript files (`.ts`, `.tsx`, `.js`, `.jsx`).
 3. Identify exported items without docblocks:
     - `export function`
@@ -139,10 +157,9 @@ export type InstructionPlan =
     - `export interface`
     - `export type`
     - `export const` (for constants and arrow functions)
-4. If `$2` equals `--all`, also identify non-exported items.
-5. Do not modify real code outside of docblocks! Do not modify existing docblocks!
-6. For each item missing a docblock:
+4. If `--all` is passed, also identify non-exported items.
+5. For each item missing a docblock:
     - Analyze the code to understand its purpose (this may span multiple files).
     - Examine parameters, return types, and behavior.
     - Generate an appropriate docblock following the style guide.
-7. Present all changes clearly, grouped by file. Apply all changes without requiring further approval.
+6. Present all changes clearly, grouped by file. Apply all changes without requiring further approval.
