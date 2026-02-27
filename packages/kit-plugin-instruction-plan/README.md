@@ -57,9 +57,9 @@ const client = createEmptyClient().use(transactionPlanExecutor(myTransactionPlan
     const transactionPlanResult = await client.transactionPlanExecutor(myTransactionPlan);
     ```
 
-## `sendTransactions` plugin
+## `planAndSendTransactions` plugin
 
-The `sendTransactions` plugin adds two helper functions, `sendTransaction` and `sendTransactions`, that combine transaction planning and execution in a single call. They accept transaction messages, instructions or instruction plans as input.
+The `planAndSendTransactions` plugin adds helper functions for planning and sending transactions. They accept transaction messages, instructions or instruction plans as input.
 
 ### Installation
 
@@ -67,23 +67,35 @@ This plugin requires both `transactionPlanner` and `transactionPlanExecutor` to 
 
 ```ts
 import { createEmptyClient } from '@solana/kit';
-import { transactionPlanner, transactionPlanExecutor, sendTransactions } from '@solana/kit-plugins';
+import { transactionPlanner, transactionPlanExecutor, planAndSendTransactions } from '@solana/kit-plugins';
 
 const client = createEmptyClient()
     .use(transactionPlanner(myTransactionPlanner))
     .use(transactionPlanExecutor(myTransactionPlanExecutor))
-    .use(sendTransactions());
+    .use(planAndSendTransactions());
 ```
 
 ### Features
 
-- `sendTransactions`: An asynchronous function that plans and executes transaction messages, instructions or instruction plans in one call.
+- `planTransactions`: Plans transaction messages, instructions or instruction plans into a transaction plan without executing it.
+
+    ```ts
+    const transactionPlan = await client.planTransactions(myInstructionPlan);
+    ```
+
+- `planTransaction`: Same as `planTransactions` but asserts that the result contains a single transaction message.
+
+    ```ts
+    const transactionMessage = await client.planTransaction(myInstructionPlan);
+    ```
+
+- `sendTransactions`: Plans and executes transaction messages, instructions or instruction plans in one call.
 
     ```ts
     const transactionPlanResult = await client.sendTransactions(myInstructionPlan);
     ```
 
-- `sendTransaction`: An asynchronous function that plans and executes a single transaction message, instruction plan or multiple instructions in one call. Should the provided instructions or instruction plan result in multiple transactions, an error will be thrown prior to execution.
+- `sendTransaction`: Same as `sendTransactions` but asserts that the result is successful and contains a single transaction. Should the provided input result in multiple transactions, an error will be thrown.
 
     ```ts
     const transactionPlanResult = await client.sendTransaction(myInstructionPlan);

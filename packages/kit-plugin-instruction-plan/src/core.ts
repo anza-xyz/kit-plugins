@@ -52,11 +52,16 @@ export function transactionPlanExecutor(transactionPlanExecutor: TransactionPlan
 }
 
 /**
- * A plugin that adds `sendTransaction` and `sendTransactions` functions on the client to
- * plan and execute transaction messages, instructions or instruction plans in one call.
+ * A plugin that adds `planTransaction`, `planTransactions`, `sendTransaction` and
+ * `sendTransactions` functions on the client to plan and execute transaction messages,
+ * instructions or instruction plans.
  *
  * This expects the client to have both a `transactionPlanner`
  * and a `transactionPlanExecutor` set.
+ *
+ * The `planTransaction` and `planTransactions` functions plan instructions into
+ * transaction plans without executing them. The `sendTransaction` and `sendTransactions`
+ * functions combine planning and execution in a single call.
  *
  * Note that the `sendTransaction` function will assert that the transaction plan result
  * is both successful and contains a single transaction plan. This is slightly different from
@@ -66,17 +71,22 @@ export function transactionPlanExecutor(transactionPlanExecutor: TransactionPlan
  * @example
  * ```ts
  * import { createEmptyClient } from '@solana/kit';
- * import { transactionPlanner, transactionPlanExecutor } from '@solana/kit-plugins';
+ * import { transactionPlanner, transactionPlanExecutor, planAndSendTransactions } from '@solana/kit-plugins';
  *
- * // Install the sendTransactions plugin and its requirements.
+ * // Install the planAndSendTransactions plugin and its requirements.
  * const client = createEmptyClient()
  *     .use(transactionPlanner(myTransactionPlanner))
  *     .use(transactionPlanExecutor(myTransactionPlanExecutor))
- *     .use(sendTransactions());
+ *     .use(planAndSendTransactions());
  *
- * // Use the sendTransaction(s) functions.
+ * // Plan transactions without executing them.
+ * const transactionPlan = await client.planTransactions(myInstructionPlan);
+ * const transactionMessage = await client.planTransaction(myInstructionPlan);
+ *
+ * // Plan and execute transactions in one call.
  * const singleResult = await client.sendTransaction(myInstructionPlan);
  * const result = await client.sendTransactions(myInstructionPlan);
+ * ```
  */
 export function planAndSendTransactions() {
     return <T extends { transactionPlanExecutor: TransactionPlanExecutor; transactionPlanner: TransactionPlanner }>(

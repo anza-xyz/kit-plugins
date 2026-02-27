@@ -43,6 +43,8 @@ await client.sendTransaction([myInstruction]);
 - `client.airdrop`: Function to request SOL from the LiteSVM instance.
 - `client.transactionPlanner`: Plans instructions into transaction messages.
 - `client.transactionPlanExecutor`: Executes planned transaction messages.
+- `client.planTransactions`: Plans transaction messages, instructions or instruction plans into a transaction plan without executing it.
+- `client.planTransaction`: Same as `client.planTransactions` but asserts a single transaction message is returned.
 - `client.sendTransactions`: Sends transaction messages, instructions or instruction plans to the cluster by using the client's transaction planner and executor.
 - `client.sendTransaction`: Same as `client.sendTransactions` but ensuring only a single transaction is sent.
 
