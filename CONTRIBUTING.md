@@ -68,7 +68,7 @@ All exported symbols (functions, types, interfaces, constants) must have JSDoc d
 - Include at least one `@example` section with realistic, concise TypeScript code.
 - Use `{@link ...}` to reference related items and `@see` for related documentation.
 
-For the full style guide with examples, see [`.claude/skills/docblocks/SKILL.md`](./.claude/skills/docblocks/SKILL.md).
+For the full style guide with examples, see [`.claude/skills/ts-docblocks/SKILL.md`](./.claude/skills/ts-docblocks/SKILL.md).
 
 ### Tests
 
@@ -80,7 +80,7 @@ Every new feature or bug fix should include tests. This project uses [Vitest](ht
 
 ### README
 
-When adding a new public API to a package, update that package's `README.md` with a new section following the existing structure (description, installation example, features). When modifying an existing API, keep the README in sync. See the existing READMEs for the expected format, or use the [`.claude/skills/readme/SKILL.md`](./.claude/skills/readme/SKILL.md) guide.
+When adding a new public API to a package, update that package's `README.md` with a new section following the existing structure (description, installation example, features). When modifying an existing API, keep the README in sync. See the existing READMEs for the expected format, or use the [`.claude/skills/ts-readme/SKILL.md`](./.claude/skills/ts-readme/SKILL.md) guide.
 
 ### Umbrella package
 

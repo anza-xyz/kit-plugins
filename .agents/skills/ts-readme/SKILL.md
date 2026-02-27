@@ -1,23 +1,24 @@
 ---
-name: readme
-description: Create or update a README file for a package or the project root
-argument-hint: '[path]'
-disable-model-invocation: true
+name: ts-readme
+description: Guidelines for writing developer-friendly READMEs for TypeScript libraries. Use when creating a new package, changing a public API, or updating documentation.
+argument-hint: "[path]"
 ---
 
 # Create or Update README
 
-Create a new README or update an existing one for a package, library, or project.
+Create a new README or update an existing one for a TypeScript package, library, or project.
+
+## Key Rules
+
+- When adding a new public API, add or update the package's README.
+- Structure: brief intro, installation, usage (with code snippet), deep-dive sections.
+- Code snippets must be realistic, concise, and use TypeScript syntax.
+- Focus on the quickest path to success. Developers should feel excited, not overwhelmed.
+- Do NOT update any real code outside of the README file itself. If you identify errors in the codebase, warn the user but do not fix them.
+
+## Guidelines
 
 A deep understanding of the project is necessary to create an effective README. Analyze the codebase, key features, and typical usage patterns to inform the content. If the project relies on other libraries or frameworks, consider how those influence usage and installation.
-
-## Arguments
-
-- `$1` (optional): Path to the README file or its directory (e.g. `packages/kit-plugin-rpc` or `packages/kit-plugin-rpc/README.md`). Defaults to the root `README.md` if not provided.
-
-## README Guidelines
-
-Create developer-friendly READMEs. Developers should be excited about installing and using the provided code rather than being overwhelmed by it.
 
 ### Structure
 
@@ -85,20 +86,28 @@ The layout of a README will vary from project to project, but they should genera
 - Marketing-heavy language.
 - Duplicating information unnecessarily.
 
-## Monorepo-Specific Guidelines
+### Monorepo Considerations
 
-This project is a monorepo with multiple packages. When working with READMEs:
+When working in a monorepo:
 
-- **Package READMEs** (`packages/kit-plugin-*/README.md`): Focus on the specific package — its plugins, installation, usage, and features. Each plugin should have its own section with an installation snippet and a features list. Include an installation note pointing to the umbrella package as an alternative.
-- **Root README** (`README.md`): Provides an overview of the entire monorepo, links to individual package READMEs for details. Focus on the quick-start experience and ready-to-use clients rather than deep-diving into each package.
+- **Package READMEs**: Focus on the specific package — its API, installation, usage, and features. Include an installation note pointing to an umbrella package as an alternative if one exists.
+- **Root README**: Provides an overview of the entire monorepo, links to individual package READMEs for details. Focus on the quick-start experience rather than deep-diving into each package.
 - **Consistency**: When updating a package README, check other package READMEs for structural consistency (heading levels, section order, code example style).
 
-## Process
+## Command Process
+
+When invoked as a command, follow these steps:
+
+### Arguments
+
+- `[path]` (optional): Path to the README file or its parent directory. Defaults to `./README.md`.
+
+### Steps
 
 1. Determine the target README path:
-    - If `$1` is provided and ends with `.md`, use it directly.
-    - If `$1` is a directory path, use `$1/README.md`.
-    - If `$1` is not provided, use `./README.md`.
+    - If a path argument is provided and ends with `.md`, use it directly.
+    - If the argument is a directory path, use `<path>/README.md`.
+    - If no argument is provided, use `./README.md`.
 
 2. Check if the README exists:
     - If it exists, read it to understand the current structure.
@@ -110,7 +119,7 @@ This project is a monorepo with multiple packages. When working with READMEs:
     - Identify key exports, main functions, and typical usage patterns.
     - Check for existing tests or examples that show usage.
     - Research any related libraries or frameworks that influence usage.
-    - Examine other package READMEs in the monorepo to ensure consistency in style and structure.
+    - If in a monorepo, examine other package READMEs to ensure consistency in style and structure.
 
 4. Create or update the README:
     - **For existing READMEs**: Identify missing sections or areas needing improvement.
@@ -121,4 +130,3 @@ This project is a monorepo with multiple packages. When working with READMEs:
     - Include realistic code snippets throughout.
 
 5. Present the complete README for review before applying changes.
-6. Do not update any real code outside of the README file itself! If you identify errors in the codebase, warn the user about them but do not fix them.
