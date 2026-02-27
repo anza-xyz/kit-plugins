@@ -83,7 +83,7 @@ client.svm.setAccount(myTestAccount);
 client.svm.addProgramFromFile(myProgramAddress, 'program.so');
 
 // Execute transactions locally
-await client.sendTransactions([myInstruction]);
+await client.sendTransaction([myInstruction]);
 ```
 
 [See all features and configuration options](./packages/kit-client-litesvm/README.md#createclient).
@@ -97,14 +97,16 @@ import { createEmptyClient } from '@solana/kit';
 import { rpc } from '@solana/kit-plugin-rpc';
 import { payerFromFile } from '@solana/kit-plugin-payer';
 import { airdrop } from '@solana/kit-plugin-airdrop';
-import { defaultTransactionPlannerAndExecutorFromRpc, sendTransactions } from '@solana/kit-plugin-instruction-plan';
+import { rpcTransactionPlanner, rpcTransactionPlanExecutor } from '@solana/kit-plugin-rpc';
+import { planAndSendTransactions } from '@solana/kit-plugin-instruction-plan';
 
 const client = await createEmptyClient() // An empty client with a `use` method to install plugins.
     .use(rpc('https://api.devnet.solana.com')) // Adds `client.rpc` and `client.rpcSubscriptions`.
     .use(payerFromFile('path/to/keypair.json')) // Adds `client.payer` using a local keypair file.
     .use(airdrop()) // Adds `client.airdrop` to request SOL from faucets.
-    .use(defaultTransactionPlannerAndExecutorFromRpc()) // Adds `client.transactionPlanner` and `client.transactionPlanExecutor`.
-    .use(sendTransactions()); // Adds `client.sendTransaction(s)` to send transaction messages, instructions or instruction plans.
+    .use(rpcTransactionPlanner()) // Adds `client.transactionPlanner`.
+    .use(rpcTransactionPlanExecutor()) // Adds `client.transactionPlanExecutor`.
+    .use(planAndSendTransactions()); // Adds `client.planTransaction(s)` and `client.sendTransaction(s)`.
 ```
 
 Note that since plugins are defined in `@solana/kit` itself, you're not limited to the plugins in this repo! You can use [community plugins](#community-plugins) or even [create your own](#create-your-own-plugins).
@@ -124,13 +126,13 @@ _Do you know any? Please open a PR to add them here!_
 
 This repo provides the following individual plugin packages. You can learn more about each package by following the links to their READMEs below.
 
-| Package                                                                         | Description                        | Plugins                                                                                                                                                              |
-| ------------------------------------------------------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`@solana/kit-plugin-rpc`](./packages/kit-plugin-rpc)                           | Connect to Solana clusters         | `rpc`, `localhostRpc`                                                                                                                                                |
-| [`@solana/kit-plugin-payer`](./packages/kit-plugin-payer)                       | Manage transaction fee payers      | `payer`, `payerFromFile`, `generatedPayer`, `generatedPayerWithSol`                                                                                                  |
-| [`@solana/kit-plugin-airdrop`](./packages/kit-plugin-airdrop)                   | Request SOL from faucets           | `airdrop`                                                                                                                                                            |
-| [`@solana/kit-plugin-litesvm`](./packages/kit-plugin-litesvm)                   | LiteSVM support                    | `litesvm`                                                                                                                                                            |
-| [`@solana/kit-plugin-instruction-plan`](./packages/kit-plugin-instruction-plan) | Transaction planning and execution | `transactionPlanner`, `transactionPlanExecutor`, `sendTransactions`,`defaultTransactionPlannerAndExecutorFromRpc`, `defaultTransactionPlannerAndExecutorFromLitesvm` |
+| Package                                                                         | Description                        | Plugins                                                                      |
+| ------------------------------------------------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------- |
+| [`@solana/kit-plugin-rpc`](./packages/kit-plugin-rpc)                           | Connect to Solana clusters         | `rpc`, `localhostRpc`, `rpcTransactionPlanner`, `rpcTransactionPlanExecutor` |
+| [`@solana/kit-plugin-payer`](./packages/kit-plugin-payer)                       | Manage transaction fee payers      | `payer`, `payerFromFile`, `generatedPayer`, `generatedPayerWithSol`          |
+| [`@solana/kit-plugin-airdrop`](./packages/kit-plugin-airdrop)                   | Request SOL from faucets           | `airdrop`                                                                    |
+| [`@solana/kit-plugin-litesvm`](./packages/kit-plugin-litesvm)                   | LiteSVM support                    | `litesvm`, `litesvmTransactionPlanner`, `litesvmTransactionPlanExecutor`     |
+| [`@solana/kit-plugin-instruction-plan`](./packages/kit-plugin-instruction-plan) | Transaction planning and execution | `transactionPlanner`, `transactionPlanExecutor`, `planAndSendTransactions`   |
 
 ## Community Plugins
 
