@@ -96,11 +96,11 @@ export function createRpcFromSvm(svm: LiteSVM): Rpc<LiteSvmRpcApi> {
         getAccountInfo: (address: Address, config?: { encoding?: Encoding }) => {
             assertEncodingIsBase64(config?.encoding);
             const response = convertMaybeEncodedAccount(svm.getAccount(address));
-            return wrapInPendingRpcRequest(wrapInSolanaRpcResponse(response));
+            return wrapInPendingRpcRequest(wrapInSolanaRpcResponse(response, svm.getClock().slot));
         },
         getBalance: (address: Address) => {
             const response = svm.getBalance(address) ?? lamports(0n);
-            return wrapInPendingRpcRequest(wrapInSolanaRpcResponse(response));
+            return wrapInPendingRpcRequest(wrapInSolanaRpcResponse(response, svm.getClock().slot));
         },
         getEpochSchedule: () => {
             const schedule = svm.getEpochSchedule();
@@ -115,7 +115,7 @@ export function createRpcFromSvm(svm: LiteSVM): Rpc<LiteSvmRpcApi> {
         },
         getLatestBlockhash: () => {
             const response = { blockhash: svm.latestBlockhash(), lastValidBlockHeight: 0n };
-            return wrapInPendingRpcRequest(wrapInSolanaRpcResponse(response));
+            return wrapInPendingRpcRequest(wrapInSolanaRpcResponse(response, svm.getClock().slot));
         },
         getMinimumBalanceForRentExemption: (size: bigint) => {
             const response = lamports(svm.minimumBalanceForRentExemption(size));
@@ -124,7 +124,7 @@ export function createRpcFromSvm(svm: LiteSVM): Rpc<LiteSvmRpcApi> {
         getMultipleAccounts: (addresses: readonly Address[], config?: { encoding?: Encoding }) => {
             assertEncodingIsBase64(config?.encoding);
             const response = addresses.map(address => convertMaybeEncodedAccount(svm.getAccount(address)));
-            return wrapInPendingRpcRequest(wrapInSolanaRpcResponse(response));
+            return wrapInPendingRpcRequest(wrapInSolanaRpcResponse(response, svm.getClock().slot));
         },
         getSlot: () => {
             return wrapInPendingRpcRequest(svm.getClock().slot);
@@ -147,8 +147,8 @@ function wrapInPendingRpcRequest<T>(response: T): PendingRpcRequest<T> {
     return { send: () => Promise.resolve(response) };
 }
 
-function wrapInSolanaRpcResponse<T>(value: T): SolanaRpcResponse<T> {
-    return { context: { slot: 0n }, value };
+function wrapInSolanaRpcResponse<T>(value: T, slot: bigint): SolanaRpcResponse<T> {
+    return { context: { slot }, value };
 }
 
 function assertEncodingIsBase64(encoding: Encoding | undefined) {
