@@ -92,9 +92,6 @@ importers:
       '@solana/kit':
         specifier: ^6.1.0
         version: 6.1.0(typescript@5.9.3)
-      '@solana/kit-plugin-airdrop':
-        specifier: workspace:*
-        version: link:../kit-plugin-airdrop
       '@solana/kit-plugin-instruction-plan':
         specifier: workspace:*
         version: link:../kit-plugin-instruction-plan
@@ -110,9 +107,6 @@ importers:
       '@solana/kit':
         specifier: ^6.1.0
         version: 6.1.0(typescript@5.9.3)
-      '@solana/kit-plugin-airdrop':
-        specifier: workspace:*
-        version: link:../kit-plugin-airdrop
       '@solana/kit-plugin-instruction-plan':
         specifier: workspace:*
         version: link:../kit-plugin-instruction-plan
@@ -5134,8 +5128,8 @@ snapshots:
 
   '@typescript-eslint/project-service@8.50.0(typescript@5.9.3)':
     dependencies:
-      '@typescript-eslint/tsconfig-utils': 8.50.0(typescript@5.9.3)
-      '@typescript-eslint/types': 8.50.0
+      '@typescript-eslint/tsconfig-utils': 8.56.1(typescript@5.9.3)
+      '@typescript-eslint/types': 8.56.1
       debug: 4.4.3
       typescript: 5.9.3
     transitivePeerDependencies:

@@ -48,7 +48,6 @@
         "@solana/kit": "^6.1.0"
     },
     "dependencies": {
-        "@solana/kit-plugin-airdrop": "workspace:*",
         "@solana/kit-plugin-instruction-plan": "workspace:*",
         "@solana/kit-plugin-litesvm": "workspace:*",
         "@solana/kit-plugin-payer": "workspace:*"

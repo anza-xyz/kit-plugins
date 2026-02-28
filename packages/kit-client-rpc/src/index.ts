@@ -5,10 +5,15 @@ import {
     MicroLamports,
     TransactionSigner,
 } from '@solana/kit';
-import { airdrop } from '@solana/kit-plugin-airdrop';
 import { planAndSendTransactions } from '@solana/kit-plugin-instruction-plan';
 import { payer, payerOrGeneratedPayer } from '@solana/kit-plugin-payer';
-import { localhostRpc, rpc, rpcTransactionPlanExecutor, rpcTransactionPlanner } from '@solana/kit-plugin-rpc';
+import {
+    localhostRpc,
+    rpc,
+    rpcAirdrop,
+    rpcTransactionPlanExecutor,
+    rpcTransactionPlanner,
+} from '@solana/kit-plugin-rpc';
 
 /**
  * Configuration options for RPC client factory functions.
@@ -126,7 +131,7 @@ export function createLocalClient(
 ) {
     return createEmptyClient()
         .use(localhostRpc(config.url, config.rpcSubscriptionsConfig))
-        .use(airdrop())
+        .use(rpcAirdrop())
         .use(payerOrGeneratedPayer(config.payer))
         .use(rpcTransactionPlanner({ priorityFees: config.priorityFees }))
         .use(rpcTransactionPlanExecutor({ maxConcurrency: config.maxConcurrency, skipPreflight: config.skipPreflight }))

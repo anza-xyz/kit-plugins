@@ -15,37 +15,30 @@ type RpcClient = {
  * client has LiteSVM installed. Otherwise, it will rely on the
  * `Rpc` and `RpcSubscriptions` clients to perform the airdrop.
  *
+ * @deprecated Use `rpcAirdrop` from `@solana/kit-plugin-rpc` or
+ * `litesvmAirdrop` from `@solana/kit-plugin-litesvm` instead.
+ *
  * @example
  * RPC-based airdrop.
  * ```ts
  * import { createEmptyClient } from '@solana/kit';
- * import { airdrop, localhostRpc } from '@solana/kit-plugins';
+ * import { localhostRpc, rpcAirdrop } from '@solana/kit-plugin-rpc';
  *
- * // Install the airdrop plugin using a localhost RPC.
  * const client = createEmptyClient()
  *     .use(localhostRpc())
- *     .use(airdrop());
- *
- * // Use the airdrop method.
- * client.airdrop(myAddress, lamports(1_000_000_000n));
+ *     .use(rpcAirdrop());
  * ```
  *
  * @example
  * LiteSVM-based airdrop.
  * ```ts
  * import { createEmptyClient } from '@solana/kit';
- * import { airdrop, litesvm } from '@solana/kit-plugins';
+ * import { litesvm, litesvmAirdrop } from '@solana/kit-plugin-litesvm';
  *
- * // Install the airdrop plugin using a LiteSVM instance.
  * const client = createEmptyClient()
  *     .use(litesvm())
- *     .use(airdrop());
- *
- * // Use the airdrop method.
- * client.airdrop(myAddress, lamports(1_000_000_000n));
+ *     .use(litesvmAirdrop());
  * ```
- *
- * @see {@link AirdropFunction}
  */
 export function airdrop() {
     return <T extends LiteSVMClient | RpcClient>(client: T): ClientWithAirdrop & T => {

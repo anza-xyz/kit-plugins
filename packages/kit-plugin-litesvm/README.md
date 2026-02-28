@@ -43,6 +43,28 @@ const client = createEmptyClient().use(litesvm());
     const { value: latestBlockhash } = await client.rpc.getLatestBlockhash().send();
     ```
 
+## `litesvmAirdrop` plugin
+
+This plugin adds an `airdrop` method to your Kit client that airdrops SOL using the underlying LiteSVM instance. It performs error handling and returns the transaction signature on success.
+
+### Installation
+
+The client must have the `litesvm` plugin installed before applying this plugin.
+
+```ts
+import { createEmptyClient } from '@solana/kit';
+import { litesvm, litesvmAirdrop } from '@solana/kit-plugin-litesvm';
+
+const client = createEmptyClient().use(litesvm()).use(litesvmAirdrop());
+```
+
+### Features
+
+- `airdrop`: An asynchronous helper function that airdrops a specified amount of lamports to a given address.
+    ```ts
+    await client.airdrop(address('HQVxiMVDoV9jzG4tpoxmDZsNfWvaHXm8DGGv93Gka75v'), lamports(1_000_000_000n));
+    ```
+
 ## `litesvmTransactionPlanner` plugin
 
 This plugin provides a default transaction planner that creates transaction messages with a fee payer, a provisory compute unit limit, and optional priority fees.

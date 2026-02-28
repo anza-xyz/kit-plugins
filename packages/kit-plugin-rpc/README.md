@@ -81,6 +81,31 @@ const client = createEmptyClient().use(localhostRpc());
 
 _See the `rpc` plugin for available features_.
 
+## `rpcAirdrop` plugin
+
+This plugin adds an `airdrop` method to your Kit client that requests SOL airdrops via the RPC and RPC Subscriptions transports.
+
+> [!NOTE]
+> Airdrop is only available on test clusters (devnet, testnet) and local validators. Using this plugin with a mainnet RPC will produce a TypeScript error.
+
+### Installation
+
+The client must have `rpc` and `rpcSubscriptions` installed before applying this plugin.
+
+```ts
+import { createEmptyClient } from '@solana/kit';
+import { localhostRpc, rpcAirdrop } from '@solana/kit-plugin-rpc';
+
+const client = createEmptyClient().use(localhostRpc()).use(rpcAirdrop());
+```
+
+### Features
+
+- `airdrop`: An asynchronous helper function that airdrops a specified amount of lamports to a given address.
+    ```ts
+    await client.airdrop(address('HQVxiMVDoV9jzG4tpoxmDZsNfWvaHXm8DGGv93Gka75v'), lamports(1_000_000_000n));
+    ```
+
 ## `rpcTransactionPlanner` plugin
 
 This plugin provides a default transaction planner that creates transaction messages with a fee payer, a provisory compute unit limit, and optional priority fees.
