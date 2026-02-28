@@ -14,6 +14,7 @@ Guidance for shipping code using standard Git and the GitHub CLI (`gh`). This sk
 - Show the proposed changeset entry for review before writing the changeset file.
 - Use standard `git add` and `git commit` workflows. Concise title on the first line, blank line, then description body.
 - Use `gh pr create` for pull requests.
+- Write commit and PR descriptions as natural flowing prose. Do NOT insert hard line breaks mid-paragraph.
 
 ## Guidelines
 

@@ -9,12 +9,12 @@
     "shipping-git": {
       "source": "lorisleiva/skills",
       "sourceType": "github",
-      "computedHash": "68666c517509b6634eb5940bb767348454aed483dab368a30c9af33815032e47"
+      "computedHash": "1e730a4eadb36e5dccae01d0609fc9cfe634349961aa0e45f1b718dd31c2327f"
     },
     "shipping-graphite": {
       "source": "lorisleiva/skills",
       "sourceType": "github",
-      "computedHash": "2210b5a35e10d6799c3ec8affed9e0feb151926cbb332a2c6a33b70db70bf61c"
+      "computedHash": "bd7eebc15668ad09a6dac4c56f981c423a37b17b5fcce869ac93d5c6de36e26e"
     },
     "ts-docblocks": {
       "source": "lorisleiva/skills",
