@@ -11,7 +11,7 @@ Guidance for shipping code using standard Git and the GitHub CLI (`gh`). This sk
 
 - NEVER commit, push, create branches, or create PRs without explicit user approval.
 - Before any git operation that creates or modifies a commit, present a review block containing: changeset content (if applicable), commit title, and commit/PR description. ALWAYS wait for approval.
-- Present changeset file contents for review before writing them.
+- Show the proposed changeset entry for review before writing the changeset file.
 - Use standard `git add` and `git commit` workflows. Concise title on the first line, blank line, then description body.
 - Use `gh pr create` for pull requests.
 
@@ -62,6 +62,6 @@ git push -u origin HEAD
 
 Before any git operation, present this review block and wait for approval:
 
-1. **Changeset content** (if applicable) — the full changeset file contents.
+1. **Changeset entry** (if applicable) — the proposed changelog entry and bump type.
 2. **Commit title** — a concise title for the commit.
 3. **Commit/PR description** — a short description that explains what changed and why.

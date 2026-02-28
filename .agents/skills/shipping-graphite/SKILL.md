@@ -11,7 +11,7 @@ Guidance for shipping code using the [Graphite](https://graphite.dev/) CLI (`gt`
 
 - NEVER commit, push, create branches, or create PRs without explicit user approval.
 - Before any git operation that creates or modifies a commit, present a review block containing: changeset content (if applicable), commit title, and commit/PR description. ALWAYS wait for approval.
-- Present changeset file contents for review before writing them.
+- Show the proposed changeset entry for review before writing the changeset file.
 - Use `gt create -am "Title" -m "Description body"` for new PRs. The first `-m` sets the commit title; the second sets the PR description.
 - Use `gt modify -a` to amend the current branch with follow-up changes (NEVER create additional commits on the same branch).
 - ALWAYS escape backticks in commit messages with backslashes for shell compatibility (e.g. `"Update \`my-package\` config"`).
@@ -43,13 +43,11 @@ This amends the single commit on the current branch. Since Graphite uses a one-c
 
 ### Submitting PRs
 
-After creating or modifying branches, submit the stack:
+Do NOT run `gt submit` (or `gt ss`) after creating or modifying branches. The `gt create` and `gt modify` steps are the end of the workflow unless the user explicitly asks to submit or push.
 
-```sh
-gt submit
-```
+When the user asks to submit, first run `gt sync` to ensure the local stack is up-to-date. This will restack branches from the main branch and prompt to delete any stale (merged) branches. If `gt sync` encounters any issues or conflicts, stop immediately and report the problem to the user before proceeding — await their instructions on how to resolve it.
 
-This creates or updates PRs for all branches in the current stack.
+Only after a clean sync, run `gt submit` to create or update PRs for all branches in the current stack.
 
 ### Shell Escaping
 
@@ -63,6 +61,6 @@ gt create -am "Align \`kit-plugins\` infrastructure" -m "This PR updates the sha
 
 Before any git operation, present this review block and wait for approval:
 
-1. **Changeset content** (if applicable) — the full changeset file contents.
+1. **Changeset entry** (if applicable) — the proposed changelog entry and bump type.
 2. **Commit title** — a concise title for the commit.
 3. **Commit/PR description** — a short description that explains what changed and why.
