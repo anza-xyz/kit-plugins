@@ -6,20 +6,7 @@ import {
     signTransactionMessageWithSigners,
 } from '@solana/kit';
 
-import { getSolanaErrorFromLiteSvmFailure } from './transaction-error';
-
-/**
- * Checks whether a `sendTransaction` result is a failed transaction.
- *
- * LiteSVM's `sendTransaction` returns `TransactionMetadata` on success
- * or `FailedTransactionMetadata` on failure. The failure type has an
- * `err` method while the success type does not.
- */
-function isFailedTransaction(
-    result: FailedTransactionMetadata | TransactionMetadata,
-): result is FailedTransactionMetadata {
-    return 'err' in result && typeof result.err === 'function';
-}
+import { getSolanaErrorFromLiteSvmFailure, isFailedTransaction } from './transaction-error';
 
 /**
  * A plugin that provides a default transaction plan executor using LiteSVM.

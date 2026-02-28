@@ -117,6 +117,20 @@ const INSTRUCTION_ERROR_NAMES: readonly string[] = [
 ];
 
 /**
+ * Checks whether a LiteSVM transaction result is a failed transaction.
+ *
+ * LiteSVM's `sendTransaction` and `airdrop` return `TransactionMetadata`
+ * on success or `FailedTransactionMetadata` on failure. The failure type
+ * has an `err` method while the success type does not.
+ *
+ * @param result - The transaction result to check.
+ * @returns `true` if the result is a {@link FailedTransactionResult}.
+ */
+export function isFailedTransaction(result: object): result is FailedTransactionResult {
+    return 'err' in result && typeof result.err === 'function';
+}
+
+/**
  * Converts a failed transaction result from LiteSVM into a `SolanaError`
  * using the same error codes that the RPC would produce.
  *
