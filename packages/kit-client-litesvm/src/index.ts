@@ -1,7 +1,11 @@
 import { createEmptyClient, TransactionSigner } from '@solana/kit';
-import { airdrop } from '@solana/kit-plugin-airdrop';
 import { planAndSendTransactions } from '@solana/kit-plugin-instruction-plan';
-import { litesvm, litesvmTransactionPlanExecutor, litesvmTransactionPlanner } from '@solana/kit-plugin-litesvm';
+import {
+    litesvm,
+    litesvmAirdrop,
+    litesvmTransactionPlanExecutor,
+    litesvmTransactionPlanner,
+} from '@solana/kit-plugin-litesvm';
 import { payerOrGeneratedPayer } from '@solana/kit-plugin-payer';
 
 // Re-export types that appear in the `createClient` return type to make them type-portable.
@@ -51,7 +55,7 @@ export type {
 export function createClient(config: { payer?: TransactionSigner } = {}) {
     return createEmptyClient()
         .use(litesvm())
-        .use(airdrop())
+        .use(litesvmAirdrop())
         .use(payerOrGeneratedPayer(config.payer))
         .use(litesvmTransactionPlanner())
         .use(litesvmTransactionPlanExecutor())

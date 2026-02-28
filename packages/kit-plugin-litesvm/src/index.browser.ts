@@ -9,6 +9,7 @@ export function litesvm(): <T extends object>(_client: T) => never {
     );
 }
 
+export * from './airdrop';
 export * from './transaction-error';
 export * from './transaction-plan-executor';
 export * from './transaction-planner';
