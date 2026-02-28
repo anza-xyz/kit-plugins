@@ -1,5 +1,13 @@
 import { TransactionSigner } from '@solana/kit';
 
+// Re-export types that appear in the `createClient` return type to make them type-portable.
+export type {
+    FailedTransactionMetadata,
+    LiteSVM,
+    LiteSvmRpcApi,
+    TransactionMetadata,
+} from '@solana/kit-plugin-litesvm';
+
 /**
  * Creates a default LiteSVM client for local blockchain simulation.
  *
