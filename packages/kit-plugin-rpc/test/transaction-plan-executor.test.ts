@@ -12,9 +12,6 @@ import {
     singleInstructionPlan,
     singleTransactionPlan,
     SingleTransactionPlanResult,
-    SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN,
-    SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_COMPUTE_LIMIT,
-    SolanaError,
     SolanaRpcApi,
     SolanaRpcSubscriptionsApi,
 } from '@solana/kit';
@@ -227,67 +224,6 @@ describe('rpcTransactionPlanExecutor', () => {
             commitment: 'confirmed',
             skipPreflight: true,
         });
-    });
-
-    it('unwraps simulation errors when executing transactions', async () => {
-        const payer = await generateKeyPairSigner();
-        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
-        const simulateTransaction = vi.fn().mockResolvedValue({ value: { unitsConsumed: 42 } });
-        const rpc = {
-            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
-            simulateTransaction: () => ({ send: simulateTransaction }),
-        } as unknown as Rpc<SolanaRpcApi>;
-        const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
-        const originalError = new Error('Original transaction error');
-        const sendAndConfirmTransaction = vi.fn().mockRejectedValue(
-            new SolanaError(SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_COMPUTE_LIMIT, {
-                cause: originalError,
-                unitsConsumed: 42,
-            }),
-        );
-        (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
-
-        const client = createEmptyClient()
-            .use(() => ({ payer, rpc, rpcSubscriptions }))
-            .use(rpcTransactionPlanExecutor());
-
-        const transactionPlan = singleTransactionPlan(
-            setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 })),
-        );
-        const promise = client.transactionPlanExecutor(transactionPlan);
-        await expect(promise).rejects.toThrowError(
-            new SolanaError(SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN, {
-                cause: originalError,
-            }),
-        );
-    });
-
-    it('does not unwrap non-simulation errors when executing transactions', async () => {
-        const payer = await generateKeyPairSigner();
-        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
-        const simulateTransaction = vi.fn().mockResolvedValue({ value: { unitsConsumed: 42 } });
-        const rpc = {
-            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
-            simulateTransaction: () => ({ send: simulateTransaction }),
-        } as unknown as Rpc<SolanaRpcApi>;
-        const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
-        const originalError = new Error('Original transaction error');
-        const sendAndConfirmTransaction = vi.fn().mockRejectedValue(originalError);
-        (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
-
-        const client = createEmptyClient()
-            .use(() => ({ payer, rpc, rpcSubscriptions }))
-            .use(rpcTransactionPlanExecutor());
-
-        const transactionPlan = singleTransactionPlan(
-            setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 })),
-        );
-        const promise = client.transactionPlanExecutor(transactionPlan);
-        await expect(promise).rejects.toThrowError(
-            new SolanaError(SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN, {
-                cause: originalError,
-            }),
-        );
     });
 
     it('limits the number of concurrent executions for parallel transaction plans', async () => {

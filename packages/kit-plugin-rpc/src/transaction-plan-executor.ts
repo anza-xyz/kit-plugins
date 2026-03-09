@@ -17,7 +17,6 @@ import {
     SlotNotificationsApi,
     SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_COMPUTE_LIMIT,
     TransactionPlanExecutorConfig,
-    unwrapSimulationError,
 } from '@solana/kit';
 import {
     estimateComputeUnitLimitFactory,
@@ -103,35 +102,31 @@ export function rpcTransactionPlanExecutor(
 
         const transactionPlanExecutor = createTransactionPlanExecutor({
             executeTransactionMessage: limitFunction(async (context, transactionMessage, executorConfig) => {
-                try {
-                    const needsCuEstimation = needsComputeUnitEstimation(transactionMessage);
-                    const { value: latestBlockhash } = await client.rpc.getLatestBlockhash().send(executorConfig);
-                    const signedTransaction = await pipe(
-                        setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, transactionMessage),
-                        tx => (context.message = tx),
-                        async tx =>
-                            needsCuEstimation
-                                ? await estimateAndSetComputeUnitLimit(
-                                      tx,
-                                      estimateCULimit,
-                                      config.skipPreflight ?? false,
-                                      executorConfig,
-                                  )
-                                : tx,
-                        async tx => (context.message = await tx),
-                        async tx => await signTransactionMessageWithSigners(await tx, executorConfig),
-                        async tx => (context.transaction = await tx),
-                    );
-                    assertIsTransactionWithBlockhashLifetime(signedTransaction);
-                    await sendAndConfirmTransaction(signedTransaction, {
-                        commitment: 'confirmed',
-                        skipPreflight: config.skipPreflight || needsCuEstimation,
-                        ...executorConfig,
-                    });
-                    return signedTransaction;
-                } catch (error) {
-                    throw unwrapSimulationError(error);
-                }
+                const needsCuEstimation = needsComputeUnitEstimation(transactionMessage);
+                const { value: latestBlockhash } = await client.rpc.getLatestBlockhash().send(executorConfig);
+                const signedTransaction = await pipe(
+                    setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, transactionMessage),
+                    tx => (context.message = tx),
+                    async tx =>
+                        needsCuEstimation
+                            ? await estimateAndSetComputeUnitLimit(
+                                  tx,
+                                  estimateCULimit,
+                                  config.skipPreflight ?? false,
+                                  executorConfig,
+                              )
+                            : tx,
+                    async tx => (context.message = await tx),
+                    async tx => await signTransactionMessageWithSigners(await tx, executorConfig),
+                    async tx => (context.transaction = await tx),
+                );
+                assertIsTransactionWithBlockhashLifetime(signedTransaction);
+                await sendAndConfirmTransaction(signedTransaction, {
+                    commitment: 'confirmed',
+                    skipPreflight: config.skipPreflight || needsCuEstimation,
+                    ...executorConfig,
+                });
+                return signedTransaction;
             }, config.maxConcurrency ?? 10),
         } as TransactionPlanExecutorConfig);
 
