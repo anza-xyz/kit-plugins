@@ -2,8 +2,11 @@ import {
     Address,
     canceledSingleTransactionPlanResult,
     createEmptyClient,
+    createFailedToExecuteTransactionPlanError,
     createTransactionMessage,
+    failedSingleTransactionPlanResult,
     Instruction,
+    isSolanaError,
     sequentialInstructionPlan,
     sequentialTransactionPlan,
     sequentialTransactionPlanResult,
@@ -11,8 +14,12 @@ import {
     Signature,
     singleInstructionPlan,
     singleTransactionPlan,
+    SOLANA_ERROR__FAILED_TO_SEND_TRANSACTION,
+    SOLANA_ERROR__FAILED_TO_SEND_TRANSACTIONS,
     SOLANA_ERROR__INSTRUCTION_PLANS__UNEXPECTED_TRANSACTION_PLAN,
     SOLANA_ERROR__INSTRUCTION_PLANS__UNEXPECTED_TRANSACTION_PLAN_RESULT,
+    SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE,
+    SOLANA_ERROR__TRANSACTION_ERROR__INSUFFICIENT_FUNDS_FOR_FEE,
     SolanaError,
     SuccessfulSingleTransactionPlanResult,
     successfulSingleTransactionPlanResult,
@@ -21,7 +28,7 @@ import {
     TransactionPlan,
     TransactionPlanResult,
 } from '@solana/kit';
-import { describe, expect, it, vi } from 'vitest';
+import { assert, describe, expect, it, vi } from 'vitest';
 
 import { planAndSendTransactions, transactionPlanExecutor, transactionPlanner } from '../src';
 
@@ -411,6 +418,75 @@ describe('planAndSendTransactions', () => {
                 abortSignal: undefined,
             });
         });
+
+        it('re-wraps a failed-to-execute error into a failed-to-send-transaction error', async () => {
+            const message = {} as TransactionMessage & TransactionMessageWithFeePayer;
+            const txPlan = singleTransactionPlan(message);
+            const error = new Error('tx failed');
+            const failedResult = failedSingleTransactionPlanResult(message, error);
+            const executionError = createFailedToExecuteTransactionPlanError(failedResult);
+
+            const customTransactionPlanner = vi.fn().mockResolvedValue(txPlan);
+            const customTransactionPlanExecutor = vi.fn().mockRejectedValue(executionError);
+            const client = createEmptyClient()
+                .use(transactionPlanner(customTransactionPlanner))
+                .use(transactionPlanExecutor(customTransactionPlanExecutor))
+                .use(planAndSendTransactions());
+
+            const thrownError = await client.sendTransaction({} as Instruction).catch((e: unknown) => e);
+            assert(isSolanaError(thrownError, SOLANA_ERROR__FAILED_TO_SEND_TRANSACTION));
+        });
+
+        it('unwraps preflight errors when re-wrapping a failed-to-execute error', async () => {
+            const message = {} as TransactionMessage & TransactionMessageWithFeePayer;
+            const txPlan = singleTransactionPlan(message);
+            const innerError = new SolanaError(SOLANA_ERROR__TRANSACTION_ERROR__INSUFFICIENT_FUNDS_FOR_FEE);
+            const logs = ['Program log: Error: insufficient funds'];
+            const simulationData = {
+                accounts: null,
+                innerInstructions: null,
+                loadedAccountsDataSize: null,
+                logs,
+                replacementBlockhash: null,
+                returnData: null,
+                unitsConsumed: 200_000n,
+            };
+            const preflightError = new SolanaError(
+                SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE,
+                { ...simulationData, cause: innerError },
+            );
+            const failedResult = failedSingleTransactionPlanResult(message, preflightError);
+            const executionError = createFailedToExecuteTransactionPlanError(failedResult);
+
+            const customTransactionPlanner = vi.fn().mockResolvedValue(txPlan);
+            const customTransactionPlanExecutor = vi.fn().mockRejectedValue(executionError);
+            const client = createEmptyClient()
+                .use(transactionPlanner(customTransactionPlanner))
+                .use(transactionPlanExecutor(customTransactionPlanExecutor))
+                .use(planAndSendTransactions());
+
+            const thrownError = await client.sendTransaction({} as Instruction).catch((e: unknown) => e);
+            assert(isSolanaError(thrownError, SOLANA_ERROR__FAILED_TO_SEND_TRANSACTION));
+            expect(thrownError.context.logs).toBe(logs);
+            expect(thrownError.context.preflightData).toMatchObject(simulationData);
+            expect(thrownError.cause).toBe(innerError);
+        });
+
+        it('re-throws non-Solana errors unchanged', async () => {
+            const message = {} as TransactionMessage & TransactionMessageWithFeePayer;
+            const txPlan = singleTransactionPlan(message);
+            const genericError = new Error('something went wrong');
+
+            const customTransactionPlanner = vi.fn().mockResolvedValue(txPlan);
+            const customTransactionPlanExecutor = vi.fn().mockRejectedValue(genericError);
+            const client = createEmptyClient()
+                .use(transactionPlanner(customTransactionPlanner))
+                .use(transactionPlanExecutor(customTransactionPlanExecutor))
+                .use(planAndSendTransactions());
+
+            const promise = client.sendTransaction({} as Instruction);
+            await expect(promise).rejects.toBe(genericError);
+        });
     });
 
     describe('client.sendTransactions', () => {
@@ -546,6 +622,76 @@ describe('planAndSendTransactions', () => {
             expect(customTransactionPlanExecutor).toHaveBeenCalledExactlyOnceWith(transactionPlan, {
                 abortSignal: undefined,
             });
+        });
+
+        it('re-wraps a failed-to-execute error into a failed-to-send-transactions error', async () => {
+            const message = {} as TransactionMessage & TransactionMessageWithFeePayer;
+            const txPlan = singleTransactionPlan(message);
+            const error = new Error('tx failed');
+            const failedResult = failedSingleTransactionPlanResult(message, error);
+            const executionError = createFailedToExecuteTransactionPlanError(failedResult);
+
+            const customTransactionPlanner = vi.fn().mockResolvedValue(txPlan);
+            const customTransactionPlanExecutor = vi.fn().mockRejectedValue(executionError);
+            const client = createEmptyClient()
+                .use(transactionPlanner(customTransactionPlanner))
+                .use(transactionPlanExecutor(customTransactionPlanExecutor))
+                .use(planAndSendTransactions());
+
+            const thrownError = await client.sendTransactions({} as Instruction).catch((e: unknown) => e);
+            assert(isSolanaError(thrownError, SOLANA_ERROR__FAILED_TO_SEND_TRANSACTIONS));
+        });
+
+        it('unwraps preflight errors when re-wrapping a failed-to-execute error', async () => {
+            const message = {} as TransactionMessage & TransactionMessageWithFeePayer;
+            const txPlan = singleTransactionPlan(message);
+            const innerError = new SolanaError(SOLANA_ERROR__TRANSACTION_ERROR__INSUFFICIENT_FUNDS_FOR_FEE);
+            const logs = ['Program log: Error: insufficient funds'];
+            const simulationData = {
+                accounts: null,
+                innerInstructions: null,
+                loadedAccountsDataSize: null,
+                logs,
+                replacementBlockhash: null,
+                returnData: null,
+                unitsConsumed: 200_000n,
+            };
+            const preflightError = new SolanaError(
+                SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE,
+                { ...simulationData, cause: innerError },
+            );
+            const failedResult = failedSingleTransactionPlanResult(message, preflightError);
+            const executionError = createFailedToExecuteTransactionPlanError(failedResult);
+
+            const customTransactionPlanner = vi.fn().mockResolvedValue(txPlan);
+            const customTransactionPlanExecutor = vi.fn().mockRejectedValue(executionError);
+            const client = createEmptyClient()
+                .use(transactionPlanner(customTransactionPlanner))
+                .use(transactionPlanExecutor(customTransactionPlanExecutor))
+                .use(planAndSendTransactions());
+
+            const thrownError = await client.sendTransactions({} as Instruction).catch((e: unknown) => e);
+            assert(isSolanaError(thrownError, SOLANA_ERROR__FAILED_TO_SEND_TRANSACTIONS));
+            expect(thrownError.context.failedTransactions).toHaveLength(1);
+            expect(thrownError.context.failedTransactions[0].error).toBe(innerError);
+            expect(thrownError.context.failedTransactions[0].logs).toBe(logs);
+            expect(thrownError.context.failedTransactions[0].preflightData).toMatchObject(simulationData);
+        });
+
+        it('re-throws non-Solana errors unchanged', async () => {
+            const message = {} as TransactionMessage & TransactionMessageWithFeePayer;
+            const txPlan = singleTransactionPlan(message);
+            const genericError = new Error('something went wrong');
+
+            const customTransactionPlanner = vi.fn().mockResolvedValue(txPlan);
+            const customTransactionPlanExecutor = vi.fn().mockRejectedValue(genericError);
+            const client = createEmptyClient()
+                .use(transactionPlanner(customTransactionPlanner))
+                .use(transactionPlanExecutor(customTransactionPlanExecutor))
+                .use(planAndSendTransactions());
+
+            const promise = client.sendTransactions({} as Instruction);
+            await expect(promise).rejects.toBe(genericError);
         });
     });
 });

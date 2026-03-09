@@ -1,14 +1,22 @@
 import {
     assertIsSingleTransactionPlan,
+    assertIsSingleTransactionPlanResult,
     assertIsSuccessfulSingleTransactionPlanResult,
+    CanceledSingleTransactionPlanResult,
     ClientWithTransactionPlanning,
     ClientWithTransactionSending,
+    createFailedToSendTransactionError,
+    createFailedToSendTransactionsError,
+    FailedSingleTransactionPlanResult,
+    isSolanaError,
     isTransactionPlan,
     parseInstructionOrTransactionPlanInput,
     parseInstructionPlanInput,
     singleTransactionPlan,
+    SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN,
     TransactionPlanExecutor,
     TransactionPlanner,
+    TransactionPlanResult,
 } from '@solana/kit';
 
 /**
@@ -118,7 +126,17 @@ function getTransactionPlanningAndSendingFunctions(client: {
         config?.abortSignal?.throwIfAborted();
         const transactionPlan = isTransactionPlan(plan) ? plan : await planTransactions(plan, config);
         config?.abortSignal?.throwIfAborted();
-        return await client.transactionPlanExecutor(transactionPlan, config);
+        try {
+            return await client.transactionPlanExecutor(transactionPlan, config);
+        } catch (error) {
+            if (!isSolanaError(error, SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN)) {
+                throw error;
+            }
+            throw createFailedToSendTransactionsError(
+                error.context.transactionPlanResult as TransactionPlanResult,
+                error.context.abortReason,
+            );
+        }
     };
 
     const sendTransaction: ClientWithTransactionSending['sendTransaction'] = async (input, config = {}) => {
@@ -128,9 +146,22 @@ function getTransactionPlanningAndSendingFunctions(client: {
             ? plan
             : singleTransactionPlan(await planTransaction(plan, config));
         config?.abortSignal?.throwIfAborted();
-        const result = await client.transactionPlanExecutor(transactionPlan, config);
-        assertIsSuccessfulSingleTransactionPlanResult(result);
-        return result;
+        try {
+            const result = await client.transactionPlanExecutor(transactionPlan, config);
+            assertIsSuccessfulSingleTransactionPlanResult(result);
+            return result;
+        } catch (error) {
+            if (!isSolanaError(error, SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN)) {
+                throw error;
+            }
+            assertIsSingleTransactionPlanResult(error.context.transactionPlanResult as TransactionPlanResult);
+            throw createFailedToSendTransactionError(
+                error.context.transactionPlanResult as
+                    | CanceledSingleTransactionPlanResult
+                    | FailedSingleTransactionPlanResult,
+                error.context.abortReason,
+            );
+        }
     };
 
     return { planTransaction, planTransactions, sendTransaction, sendTransactions };
