@@ -44,7 +44,7 @@
         "test:unit": "vitest run"
     },
     "peerDependencies": {
-        "@solana/kit": "^6.2.0"
+        "@solana/kit": "^6.3.0"
     },
     "dependencies": {
         "@solana/kit-client-litesvm": "workspace:*",

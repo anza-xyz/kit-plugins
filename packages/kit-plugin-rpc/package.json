@@ -45,10 +45,10 @@
         "test:unit": "vitest run"
     },
     "peerDependencies": {
-        "@solana/kit": "^6.2.0"
+        "@solana/kit": "^6.3.0"
     },
     "dependencies": {
-        "@solana-program/compute-budget": "^0.14.0"
+        "@solana-program/compute-budget": "^0.15.0"
     },
     "license": "MIT",
     "repository": {

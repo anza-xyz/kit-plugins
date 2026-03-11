@@ -183,7 +183,10 @@ async function estimateAndSetComputeUnitLimit<
         ) {
             // Use consumed units from the failed simulation so the
             // transaction can still reach the validator for debugging.
-            estimatedUnits = error.context.unitsConsumed;
+            // The unitsConsumed field is a raw bigint from the RPC response,
+            // so we downcast it to a u32 number, capping at 4_294_967_295.
+            const bigintUnits = error.context.unitsConsumed ?? 0n;
+            estimatedUnits = bigintUnits > 4_294_967_295n ? 4_294_967_295 : Number(bigintUnits);
         } else {
             throw error;
         }
