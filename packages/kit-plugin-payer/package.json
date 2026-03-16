@@ -25,7 +25,8 @@
     "type": "commonjs",
     "files": [
         "./dist/types",
-        "./dist/index.*"
+        "./dist/index.*",
+        "./src/"
     ],
     "sideEffects": false,
     "keywords": [
