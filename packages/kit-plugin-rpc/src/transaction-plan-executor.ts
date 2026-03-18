@@ -3,14 +3,17 @@ import {
     ClientWithRpc,
     ClientWithRpcSubscriptions,
     createTransactionPlanExecutor,
+    estimateComputeUnitLimitFactory,
     extendClient,
     GetEpochInfoApi,
     GetLatestBlockhashApi,
     GetSignatureStatusesApi,
+    getTransactionMessageComputeUnitLimit,
     isSolanaError,
     pipe,
     sendAndConfirmTransactionFactory,
     SendTransactionApi,
+    setTransactionMessageComputeUnitLimit,
     setTransactionMessageLifetimeUsingBlockhash,
     SignatureNotificationsApi,
     signTransactionMessageWithSigners,
@@ -19,13 +22,8 @@ import {
     SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_COMPUTE_LIMIT,
     TransactionPlanExecutorConfig,
 } from '@solana/kit';
-import {
-    estimateComputeUnitLimitFactory,
-    findSetComputeUnitLimitInstructionIndexAndUnits,
-    MAX_COMPUTE_UNIT_LIMIT,
-    PROVISORY_COMPUTE_UNIT_LIMIT,
-    updateOrAppendSetComputeUnitLimitInstruction,
-} from '@solana-program/compute-budget';
+
+const MAX_COMPUTE_UNIT_LIMIT = 1_400_000;
 
 /**
  * A plugin that provides a default transaction plan executor using RPC.
@@ -106,7 +104,8 @@ export function rpcTransactionPlanExecutor(
                 const needsCuEstimation = needsComputeUnitEstimation(transactionMessage);
                 const { value: latestBlockhash } = await client.rpc.getLatestBlockhash().send(executorConfig);
                 const signedTransaction = await pipe(
-                    setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, transactionMessage),
+                    transactionMessage,
+                    tx => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, tx),
                     tx => (context.message = tx),
                     async tx =>
                         needsCuEstimation
@@ -146,10 +145,10 @@ export function rpcTransactionPlanExecutor(
  * @returns `true` if the transaction needs compute unit estimation, `false` otherwise.
  */
 function needsComputeUnitEstimation(
-    transactionMessage: Parameters<typeof findSetComputeUnitLimitInstructionIndexAndUnits>[0],
+    transactionMessage: Parameters<typeof getTransactionMessageComputeUnitLimit>[0],
 ): boolean {
-    const details = findSetComputeUnitLimitInstructionIndexAndUnits(transactionMessage);
-    return !details || details.units === PROVISORY_COMPUTE_UNIT_LIMIT || details.units === MAX_COMPUTE_UNIT_LIMIT;
+    const computeUnitLimit = getTransactionMessageComputeUnitLimit(transactionMessage);
+    return !computeUnitLimit || computeUnitLimit === MAX_COMPUTE_UNIT_LIMIT;
 }
 
 /**
@@ -167,7 +166,7 @@ function needsComputeUnitEstimation(
  * @returns The updated transaction message with the estimated compute unit limit.
  */
 async function estimateAndSetComputeUnitLimit<
-    TMessage extends Parameters<typeof updateOrAppendSetComputeUnitLimitInstruction>[1],
+    TMessage extends Parameters<typeof setTransactionMessageComputeUnitLimit>[1],
 >(
     transactionMessage: TMessage,
     estimateCULimit: (tx: TMessage, config?: { abortSignal?: AbortSignal }) => Promise<number>,
@@ -195,7 +194,7 @@ async function estimateAndSetComputeUnitLimit<
 
     // Multiply the simulated limit by 1.1 to add a 10% buffer.
     const units = Math.ceil(estimatedUnits * 1.1);
-    return updateOrAppendSetComputeUnitLimitInstruction(units, transactionMessage);
+    return setTransactionMessageComputeUnitLimit(units, transactionMessage);
 }
 
 /**
