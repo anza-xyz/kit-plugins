@@ -1,4 +1,5 @@
 import { LiteSVM } from '@loris-sandbox/litesvm-kit';
+import { extendClient } from '@solana/kit';
 
 import { createRpcFromSvm } from './litesvm-to-rpc';
 
@@ -33,6 +34,6 @@ export function litesvm() {
     return <T extends object>(client: T) => {
         const svm = new LiteSVM();
         const rpc = createRpcFromSvm(svm);
-        return { ...client, rpc, svm };
+        return extendClient(client, { rpc, svm });
     };
 }

@@ -3,6 +3,7 @@ import {
     createSolanaRpc,
     createSolanaRpcSubscriptions,
     DefaultRpcSubscriptionsChannelConfig,
+    extendClient,
 } from '@solana/kit';
 
 /**
@@ -38,7 +39,7 @@ export function rpc<TClusterUrl extends ClusterUrl>(
     const rpc = createSolanaRpc(url);
     const rpcSubscriptionsUrl = rpcSubscriptionsConfig?.url ?? url.replace(/^http/, 'ws');
     const rpcSubscriptions = createSolanaRpcSubscriptions(rpcSubscriptionsUrl, rpcSubscriptionsConfig);
-    return <T extends object>(client: T) => ({ ...client, rpc, rpcSubscriptions });
+    return <T extends object>(client: T) => extendClient(client, { rpc, rpcSubscriptions });
 }
 
 /**

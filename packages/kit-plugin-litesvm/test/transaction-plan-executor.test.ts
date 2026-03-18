@@ -4,6 +4,7 @@ import {
     appendTransactionMessageInstruction,
     createEmptyClient,
     createTransactionMessage,
+    extendClient,
     generateKeyPairSigner,
     isSolanaError,
     lamports,
@@ -173,7 +174,7 @@ describe('litesvmTransactionPlanExecutor', () => {
             const payer = await generateKeyPairSigner();
             const client = createEmptyClient()
                 .use(litesvm())
-                .use(client => ({ ...client, payer }))
+                .use(client => extendClient(client, { payer }))
                 .use(litesvmTransactionPlanner())
                 .use(litesvmTransactionPlanExecutor());
             client.svm.airdrop(payer.address, lamports(1_000_000_000n));
@@ -190,7 +191,7 @@ describe('litesvmTransactionPlanExecutor', () => {
             const destination = await generateKeyPairSigner();
             const client = createEmptyClient()
                 .use(litesvm())
-                .use(client => ({ ...client, payer }))
+                .use(client => extendClient(client, { payer }))
                 .use(litesvmTransactionPlanner())
                 .use(litesvmTransactionPlanExecutor());
             client.svm.airdrop(payer.address, lamports(1_000_000_000n));
@@ -210,7 +211,7 @@ describe('litesvmTransactionPlanExecutor', () => {
             const payer = await generateKeyPairSigner();
             const client = createEmptyClient()
                 .use(litesvm())
-                .use(client => ({ ...client, payer }))
+                .use(client => extendClient(client, { payer }))
                 .use(litesvmTransactionPlanner())
                 .use(litesvmTransactionPlanExecutor());
             client.svm.airdrop(payer.address, lamports(1_000_000_000n));
@@ -245,7 +246,7 @@ describe('litesvmTransactionPlanExecutor', () => {
             const payer = await generateKeyPairSigner();
             const client = createEmptyClient()
                 .use(litesvm())
-                .use(client => ({ ...client, payer }))
+                .use(client => extendClient(client, { payer }))
                 .use(litesvmTransactionPlanner())
                 .use(litesvmTransactionPlanExecutor());
             // Do NOT airdrop — payer account doesn't exist.
@@ -270,7 +271,7 @@ describe('litesvmTransactionPlanExecutor', () => {
             const payer = await generateKeyPairSigner();
             const client = createEmptyClient()
                 .use(litesvm())
-                .use(client => ({ ...client, payer }))
+                .use(client => extendClient(client, { payer }))
                 .use(litesvmTransactionPlanner())
                 .use(litesvmTransactionPlanExecutor());
             client.svm.airdrop(payer.address, lamports(1_000_000_000n));
@@ -292,7 +293,7 @@ describe('litesvmTransactionPlanExecutor', () => {
             const payer = await generateKeyPairSigner();
             const client = createEmptyClient()
                 .use(litesvm())
-                .use(client => ({ ...client, payer }))
+                .use(client => extendClient(client, { payer }))
                 .use(litesvmTransactionPlanner())
                 .use(litesvmTransactionPlanExecutor());
             // Do NOT airdrop — payer account doesn't exist.

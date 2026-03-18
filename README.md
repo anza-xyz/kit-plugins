@@ -160,11 +160,21 @@ function apple() {
 }
 ```
 
+While this works, it is recommended to use the `extendClient` utility from `@solana/kit` instead. Unlike a plain object spread, `extendClient` preserves property descriptors (such as getter functions and symbol-keyed properties) from the original client.
+
+```ts
+import { extendClient } from '@solana/kit';
+
+function apple() {
+    return <T extends object>(client: T) => extendClient(client, { fruit: 'apple' as const });
+}
+```
+
 You may also add requirements to your plugins to ensure that other plugins have been installed beforehand. For instance, in the example below, the `appleTart` plugin requires that the `apple` plugin has already been installed on the client.
 
 ```ts
 function appleTart() {
-    return <T extends { fruit: 'apple' }>(client: T) => ({ ...client, dessert: 'appleTart' as const });
+    return <T extends { fruit: 'apple' }>(client: T) => extendClient(client, { dessert: 'appleTart' as const });
 }
 
 createEmptyClient().use(apple()).use(appleTart()); // Ok
@@ -177,7 +187,7 @@ Plugins can also be asynchronous if required and return promises that resolve to
 function magicFruit() {
     return async <T extends object>(client: T) => {
         const fruit = await fetchSomeMagicFruit();
-        return { ...client, fruit };
+        return extendClient(client, { fruit });
     };
 }
 ```

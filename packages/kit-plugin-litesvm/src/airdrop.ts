@@ -1,4 +1,11 @@
-import { Address, ClientWithAirdrop, getBase58Decoder, Lamports, signature as toSignature } from '@solana/kit';
+import {
+    Address,
+    ClientWithAirdrop,
+    extendClient,
+    getBase58Decoder,
+    Lamports,
+    signature as toSignature,
+} from '@solana/kit';
 
 import { getSolanaErrorFromLiteSvmFailure, isFailedTransaction } from './transaction-error';
 
@@ -30,10 +37,9 @@ type LiteSVMClient = {
  * @see {@link litesvm}
  */
 export function litesvmAirdrop() {
-    return <T extends LiteSVMClient>(client: T): ClientWithAirdrop & T => {
+    return <T extends LiteSVMClient>(client: T) => {
         const base58Decoder = getBase58Decoder();
-        return {
-            ...client,
+        return extendClient(client, <ClientWithAirdrop>{
             airdrop: (address: Address, amount: Lamports) => {
                 const result = client.svm.airdrop(address, amount);
                 if (result == null) {
@@ -45,6 +51,6 @@ export function litesvmAirdrop() {
                 const sig = toSignature(base58Decoder.decode((result as { signature: () => Uint8Array }).signature()));
                 return Promise.resolve(sig);
             },
-        } as ClientWithAirdrop & T;
+        });
     };
 }

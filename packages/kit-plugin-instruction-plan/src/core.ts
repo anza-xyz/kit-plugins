@@ -7,6 +7,7 @@ import {
     ClientWithTransactionSending,
     createFailedToSendTransactionError,
     createFailedToSendTransactionsError,
+    extendClient,
     FailedSingleTransactionPlanResult,
     isSolanaError,
     isTransactionPlan,
@@ -36,7 +37,7 @@ import {
  * ```
  */
 export function transactionPlanner(transactionPlanner: TransactionPlanner) {
-    return <T extends object>(client: T) => ({ ...client, transactionPlanner });
+    return <T extends object>(client: T) => extendClient(client, { transactionPlanner });
 }
 
 /**
@@ -56,7 +57,7 @@ export function transactionPlanner(transactionPlanner: TransactionPlanner) {
  * ```
  */
 export function transactionPlanExecutor(transactionPlanExecutor: TransactionPlanExecutor) {
-    return <T extends object>(client: T) => ({ ...client, transactionPlanExecutor });
+    return <T extends object>(client: T) => extendClient(client, { transactionPlanExecutor });
 }
 
 /**
@@ -99,10 +100,7 @@ export function transactionPlanExecutor(transactionPlanExecutor: TransactionPlan
 export function planAndSendTransactions() {
     return <T extends { transactionPlanExecutor: TransactionPlanExecutor; transactionPlanner: TransactionPlanner }>(
         client: T,
-    ): ClientWithTransactionPlanning & ClientWithTransactionSending & T => ({
-        ...client,
-        ...getTransactionPlanningAndSendingFunctions(client),
-    });
+    ) => extendClient(client, getTransactionPlanningAndSendingFunctions(client));
 }
 
 function getTransactionPlanningAndSendingFunctions(client: {

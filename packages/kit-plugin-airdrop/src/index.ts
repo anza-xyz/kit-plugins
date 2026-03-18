@@ -1,4 +1,4 @@
-import { Address, airdropFactory, ClientWithAirdrop, Lamports } from '@solana/kit';
+import { Address, airdropFactory, ClientWithAirdrop, extendClient, Lamports } from '@solana/kit';
 
 type LiteSVMClient = {
     svm: { airdrop: (address: Address, lamports: Lamports) => unknown };
@@ -43,22 +43,20 @@ type RpcClient = {
 export function airdrop() {
     return <T extends LiteSVMClient | RpcClient>(client: T): ClientWithAirdrop & T => {
         if ('svm' in client) {
-            return {
-                ...client,
+            return extendClient<T, ClientWithAirdrop>(client, {
                 airdrop: (address, amount) => {
                     client.svm.airdrop(address, amount);
-                    return Promise.resolve();
+                    return Promise.resolve(undefined);
                 },
-            } as ClientWithAirdrop & T;
+            }) as ClientWithAirdrop & T;
         }
         const airdropInternal = airdropFactory({
             rpc: client.rpc,
             rpcSubscriptions: client.rpcSubscriptions,
         });
-        return {
-            ...client,
+        return extendClient<T, ClientWithAirdrop>(client, {
             airdrop: (address, amount, abortSignal) =>
                 airdropInternal({ abortSignal, commitment: 'confirmed', lamports: amount, recipientAddress: address }),
-        } as ClientWithAirdrop & T;
+        }) as ClientWithAirdrop & T;
     };
 }

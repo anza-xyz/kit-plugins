@@ -1,4 +1,4 @@
-import { Address, airdropFactory, ClientWithAirdrop, Lamports } from '@solana/kit';
+import { Address, airdropFactory, ClientWithAirdrop, extendClient, Lamports } from '@solana/kit';
 
 type RpcClient = {
     rpc: Parameters<typeof airdropFactory>[0]['rpc'];
@@ -30,20 +30,11 @@ type RpcClient = {
  * @see {@link localhostRpc}
  */
 export function rpcAirdrop() {
-    return <T extends RpcClient>(client: T): ClientWithAirdrop & T => {
-        const airdropInternal = airdropFactory({
-            rpc: client.rpc,
-            rpcSubscriptions: client.rpcSubscriptions,
-        });
-        return {
-            ...client,
+    return <T extends RpcClient>(client: T) => {
+        const airdropInternal = airdropFactory({ rpc: client.rpc, rpcSubscriptions: client.rpcSubscriptions });
+        return extendClient(client, <ClientWithAirdrop>{
             airdrop: (address: Address, amount: Lamports, abortSignal?: AbortSignal) =>
-                airdropInternal({
-                    abortSignal,
-                    commitment: 'confirmed',
-                    lamports: amount,
-                    recipientAddress: address,
-                }),
-        } as ClientWithAirdrop & T;
+                airdropInternal({ abortSignal, commitment: 'confirmed', lamports: amount, recipientAddress: address }),
+        });
     };
 }

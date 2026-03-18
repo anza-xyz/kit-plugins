@@ -1,6 +1,7 @@
 import type { FailedTransactionMetadata, LiteSVM, TransactionMetadata } from '@loris-sandbox/litesvm-kit';
 import {
     createTransactionPlanExecutor,
+    extendClient,
     pipe,
     setTransactionMessageLifetimeUsingBlockhash,
     signTransactionMessageWithSigners,
@@ -68,6 +69,6 @@ export function litesvmTransactionPlanExecutor() {
             },
         });
 
-        return { ...client, transactionPlanExecutor };
+        return extendClient(client, { transactionPlanExecutor });
     };
 }

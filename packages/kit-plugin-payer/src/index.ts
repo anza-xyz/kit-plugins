@@ -4,6 +4,7 @@ import {
     ClientWithAirdrop,
     ClientWithPayer,
     createKeyPairSignerFromBytes,
+    extendClient,
     generateKeyPairSigner,
     Lamports,
     lamports,
@@ -29,7 +30,7 @@ import {
  * ```
  */
 export function payer(payer: TransactionSigner) {
-    return <T extends object>(client: T) => ({ ...client, payer });
+    return <T extends object>(client: T) => extendClient(client, { payer });
 }
 
 /**
@@ -49,7 +50,7 @@ export function payer(payer: TransactionSigner) {
  * ```
  */
 export function generatedPayer() {
-    return async <T extends object>(client: T) => ({ ...client, payer: await generateKeyPairSigner() });
+    return async <T extends object>(client: T) => extendClient(client, { payer: await generateKeyPairSigner() });
 }
 
 /**
@@ -113,7 +114,7 @@ export function payerFromFile(path: string) {
     return async <T extends object>(client: T) => {
         const bytes = JSON.parse(readFileSync(path, 'utf-8')) as number[];
         const payer = await createKeyPairSignerFromBytes(new Uint8Array(bytes));
-        return { ...client, payer };
+        return extendClient(client, { payer });
     };
 }
 
@@ -145,7 +146,7 @@ export function payerFromFile(path: string) {
  * ```
  */
 export function payerOrGeneratedPayer(explicitPayer: TransactionSigner | undefined) {
-    return <T extends ClientWithAirdrop>(client: T): Promise<ClientWithPayer & T> => {
+    return <T extends ClientWithAirdrop>(client: T): Promise<ClientWithPayer & Omit<T, 'payer'>> => {
         if (explicitPayer) {
             return Promise.resolve(payer(explicitPayer)(client));
         }
