@@ -4,6 +4,8 @@ import {
     AccountInfoWithBase64EncodedData,
     Address,
     Base64EncodedBytes,
+    createJsonRpcApi,
+    createRpc,
     GetAccountInfoApi,
     GetBalanceApi,
     getBase58Decoder,
@@ -16,9 +18,10 @@ import {
     Lamports,
     lamports,
     MaybeEncodedAccount,
-    PendingRpcRequest,
     RequestAirdropApi,
     Rpc,
+    RpcResponse,
+    RpcTransport,
     signature as toSignature,
     SolanaRpcResponse,
 } from '@solana/kit';
@@ -76,6 +79,7 @@ type Encoding = 'base58' | 'base64' | 'base64+zstd' | 'jsonParsed';
  * ```
  */
 export function createRpcFromSvm(svm: LiteSVM): Rpc<LiteSvmRpcApi> {
+    const base58Decoder = getBase58Decoder();
     const base64Decoder = getBase64Decoder();
     const convertMaybeEncodedAccount = (
         account: MaybeEncodedAccount,
@@ -90,44 +94,41 @@ export function createRpcFromSvm(svm: LiteSVM): Rpc<LiteSvmRpcApi> {
         };
     };
 
-    const base58Decoder = getBase58Decoder();
-
-    return {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const supportedApi: Record<keyof LiteSvmRpcApi, (...args: any[]) => unknown> = {
         getAccountInfo: (address: Address, config?: { encoding?: Encoding }) => {
             assertEncodingIsBase64(config?.encoding);
             const response = convertMaybeEncodedAccount(svm.getAccount(address));
-            return wrapInPendingRpcRequest(wrapInSolanaRpcResponse(response, svm.getClock().slot));
+            return withContext(response, svm.getClock().slot);
         },
         getBalance: (address: Address) => {
             const response = svm.getBalance(address) ?? lamports(0n);
-            return wrapInPendingRpcRequest(wrapInSolanaRpcResponse(response, svm.getClock().slot));
+            return withContext(response, svm.getClock().slot);
         },
         getEpochSchedule: () => {
             const schedule = svm.getEpochSchedule();
-            const response = {
+            return {
                 firstNormalEpoch: schedule.firstNormalEpoch,
                 firstNormalSlot: schedule.firstNormalSlot,
                 leaderScheduleSlotOffset: schedule.leaderScheduleSlotOffset,
                 slotsPerEpoch: schedule.slotsPerEpoch,
                 warmup: schedule.warmup,
             };
-            return wrapInPendingRpcRequest(response);
         },
         getLatestBlockhash: () => {
             const response = { blockhash: svm.latestBlockhash(), lastValidBlockHeight: 0n };
-            return wrapInPendingRpcRequest(wrapInSolanaRpcResponse(response, svm.getClock().slot));
+            return withContext(response, svm.getClock().slot);
         },
         getMinimumBalanceForRentExemption: (size: bigint) => {
-            const response = lamports(svm.minimumBalanceForRentExemption(size));
-            return wrapInPendingRpcRequest(response);
+            return lamports(svm.minimumBalanceForRentExemption(size));
         },
         getMultipleAccounts: (addresses: readonly Address[], config?: { encoding?: Encoding }) => {
             assertEncodingIsBase64(config?.encoding);
             const response = addresses.map(address => convertMaybeEncodedAccount(svm.getAccount(address)));
-            return wrapInPendingRpcRequest(wrapInSolanaRpcResponse(response, svm.getClock().slot));
+            return withContext(response, svm.getClock().slot);
         },
         getSlot: () => {
-            return wrapInPendingRpcRequest(svm.getClock().slot);
+            return svm.getClock().slot;
         },
         requestAirdrop: (recipientAddress: Address, amount: Lamports) => {
             const result = svm.airdrop(recipientAddress, amount);
@@ -137,17 +138,26 @@ export function createRpcFromSvm(svm: LiteSVM): Rpc<LiteSvmRpcApi> {
             if (isFailedTransaction(result)) {
                 throw getSolanaErrorFromLiteSvmFailure(result);
             }
-            const sig = toSignature(base58Decoder.decode(result.signature()));
-            return wrapInPendingRpcRequest(sig);
+            return toSignature(base58Decoder.decode(result.signature()));
         },
-    } as Rpc<LiteSvmRpcApi>;
+    };
+
+    return createRpc({
+        api: createJsonRpcApi<LiteSvmRpcApi>(),
+        transport: <TResponse>({ payload }: Parameters<RpcTransport>[0]): Promise<RpcResponse<TResponse>> => {
+            const method = (payload as { method: keyof LiteSvmRpcApi }).method;
+            const params = (payload as { params: unknown[] }).params;
+
+            if (method in supportedApi) {
+                return Promise.resolve(supportedApi[method](...params) as TResponse);
+            }
+
+            throw new Error(`Unsupported RPC method for LiteSVM client: ${method}`);
+        },
+    });
 }
 
-function wrapInPendingRpcRequest<T>(response: T): PendingRpcRequest<T> {
-    return { send: () => Promise.resolve(response) };
-}
-
-function wrapInSolanaRpcResponse<T>(value: T, slot: bigint): SolanaRpcResponse<T> {
+function withContext<T>(value: T, slot: bigint): SolanaRpcResponse<T> {
     return { context: { slot }, value };
 }
 

@@ -19,8 +19,8 @@ const litesvm = __NODEJS__ ? nodeLitesvm : browserLitesvm;
 
 describe('litesvm', () => {
     if (!__NODEJS__) {
-        it('it throws in browser builds', () => {
-            expect(() => litesvm()).toThrow('The `litesvm` plugin is unavailable in browser and react-native');
+        it('throws in browser builds', () => {
+            expect(litesvm).toThrow('The `litesvm` plugin is unavailable in browser and react-native');
         });
         return;
     }
