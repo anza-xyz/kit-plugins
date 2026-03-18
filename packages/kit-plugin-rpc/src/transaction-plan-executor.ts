@@ -3,6 +3,7 @@ import {
     ClientWithRpc,
     ClientWithRpcSubscriptions,
     createTransactionPlanExecutor,
+    extendClient,
     GetEpochInfoApi,
     GetLatestBlockhashApi,
     GetSignatureStatusesApi,
@@ -130,7 +131,7 @@ export function rpcTransactionPlanExecutor(
             }, config.maxConcurrency ?? 10),
         } as TransactionPlanExecutorConfig);
 
-        return { ...client, transactionPlanExecutor };
+        return extendClient(client, { transactionPlanExecutor });
     };
 }
 

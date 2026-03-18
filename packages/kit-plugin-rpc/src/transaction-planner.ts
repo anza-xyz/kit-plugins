@@ -3,6 +3,7 @@ import {
     ClientWithPayer,
     createTransactionMessage,
     createTransactionPlanner,
+    extendClient,
     MicroLamports,
     pipe,
     setTransactionMessageFeePayerSigner,
@@ -77,6 +78,6 @@ export function rpcTransactionPlanner(
             },
         });
 
-        return { ...client, transactionPlanner };
+        return extendClient(client, { transactionPlanner });
     };
 }

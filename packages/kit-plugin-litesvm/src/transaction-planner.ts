@@ -3,6 +3,7 @@ import {
     ClientWithPayer,
     createTransactionMessage,
     createTransactionPlanner,
+    extendClient,
     MicroLamports,
     pipe,
     setTransactionMessageFeePayerSigner,
@@ -72,6 +73,6 @@ export function litesvmTransactionPlanner(
             },
         });
 
-        return { ...client, transactionPlanner };
+        return extendClient(client, { transactionPlanner });
     };
 }
