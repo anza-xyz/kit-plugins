@@ -1,6 +1,6 @@
 # Agent Instructions
 
-You are contributing to **Kit Plugins** (`@solana/kit-plugins`), a plugin library for [Solana Kit](https://github.com/anza-xyz/kit). Read [`CONTRIBUTING.md`](./CONTRIBUTING.md) for full project context including the monorepo structure, available scripts, and code standards.
+You are contributing to **Kit Plugins**, a plugin library for [Solana Kit](https://github.com/anza-xyz/kit). Read [`CONTRIBUTING.md`](./CONTRIBUTING.md) for full project context including the monorepo structure, available scripts, and code standards.
 
 ## Code quality checklist
 
@@ -9,7 +9,7 @@ For every change you make, verify the following before presenting the changes to
 - **Docblocks**: All exported symbols (functions, types, interfaces, constants) must have JSDoc docblocks. Use the `ts-docblocks` skill for the full style guide.
 - **Tests**: New features and bug fixes need tests. Tests use Vitest and run in three environments (Node.js, browser, React Native). Run `pnpm test:unit` in the relevant package directory to verify.
 - **README**: When adding a new public API, add a section to the package's `README.md` following the existing structure. When modifying an existing API, keep the README in sync.
-- **Umbrella package**: The umbrella package (`packages/kit-plugins`) re-exports all `kit-plugin-*` packages via `export *`. Client factory functions from `kit-client-*` packages are re-exported in `defaults.ts` with `@deprecated` tags. New client factories should live in their own `kit-client-*` package, not in the umbrella.
+- **Umbrella package (deprecated)**: The umbrella package (`packages/kit-plugins`) is deprecated. It still re-exports all `kit-plugin-*` packages via `export *` for backward compatibility, but all documentation and examples should import from the individual `kit-plugin-*` packages directly. Do not add new exports or functionality to the umbrella.
 - **Guidelines**: When adding new packages, renaming public APIs, or changing the monorepo structure, check whether `CLAUDE.md` and `CONTRIBUTING.md` need updates to stay in sync (e.g. package tables, workflow descriptions, naming conventions).
 
 ## Git workflow

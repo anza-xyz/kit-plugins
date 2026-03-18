@@ -17,7 +17,7 @@
 ```diff
   import { createEmptyClient } from '@solana/kit';
 - import { airdrop, localhostRpc } from '@solana/kit-plugins';
-+ import { localhostRpc, rpcAirdrop } from '@solana/kit-plugins';
++ import { localhostRpc, rpcAirdrop } from '@solana/kit-plugin-rpc';
 
   const client = createEmptyClient()
       .use(localhostRpc())
@@ -30,7 +30,7 @@
 ```diff
   import { createEmptyClient } from '@solana/kit';
 - import { airdrop, litesvm } from '@solana/kit-plugins';
-+ import { litesvm, litesvmAirdrop } from '@solana/kit-plugins';
++ import { litesvm, litesvmAirdrop } from '@solana/kit-plugin-litesvm';
 
   const client = createEmptyClient()
       .use(litesvm())

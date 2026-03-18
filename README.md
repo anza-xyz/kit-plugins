@@ -1,12 +1,7 @@
 # Kit Plugins
 
-[![npm][npm-image]][npm-url]
-[![npm-downloads][npm-downloads-image]][npm-url]
 [![ci][ci-image]][ci-url]
 
-[npm-downloads-image]: https://img.shields.io/npm/dm/@solana/kit-plugins.svg?style=flat
-[npm-image]: https://img.shields.io/npm/v/@solana/kit-plugins.svg?style=flat
-[npm-url]: https://www.npmjs.com/package/@solana/kit-plugins
 [ci-image]: https://img.shields.io/github/actions/workflow/status/anza-xyz/kit-plugins/main.yml?logo=GitHub
 [ci-url]: https://github.com/anza-xyz/kit-plugins/actions/workflows/main.yml
 
@@ -111,10 +106,10 @@ Note that since plugins are defined in `@solana/kit` itself, you're not limited 
 
 ## Available Clients
 
-| Package                                                       | Description                   | Exports                             |
-| ------------------------------------------------------------- | ----------------------------- | ----------------------------------- |
-| [`@solana/kit-client-rpc`](./packages/kit-client-rpc)         | Pre-configured RPC client     | `createClient`, `createLocalClient` |
-| [`@solana/kit-client-litesvm`](./packages/kit-client-litesvm) | Pre-configured LiteSVM client | `createClient`                      |
+| Package                                                       | Version                                                                                                                                    | Description                   | Exports                             |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------- | ----------------------------------- |
+| [`@solana/kit-client-rpc`](./packages/kit-client-rpc)         | [![npm](https://img.shields.io/npm/v/@solana/kit-client-rpc.svg?style=flat)](https://www.npmjs.com/package/@solana/kit-client-rpc)         | Pre-configured RPC client     | `createClient`, `createLocalClient` |
+| [`@solana/kit-client-litesvm`](./packages/kit-client-litesvm) | [![npm](https://img.shields.io/npm/v/@solana/kit-client-litesvm.svg?style=flat)](https://www.npmjs.com/package/@solana/kit-client-litesvm) | Pre-configured LiteSVM client | `createClient`                      |
 
 ## Community Clients
 
@@ -124,12 +119,12 @@ _Do you know any? Please open a PR to add them here!_
 
 This repo provides the following individual plugin packages. You can learn more about each package by following the links to their READMEs below.
 
-| Package                                                                         | Description                        | Plugins                                                                                    |
-| ------------------------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------ |
-| [`@solana/kit-plugin-rpc`](./packages/kit-plugin-rpc)                           | Connect to Solana clusters         | `rpc`, `localhostRpc`, `rpcAirdrop`, `rpcTransactionPlanner`, `rpcTransactionPlanExecutor` |
-| [`@solana/kit-plugin-payer`](./packages/kit-plugin-payer)                       | Manage transaction fee payers      | `payer`, `payerFromFile`, `generatedPayer`, `generatedPayerWithSol`                        |
-| [`@solana/kit-plugin-litesvm`](./packages/kit-plugin-litesvm)                   | LiteSVM support                    | `litesvm`, `litesvmAirdrop`, `litesvmTransactionPlanner`, `litesvmTransactionPlanExecutor` |
-| [`@solana/kit-plugin-instruction-plan`](./packages/kit-plugin-instruction-plan) | Transaction planning and execution | `transactionPlanner`, `transactionPlanExecutor`, `planAndSendTransactions`                 |
+| Package                                                                         | Version                                                                                                                                                      | Description                        | Plugins                                                                                    |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------- | ------------------------------------------------------------------------------------------ |
+| [`@solana/kit-plugin-rpc`](./packages/kit-plugin-rpc)                           | [![npm](https://img.shields.io/npm/v/@solana/kit-plugin-rpc.svg?style=flat)](https://www.npmjs.com/package/@solana/kit-plugin-rpc)                           | Connect to Solana clusters         | `rpc`, `localhostRpc`, `rpcAirdrop`, `rpcTransactionPlanner`, `rpcTransactionPlanExecutor` |
+| [`@solana/kit-plugin-payer`](./packages/kit-plugin-payer)                       | [![npm](https://img.shields.io/npm/v/@solana/kit-plugin-payer.svg?style=flat)](https://www.npmjs.com/package/@solana/kit-plugin-payer)                       | Manage transaction fee payers      | `payer`, `payerFromFile`, `generatedPayer`, `generatedPayerWithSol`                        |
+| [`@solana/kit-plugin-litesvm`](./packages/kit-plugin-litesvm)                   | [![npm](https://img.shields.io/npm/v/@solana/kit-plugin-litesvm.svg?style=flat)](https://www.npmjs.com/package/@solana/kit-plugin-litesvm)                   | LiteSVM support                    | `litesvm`, `litesvmAirdrop`, `litesvmTransactionPlanner`, `litesvmTransactionPlanExecutor` |
+| [`@solana/kit-plugin-instruction-plan`](./packages/kit-plugin-instruction-plan) | [![npm](https://img.shields.io/npm/v/@solana/kit-plugin-instruction-plan.svg?style=flat)](https://www.npmjs.com/package/@solana/kit-plugin-instruction-plan) | Transaction planning and execution | `transactionPlanner`, `transactionPlanExecutor`, `planAndSendTransactions`                 |
 
 ## Community Plugins
 

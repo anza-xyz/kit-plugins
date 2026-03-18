@@ -23,7 +23,7 @@ This plugin simply accepts a `TransactionSigner` and sets it as the `payer` prop
 
 ```ts
 import { createEmptyClient } from '@solana/kit';
-import { payer } from '@solana/kit-plugins';
+import { payer } from '@solana/kit-plugin-payer';
 
 const client = createEmptyClient().use(payer(mySigner));
 ```
@@ -48,7 +48,7 @@ This asynchronous plugin generates a new random `KeyPairSigner` to be used as th
 
 ```ts
 import { createEmptyClient } from '@solana/kit';
-import { generatedPayer } from '@solana/kit-plugins';
+import { generatedPayer } from '@solana/kit-plugin-payer';
 
 const client = await createEmptyClient().use(generatedPayer());
 ```
@@ -67,7 +67,8 @@ Note that this plugin requires an airdrop plugin to be installed on the client b
 
 ```ts
 import { createEmptyClient } from '@solana/kit';
-import { generatedPayerWithSol, localhostRpc, rpcAirdrop } from '@solana/kit-plugins';
+import { localhostRpc, rpcAirdrop } from '@solana/kit-plugin-rpc';
+import { generatedPayerWithSol } from '@solana/kit-plugin-payer';
 
 const client = await createEmptyClient()
     .use(localhostRpc()) // or .use(litesvm()).use(litesvmAirdrop())
@@ -89,7 +90,8 @@ When no explicit payer is given, this plugin requires an airdrop plugin to be in
 
 ```ts
 import { createEmptyClient } from '@solana/kit';
-import { localhostRpc, payerOrGeneratedPayer, rpcAirdrop } from '@solana/kit-plugins';
+import { localhostRpc, rpcAirdrop } from '@solana/kit-plugin-rpc';
+import { payerOrGeneratedPayer } from '@solana/kit-plugin-payer';
 
 // With an explicit payer — no airdrop needed.
 const client = await createEmptyClient().use(payerOrGeneratedPayer(mySigner));
@@ -115,7 +117,7 @@ Note that this plugin requires access to the local filesystem and therefore can 
 
 ```ts
 import { createEmptyClient } from '@solana/kit';
-import { payerFromFile } from '@solana/kit-plugins';
+import { payerFromFile } from '@solana/kit-plugin-payer';
 
 const client = createEmptyClient().use(payerFromFile('path/to/keypair.json'));
 ```

@@ -19,7 +19,7 @@ import {
  * @example
  * ```ts
  * import { createEmptyClient } from '@solana/kit';
- * import { payer } from '@solana/kit-plugins';
+ * import { payer } from '@solana/kit-plugin-payer';
  *
  * // Install the payer plugin with your signer.
  * const client = createEmptyClient().use(payer(mySigner));
@@ -39,7 +39,7 @@ export function payer(payer: TransactionSigner) {
  * @example
  * ```ts
  * import { createEmptyClient } from '@solana/kit';
- * import { generatedPayer } from '@solana/kit-plugins';
+ * import { generatedPayer } from '@solana/kit-plugin-payer';
  *
  * // Install the generatedPayer plugin.
  * const client = await createEmptyClient().use(generatedPayer());
@@ -63,7 +63,7 @@ export function generatedPayer() {
  * @example
  * ```ts
  * import { createEmptyClient } from '@solana/kit';
- * import { generatedPayerWithSol } from '@solana/kit-plugins';
+ * import { generatedPayerWithSol } from '@solana/kit-plugin-payer';
  *
  * // Install the generatedPayerWithSol plugin.
  * const amount = lamports(10_000_000_000n); // 10 SOL.
@@ -96,7 +96,7 @@ export function generatedPayerWithSol(amount: Lamports) {
  * @example
  * ```ts
  * import { createEmptyClient } from '@solana/kit';
- * import { payerFromFile } from '@solana/kit-plugins';
+ * import { payerFromFile } from '@solana/kit-plugin-payer';
  *
  * // Install the payerFromFile plugin.
  * const client = createEmptyClient().use(payerFromFile('path/to/keypair.json'));
@@ -133,7 +133,8 @@ export function payerFromFile(path: string) {
  * @example
  * ```ts
  * import { createEmptyClient } from '@solana/kit';
- * import { localhostRpc, payerOrGeneratedPayer, rpcAirdrop } from '@solana/kit-plugins';
+ * import { localhostRpc, rpcAirdrop } from '@solana/kit-plugin-rpc';
+ * import { payerOrGeneratedPayer } from '@solana/kit-plugin-payer';
  *
  * // With an explicit payer.
  * const client = await createEmptyClient().use(payerOrGeneratedPayer(mySigner));

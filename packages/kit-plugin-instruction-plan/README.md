@@ -23,7 +23,7 @@ The `transactionPlanner` plugin sets a custom transaction planner on the client.
 
 ```ts
 import { createEmptyClient, createTransactionPlanner } from '@solana/kit';
-import { transactionPlanner } from '@solana/kit-plugins';
+import { transactionPlanner } from '@solana/kit-plugin-instruction-plan';
 
 const myTransactionPlanner = createTransactionPlanner(/* ... */);
 const client = createEmptyClient().use(transactionPlanner(myTransactionPlanner));
@@ -44,7 +44,7 @@ The `transactionPlanExecutor` plugin sets a custom transaction plan executor on 
 
 ```ts
 import { createEmptyClient, createTransactionPlanExecutor } from '@solana/kit';
-import { transactionPlanExecutor } from '@solana/kit-plugins';
+import { transactionPlanExecutor } from '@solana/kit-plugin-instruction-plan';
 
 const myTransactionPlanExecutor = createTransactionPlanExecutor(/* ... */);
 const client = createEmptyClient().use(transactionPlanExecutor(myTransactionPlanExecutor));
@@ -67,7 +67,11 @@ This plugin requires both `transactionPlanner` and `transactionPlanExecutor` to 
 
 ```ts
 import { createEmptyClient } from '@solana/kit';
-import { transactionPlanner, transactionPlanExecutor, planAndSendTransactions } from '@solana/kit-plugins';
+import {
+    transactionPlanner,
+    transactionPlanExecutor,
+    planAndSendTransactions,
+} from '@solana/kit-plugin-instruction-plan';
 
 const client = createEmptyClient()
     .use(transactionPlanner(myTransactionPlanner))
