@@ -1,4 +1,4 @@
-import { address, createEmptyClient, generateKeyPairSigner, lamports } from '@solana/kit';
+import { address, createEmptyClient, generateKeyPairSigner, lamports, Rpc } from '@solana/kit';
 import { describe, expect, it } from 'vitest';
 
 import { litesvm as nodeLitesvm } from '../src/index';
@@ -7,7 +7,9 @@ const litesvm = __NODEJS__ ? nodeLitesvm : browserLitesvm;
 
 describe('createRpcFromSvm', () => {
     if (!__NODEJS__) {
-        it.todo('skipped in browser builds');
+        it('throws in browser builds', () => {
+            expect(litesvm).toThrow('The `litesvm` plugin is unavailable in browser and react-native');
+        });
         return;
     }
 
@@ -161,5 +163,12 @@ describe('createRpcFromSvm', () => {
         // Verify the balance increased.
         const { value: balance } = await client.rpc.getBalance(recipientAddress).send();
         expect(balance).toBe(lamports(1_000_000_000n));
+    });
+
+    it('throws when calling an unsupported RPC method', async () => {
+        const client = createEmptyClient().use(litesvm());
+        const rpc = client.rpc as unknown as Rpc<{ unsupportedMethod: () => unknown }>;
+        const promise = rpc.unsupportedMethod().send();
+        await expect(promise).rejects.toThrow('Unsupported RPC method for LiteSVM client: unsupportedMethod');
     });
 });
