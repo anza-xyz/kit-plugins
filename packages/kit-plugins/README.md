@@ -1,4 +1,4 @@
-# Kit Plugins ➤ Main Library
+# Kit Plugins ➤ Main Library (deprecated)
 
 [![npm][npm-image]][npm-url]
 [![npm-downloads][npm-downloads-image]][npm-url]
@@ -7,34 +7,16 @@
 [npm-image]: https://img.shields.io/npm/v/@solana/kit-plugins.svg?style=flat&label=%40solana%2Fkit-plugins
 [npm-url]: https://www.npmjs.com/package/@solana/kit-plugins
 
-Essential plugins and plugin presets for Solana Kit that provide RPC connectivity, payer management, transaction execution, test environments and more. Choose from three ready-to-use client configurations or build your own.
-
-## Installation
-
-```sh
-pnpm install @solana/kit-plugins
-```
-
-## Default Clients (deprecated)
-
 > [!WARNING]
-> The default client factories have moved to dedicated packages. The re-exports below are deprecated and will be removed in a future release.
+> This package is deprecated. Install individual plugin packages directly instead, or use the pre-configured client packages for a quick start.
 >
-> | Deprecated re-export              | Use instead                                                               |
-> | --------------------------------- | ------------------------------------------------------------------------- |
-> | `createDefaultRpcClient`          | `createClient` from [`@solana/kit-client-rpc`](../kit-client-rpc)         |
-> | `createDefaultLocalhostRpcClient` | `createLocalClient` from [`@solana/kit-client-rpc`](../kit-client-rpc)    |
-> | `createDefaultLiteSVMClient`      | `createClient` from [`@solana/kit-client-litesvm`](../kit-client-litesvm) |
-
-## Individual Plugins
-
-This package includes and re-exports all the individual plugin packages in this monorepo. You can also install and use them separately:
-
-| Plugin               | Purpose                            | Package                                                                 |
-| -------------------- | ---------------------------------- | ----------------------------------------------------------------------- |
-| **RPC**              | Connect to Solana clusters         | [`@solana/kit-plugin-rpc`](../kit-plugin-rpc)                           |
-| **RPC Airdrop**      | Request SOL from RPC faucets       | [`@solana/kit-plugin-rpc`](../kit-plugin-rpc)                           |
-| **Payer**            | Manage transaction fee payers      | [`@solana/kit-plugin-payer`](../kit-plugin-payer)                       |
-| **LiteSVM**          | Local blockchain simulation        | [`@solana/kit-plugin-litesvm`](../kit-plugin-litesvm)                   |
-| **LiteSVM Airdrop**  | Request SOL from LiteSVM           | [`@solana/kit-plugin-litesvm`](../kit-plugin-litesvm)                   |
-| **Instruction Plan** | Transaction planning and execution | [`@solana/kit-plugin-instruction-plan`](../kit-plugin-instruction-plan) |
+> | Deprecated import from `@solana/kit-plugins`                                                 | Use instead                                                                                            |
+> | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+> | `rpc`, `localhostRpc`, `rpcAirdrop`, `rpcTransactionPlanner`, `rpcTransactionPlanExecutor`   | [`@solana/kit-plugin-rpc`](../kit-plugin-rpc)                                                          |
+> | `payer`, `payerFromFile`, `generatedPayer`, `generatedPayerWithSol`, `payerOrGeneratedPayer` | [`@solana/kit-plugin-payer`](../kit-plugin-payer)                                                      |
+> | `litesvm`, `litesvmAirdrop`, `litesvmTransactionPlanner`, `litesvmTransactionPlanExecutor`   | [`@solana/kit-plugin-litesvm`](../kit-plugin-litesvm)                                                  |
+> | `transactionPlanner`, `transactionPlanExecutor`, `planAndSendTransactions`                   | [`@solana/kit-plugin-instruction-plan`](../kit-plugin-instruction-plan)                                |
+> | `airdrop`                                                                                    | [`@solana/kit-plugin-rpc`](../kit-plugin-rpc) or [`@solana/kit-plugin-litesvm`](../kit-plugin-litesvm) |
+> | `createDefaultRpcClient`                                                                     | `createClient` from [`@solana/kit-client-rpc`](../kit-client-rpc)                                      |
+> | `createDefaultLocalhostRpcClient`                                                            | `createLocalClient` from [`@solana/kit-client-rpc`](../kit-client-rpc)                                 |
+> | `createDefaultLiteSVMClient`                                                                 | `createClient` from [`@solana/kit-client-litesvm`](../kit-client-litesvm)                              |

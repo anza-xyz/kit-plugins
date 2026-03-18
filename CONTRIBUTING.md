@@ -8,18 +8,18 @@ Thank you for your interest in contributing to Kit Plugins! This guide covers ev
 
 This is a monorepo managed with [pnpm](https://pnpm.io/) and [Turborepo](https://turbo.build/). It contains the following packages:
 
-| Package                                                                         | Description                                   |
-| ------------------------------------------------------------------------------- | --------------------------------------------- |
-| [`@solana/kit-plugins`](./packages/kit-plugins)                                 | Umbrella package that re-exports all plugins. |
-| [`@solana/kit-client-rpc`](./packages/kit-client-rpc)                           | Pre-configured RPC client factory.            |
-| [`@solana/kit-client-litesvm`](./packages/kit-client-litesvm)                   | Pre-configured LiteSVM client factory.        |
-| [`@solana/kit-plugin-rpc`](./packages/kit-plugin-rpc)                           | RPC connection plugins.                       |
-| [`@solana/kit-plugin-payer`](./packages/kit-plugin-payer)                       | Transaction fee payer plugins.                |
-| [`@solana/kit-plugin-airdrop`](./packages/kit-plugin-airdrop)                   | SOL airdrop plugin.                           |
-| [`@solana/kit-plugin-litesvm`](./packages/kit-plugin-litesvm)                   | LiteSVM support plugin.                       |
-| [`@solana/kit-plugin-instruction-plan`](./packages/kit-plugin-instruction-plan) | Transaction planning and execution plugins.   |
+| Package                                                                         | Description                                                    |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| [`@solana/kit-plugins`](./packages/kit-plugins)                                 | **(deprecated)** Umbrella package that re-exports all plugins. |
+| [`@solana/kit-client-rpc`](./packages/kit-client-rpc)                           | Pre-configured RPC client factory.                             |
+| [`@solana/kit-client-litesvm`](./packages/kit-client-litesvm)                   | Pre-configured LiteSVM client factory.                         |
+| [`@solana/kit-plugin-rpc`](./packages/kit-plugin-rpc)                           | RPC connection plugins.                                        |
+| [`@solana/kit-plugin-payer`](./packages/kit-plugin-payer)                       | Transaction fee payer plugins.                                 |
+| [`@solana/kit-plugin-airdrop`](./packages/kit-plugin-airdrop)                   | SOL airdrop plugin.                                            |
+| [`@solana/kit-plugin-litesvm`](./packages/kit-plugin-litesvm)                   | LiteSVM support plugin.                                        |
+| [`@solana/kit-plugin-instruction-plan`](./packages/kit-plugin-instruction-plan) | Transaction planning and execution plugins.                    |
 
-The umbrella package (`@solana/kit-plugins`) re-exports everything from the individual plugin packages via `export *` statements. When you add a new export to a sub-package, it is automatically available through the umbrella package. The `kit-client-*` client factory functions are also re-exported from the umbrella with `@deprecated` tags — consumers should import them from their dedicated packages instead.
+The umbrella package (`@solana/kit-plugins`) is deprecated. It re-exports everything from the individual plugin packages via `export *` statements for backward compatibility, but consumers should import from the individual `kit-plugin-*` packages directly.
 
 ## Getting started
 
@@ -82,9 +82,9 @@ Every new feature or bug fix should include tests. This project uses [Vitest](ht
 
 When adding a new public API to a package, update that package's `README.md` with a new section following the existing structure (description, installation example, features). When modifying an existing API, keep the README in sync. See the existing READMEs for the expected format, or use the [`.claude/skills/ts-readme/SKILL.md`](./.claude/skills/ts-readme/SKILL.md) guide.
 
-### Umbrella package
+### Umbrella package (deprecated)
 
-When modifying exports in a `kit-plugin-*` sub-package, the umbrella package picks them up automatically via `export *`. The `kit-client-*` client factory functions are re-exported separately with `@deprecated` tags in `defaults.ts` — new client factories should live in their own `kit-client-*` package rather than in the umbrella.
+The umbrella package (`@solana/kit-plugins`) is deprecated. It still re-exports everything from the individual plugin packages via `export *` for backward compatibility, but all documentation and examples should import from the individual `kit-plugin-*` packages directly. Do not add new exports or functionality to the umbrella.
 
 ## Pull request workflow
 
@@ -128,7 +128,6 @@ Any PR that should trigger a new package release must include a [changeset](http
 ```md
 ---
 '@solana/kit-plugin-payer': minor
-'@solana/kit-plugins': minor
 ---
 
 Add `payerOrGeneratedPayer` plugin that uses an explicit payer when provided, or generates a new one funded with 100 SOL via airdrop as a fallback.

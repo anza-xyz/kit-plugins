@@ -26,7 +26,7 @@ The LiteSVM plugin starts a new LiteSVM instance within your Kit client, allowin
 
 ```ts
 import { createEmptyClient } from '@solana/kit';
-import { litesvm } from '@solana/kit-plugins';
+import { litesvm } from '@solana/kit-plugin-litesvm';
 
 const client = createEmptyClient().use(litesvm());
 ```

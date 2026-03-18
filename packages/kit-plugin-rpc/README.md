@@ -25,7 +25,7 @@ To use the `rpc` plugin, you must provide the URL of your desired Solana RPC end
 
 ```ts
 import { createEmptyClient } from '@solana/kit';
-import { rpc } from '@solana/kit-plugins';
+import { rpc } from '@solana/kit-plugin-rpc';
 
 const client = createEmptyClient().use(rpc('https://api.mainnet-beta.solana.com'));
 ```
@@ -72,7 +72,7 @@ This plugin is an alias for the `rpc` plugin pre-configured to connect to a loca
 
 ```ts
 import { createEmptyClient } from '@solana/kit';
-import { localhostRpc } from '@solana/kit-plugins';
+import { localhostRpc } from '@solana/kit-plugin-rpc';
 
 const client = createEmptyClient().use(localhostRpc());
 ```
