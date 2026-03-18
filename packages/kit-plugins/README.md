@@ -33,7 +33,8 @@ This package includes and re-exports all the individual plugin packages in this 
 | Plugin               | Purpose                            | Package                                                                 |
 | -------------------- | ---------------------------------- | ----------------------------------------------------------------------- |
 | **RPC**              | Connect to Solana clusters         | [`@solana/kit-plugin-rpc`](../kit-plugin-rpc)                           |
+| **RPC Airdrop**      | Request SOL from RPC faucets       | [`@solana/kit-plugin-rpc`](../kit-plugin-rpc)                           |
 | **Payer**            | Manage transaction fee payers      | [`@solana/kit-plugin-payer`](../kit-plugin-payer)                       |
-| **Airdrop**          | Request SOL from faucets           | [`@solana/kit-plugin-airdrop`](../kit-plugin-airdrop)                   |
 | **LiteSVM**          | Local blockchain simulation        | [`@solana/kit-plugin-litesvm`](../kit-plugin-litesvm)                   |
+| **LiteSVM Airdrop**  | Request SOL from LiteSVM           | [`@solana/kit-plugin-litesvm`](../kit-plugin-litesvm)                   |
 | **Instruction Plan** | Transaction planning and execution | [`@solana/kit-plugin-instruction-plan`](../kit-plugin-instruction-plan) |

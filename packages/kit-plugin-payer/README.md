@@ -63,15 +63,15 @@ This asynchronous plugin generates a new random `KeyPairSigner`, airdrops some S
 
 ### Installation
 
-Note that this plugin requires the `airdrop` plugin to be installed on the client beforehand which itself either requires an RPC connection or a LiteSVM instance.
+Note that this plugin requires an airdrop plugin to be installed on the client beforehand (e.g. `rpcAirdrop` or `litesvmAirdrop`) which itself either requires an RPC connection or a LiteSVM instance.
 
 ```ts
 import { createEmptyClient } from '@solana/kit';
-import { airdrop, generatedPayerWithSol, localhostRpc } from '@solana/kit-plugins';
+import { generatedPayerWithSol, localhostRpc, rpcAirdrop } from '@solana/kit-plugins';
 
 const client = await createEmptyClient()
-    .use(localhostRpc()) // or .use(litesvm())
-    .use(airdrop())
+    .use(localhostRpc()) // or .use(litesvm()).use(litesvmAirdrop())
+    .use(rpcAirdrop())
     .use(generatedPayerWithSol(lamports(10_000_000_000n))); // 10 SOL
 ```
 
@@ -85,19 +85,19 @@ This asynchronous plugin uses the provided `TransactionSigner` as the payer if o
 
 ### Installation
 
-When no explicit payer is given, this plugin requires the `airdrop` plugin to be installed on the client beforehand which itself either requires an RPC connection or a LiteSVM instance.
+When no explicit payer is given, this plugin requires an airdrop plugin to be installed on the client beforehand (e.g. `rpcAirdrop` or `litesvmAirdrop`) which itself either requires an RPC connection or a LiteSVM instance.
 
 ```ts
 import { createEmptyClient } from '@solana/kit';
-import { airdrop, localhostRpc, payerOrGeneratedPayer } from '@solana/kit-plugins';
+import { localhostRpc, payerOrGeneratedPayer, rpcAirdrop } from '@solana/kit-plugins';
 
 // With an explicit payer — no airdrop needed.
 const client = await createEmptyClient().use(payerOrGeneratedPayer(mySigner));
 
 // Without a payer — generates one and airdrops 100 SOL.
 const client = await createEmptyClient()
-    .use(localhostRpc()) // or .use(litesvm())
-    .use(airdrop())
+    .use(localhostRpc()) // or .use(litesvm()).use(litesvmAirdrop())
+    .use(rpcAirdrop())
     .use(payerOrGeneratedPayer(undefined));
 ```
 

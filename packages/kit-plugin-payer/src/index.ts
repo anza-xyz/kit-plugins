@@ -133,7 +133,7 @@ export function payerFromFile(path: string) {
  * @example
  * ```ts
  * import { createEmptyClient } from '@solana/kit';
- * import { airdrop, localhostRpc, payerOrGeneratedPayer } from '@solana/kit-plugins';
+ * import { localhostRpc, payerOrGeneratedPayer, rpcAirdrop } from '@solana/kit-plugins';
  *
  * // With an explicit payer.
  * const client = await createEmptyClient().use(payerOrGeneratedPayer(mySigner));
@@ -141,7 +141,7 @@ export function payerFromFile(path: string) {
  * // Without a payer — generates one and airdrops 100 SOL.
  * const client = await createEmptyClient()
  *     .use(localhostRpc())
- *     .use(airdrop())
+ *     .use(rpcAirdrop())
  *     .use(payerOrGeneratedPayer(undefined));
  * ```
  */

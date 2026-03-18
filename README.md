@@ -94,16 +94,14 @@ None of the ready-to-use clients fit your needs? No worries! You can **build you
 
 ```ts
 import { createEmptyClient } from '@solana/kit';
-import { rpc } from '@solana/kit-plugin-rpc';
+import { rpc, rpcAirdrop, rpcTransactionPlanner, rpcTransactionPlanExecutor } from '@solana/kit-plugin-rpc';
 import { payerFromFile } from '@solana/kit-plugin-payer';
-import { airdrop } from '@solana/kit-plugin-airdrop';
-import { rpcTransactionPlanner, rpcTransactionPlanExecutor } from '@solana/kit-plugin-rpc';
 import { planAndSendTransactions } from '@solana/kit-plugin-instruction-plan';
 
 const client = await createEmptyClient() // An empty client with a `use` method to install plugins.
     .use(rpc('https://api.devnet.solana.com')) // Adds `client.rpc` and `client.rpcSubscriptions`.
     .use(payerFromFile('path/to/keypair.json')) // Adds `client.payer` using a local keypair file.
-    .use(airdrop()) // Adds `client.airdrop` to request SOL from faucets.
+    .use(rpcAirdrop()) // Adds `client.airdrop` to request SOL from faucets.
     .use(rpcTransactionPlanner()) // Adds `client.transactionPlanner`.
     .use(rpcTransactionPlanExecutor()) // Adds `client.transactionPlanExecutor`.
     .use(planAndSendTransactions()); // Adds `client.planTransaction(s)` and `client.sendTransaction(s)`.
@@ -126,13 +124,12 @@ _Do you know any? Please open a PR to add them here!_
 
 This repo provides the following individual plugin packages. You can learn more about each package by following the links to their READMEs below.
 
-| Package                                                                         | Description                        | Plugins                                                                      |
-| ------------------------------------------------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------- |
-| [`@solana/kit-plugin-rpc`](./packages/kit-plugin-rpc)                           | Connect to Solana clusters         | `rpc`, `localhostRpc`, `rpcTransactionPlanner`, `rpcTransactionPlanExecutor` |
-| [`@solana/kit-plugin-payer`](./packages/kit-plugin-payer)                       | Manage transaction fee payers      | `payer`, `payerFromFile`, `generatedPayer`, `generatedPayerWithSol`          |
-| [`@solana/kit-plugin-airdrop`](./packages/kit-plugin-airdrop)                   | Request SOL from faucets           | `airdrop`                                                                    |
-| [`@solana/kit-plugin-litesvm`](./packages/kit-plugin-litesvm)                   | LiteSVM support                    | `litesvm`, `litesvmTransactionPlanner`, `litesvmTransactionPlanExecutor`     |
-| [`@solana/kit-plugin-instruction-plan`](./packages/kit-plugin-instruction-plan) | Transaction planning and execution | `transactionPlanner`, `transactionPlanExecutor`, `planAndSendTransactions`   |
+| Package                                                                         | Description                        | Plugins                                                                                    |
+| ------------------------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------ |
+| [`@solana/kit-plugin-rpc`](./packages/kit-plugin-rpc)                           | Connect to Solana clusters         | `rpc`, `localhostRpc`, `rpcAirdrop`, `rpcTransactionPlanner`, `rpcTransactionPlanExecutor` |
+| [`@solana/kit-plugin-payer`](./packages/kit-plugin-payer)                       | Manage transaction fee payers      | `payer`, `payerFromFile`, `generatedPayer`, `generatedPayerWithSol`                        |
+| [`@solana/kit-plugin-litesvm`](./packages/kit-plugin-litesvm)                   | LiteSVM support                    | `litesvm`, `litesvmAirdrop`, `litesvmTransactionPlanner`, `litesvmTransactionPlanExecutor` |
+| [`@solana/kit-plugin-instruction-plan`](./packages/kit-plugin-instruction-plan) | Transaction planning and execution | `transactionPlanner`, `transactionPlanExecutor`, `planAndSendTransactions`                 |
 
 ## Community Plugins
 
