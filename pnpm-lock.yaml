@@ -141,9 +141,6 @@ importers:
       '@loris-sandbox/litesvm-kit':
         specifier: ^0.5.0
         version: 0.5.0(typescript@5.9.3)
-      '@solana-program/compute-budget':
-        specifier: ^0.15.0
-        version: 0.15.0(@solana/kit@6.4.0(typescript@5.9.3))
       '@solana/kit':
         specifier: ^6.4.0
         version: 6.4.0(typescript@5.9.3)
@@ -160,9 +157,6 @@ importers:
 
   packages/kit-plugin-rpc:
     dependencies:
-      '@solana-program/compute-budget':
-        specifier: ^0.15.0
-        version: 0.15.0(@solana/kit@6.4.0(typescript@5.9.3))
       '@solana/kit':
         specifier: ^6.4.0
         version: 6.4.0(typescript@5.9.3)
@@ -1251,11 +1245,6 @@ packages:
 
   '@sinonjs/fake-timers@13.0.5':
     resolution: {integrity: sha512-36/hTbH2uaWuGVERyC6da9YwGWnzUZXuPro/F2LfsdOsLnCojz/iSH8MxUt/FD2S5XBSVPhmArFUXcpCQ2Hkiw==}
-
-  '@solana-program/compute-budget@0.15.0':
-    resolution: {integrity: sha512-toejNdIkzpUTqLSIzP0Nofr/EFel8QpPWuTtIKzfCcjn+mXpkThHxPJaNesk251rSTiWaxDZ3WxG7RxYwTWTqA==}
-    peerDependencies:
-      '@solana/kit': ^6.4.0
 
   '@solana-program/system@0.10.0':
     resolution: {integrity: sha512-Go+LOEZmqmNlfr+Gjy5ZWAdY5HbYzk2RBewD9QinEU/bBSzpFfzqDRT55JjFRBGJUvMgf3C2vfXEGT4i8DSI4g==}
@@ -4742,10 +4731,6 @@ snapshots:
   '@sinonjs/fake-timers@13.0.5':
     dependencies:
       '@sinonjs/commons': 3.0.1
-
-  '@solana-program/compute-budget@0.15.0(@solana/kit@6.4.0(typescript@5.9.3))':
-    dependencies:
-      '@solana/kit': 6.4.0(typescript@5.9.3)
 
   '@solana-program/system@0.10.0(@solana/kit@6.4.0(typescript@5.9.3))':
     dependencies:

@@ -8,6 +8,7 @@ import {
     Rpc,
     RpcSubscriptions,
     sendAndConfirmTransactionFactory,
+    setTransactionMessageComputeUnitLimit,
     setTransactionMessageFeePayerSigner,
     singleInstructionPlan,
     singleTransactionPlan,
@@ -15,7 +16,6 @@ import {
     SolanaRpcApi,
     SolanaRpcSubscriptionsApi,
 } from '@solana/kit';
-import { updateOrAppendSetComputeUnitLimitInstruction } from '@solana-program/compute-budget';
 import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
 import { rpcTransactionPlanExecutor, rpcTransactionPlanner } from '../src';
@@ -122,7 +122,7 @@ describe('rpcTransactionPlanExecutor', () => {
         const txMessage = pipe(
             createTransactionMessage({ version: 0 }),
             tx => setTransactionMessageFeePayerSigner(payer, tx),
-            tx => updateOrAppendSetComputeUnitLimitInstruction(500, tx),
+            tx => setTransactionMessageComputeUnitLimit(500, tx),
         );
         await client.transactionPlanExecutor(singleTransactionPlan(txMessage));
 
@@ -156,7 +156,7 @@ describe('rpcTransactionPlanExecutor', () => {
         const txMessage = pipe(
             createTransactionMessage({ version: 0 }),
             tx => setTransactionMessageFeePayerSigner(payer, tx),
-            tx => updateOrAppendSetComputeUnitLimitInstruction(500, tx),
+            tx => setTransactionMessageComputeUnitLimit(500, tx),
         );
         await client.transactionPlanExecutor(singleTransactionPlan(txMessage));
 

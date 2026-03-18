@@ -1,18 +1,15 @@
 import {
-    appendTransactionMessageInstruction,
     ClientWithPayer,
     createTransactionMessage,
     createTransactionPlanner,
     extendClient,
+    fillTransactionMessageProvisoryComputeUnitLimit,
     MicroLamports,
     pipe,
+    setTransactionMessageComputeUnitPrice,
     setTransactionMessageFeePayerSigner,
     TransactionSigner,
 } from '@solana/kit';
-import {
-    fillProvisorySetComputeUnitLimitInstruction,
-    getSetComputeUnitPriceInstruction,
-} from '@solana-program/compute-budget';
 
 /**
  * A plugin that provides a default transaction planner using RPC.
@@ -66,14 +63,8 @@ export function rpcTransactionPlanner(
                 return pipe(
                     createTransactionMessage({ version: 0 }),
                     tx => setTransactionMessageFeePayerSigner(payer, tx),
-                    tx => fillProvisorySetComputeUnitLimitInstruction(tx),
-                    tx =>
-                        config.priorityFees
-                            ? appendTransactionMessageInstruction(
-                                  getSetComputeUnitPriceInstruction({ microLamports: config.priorityFees }),
-                                  tx,
-                              )
-                            : tx,
+                    tx => fillTransactionMessageProvisoryComputeUnitLimit(tx),
+                    tx => (config.priorityFees ? setTransactionMessageComputeUnitPrice(config.priorityFees, tx) : tx),
                 );
             },
         });
