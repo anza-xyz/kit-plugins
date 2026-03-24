@@ -37,6 +37,7 @@ await client.sendTransaction([myInstruction]);
 - `client.rpc`: RPC methods for interacting with the Solana cluster.
 - `client.rpcSubscriptions`: Subscription methods for real-time updates.
 - `client.payer`: The main payer signer for transactions.
+- `client.getMinimumBalance`: Computes the minimum lamports required for an account with a given data size.
 - `client.transactionPlanner`: Plans instructions into transaction messages.
 - `client.transactionPlanExecutor`: Executes planned transaction messages.
 - `client.planTransactions`: Plans transaction messages, instructions or instruction plans into a transaction plan without executing it.
@@ -79,6 +80,7 @@ await client.airdrop(client.payer.address, lamports(5_000_000_000n));
 - `client.rpcSubscriptions`: Subscription methods for real-time updates from the local validator (i.e. `ws://127.0.0.1:8900`).
 - `client.payer`: The main payer signer for transactions.
 - `client.airdrop`: Function to request SOL from the local faucet.
+- `client.getMinimumBalance`: Computes the minimum lamports required for an account with a given data size.
 - `client.transactionPlanner`: Plans instructions into transaction messages.
 - `client.transactionPlanExecutor`: Executes planned transaction messages.
 - `client.planTransactions`: Plans transaction messages, instructions or instruction plans into a transaction plan without executing it.

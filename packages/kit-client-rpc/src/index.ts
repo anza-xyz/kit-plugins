@@ -11,6 +11,7 @@ import {
     localhostRpc,
     rpc,
     rpcAirdrop,
+    rpcGetMinimumBalance,
     rpcTransactionPlanExecutor,
     rpcTransactionPlanner,
 } from '@solana/kit-plugin-rpc';
@@ -84,6 +85,7 @@ export function createClient<TClusterUrl extends ClusterUrl>(config: ClientConfi
     return createEmptyClient()
         .use(rpc<TClusterUrl>(config.url, config.rpcSubscriptionsConfig))
         .use(payer(config.payer))
+        .use(rpcGetMinimumBalance())
         .use(rpcTransactionPlanner({ priorityFees: config.priorityFees }))
         .use(rpcTransactionPlanExecutor({ maxConcurrency: config.maxConcurrency, skipPreflight: config.skipPreflight }))
         .use(planAndSendTransactions());
@@ -132,6 +134,7 @@ export function createLocalClient(
     return createEmptyClient()
         .use(localhostRpc(config.url, config.rpcSubscriptionsConfig))
         .use(rpcAirdrop())
+        .use(rpcGetMinimumBalance())
         .use(payerOrGeneratedPayer(config.payer))
         .use(rpcTransactionPlanner({ priorityFees: config.priorityFees }))
         .use(rpcTransactionPlanExecutor({ maxConcurrency: config.maxConcurrency, skipPreflight: config.skipPreflight }))

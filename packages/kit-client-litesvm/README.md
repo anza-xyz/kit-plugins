@@ -41,6 +41,7 @@ await client.sendTransaction([myInstruction]);
 - `client.rpc`: Subset of RPC methods that delegate to the LiteSVM instance.
 - `client.payer`: The main payer signer for transactions.
 - `client.airdrop`: Function to request SOL from the LiteSVM instance.
+- `client.getMinimumBalance`: Computes the minimum lamports required for an account with a given data size.
 - `client.transactionPlanner`: Plans instructions into transaction messages.
 - `client.transactionPlanExecutor`: Executes planned transaction messages.
 - `client.planTransactions`: Plans transaction messages, instructions or instruction plans into a transaction plan without executing it.

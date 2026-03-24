@@ -106,6 +106,33 @@ const client = createEmptyClient().use(localhostRpc()).use(rpcAirdrop());
     await client.airdrop(address('HQVxiMVDoV9jzG4tpoxmDZsNfWvaHXm8DGGv93Gka75v'), lamports(1_000_000_000n));
     ```
 
+## `rpcGetMinimumBalance` plugin
+
+This plugin adds a `getMinimumBalance` method to your Kit client that computes the minimum lamports required for an account with a given data size, using the `getMinimumBalanceForRentExemption` RPC method.
+
+### Installation
+
+The client must have `rpc` installed before applying this plugin.
+
+```ts
+import { createEmptyClient } from '@solana/kit';
+import { rpc, rpcGetMinimumBalance } from '@solana/kit-plugin-rpc';
+
+const client = createEmptyClient().use(rpc('https://api.mainnet-beta.solana.com')).use(rpcGetMinimumBalance());
+```
+
+### Features
+
+- `getMinimumBalance`: An asynchronous helper that returns the minimum lamports required for an account with the given data size. By default, the 128-byte account header is included on top of the provided space.
+
+    ```ts
+    // Minimum balance for an account with 100 bytes of data (plus header).
+    const balance = await client.getMinimumBalance(100);
+
+    // Minimum balance for exactly 100 bytes (without adding the header).
+    const rawBalance = await client.getMinimumBalance(100, { withoutHeader: true });
+    ```
+
 ## `rpcTransactionPlanner` plugin
 
 This plugin provides a default transaction planner that creates transaction messages with a fee payer, a provisory compute unit limit, and optional priority fees.

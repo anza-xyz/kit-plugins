@@ -1,5 +1,6 @@
 import {
     ClientWithAirdrop,
+    ClientWithGetMinimumBalance,
     ClientWithRpc,
     TransactionPlanExecutor,
     TransactionPlanner,
@@ -43,6 +44,12 @@ describe('createClient', () => {
         const client = await createClient();
         expect(client.airdrop).toBeTypeOf('function');
         expectTypeOf(client).toMatchObjectType<ClientWithAirdrop>();
+    });
+
+    it('it offers a getMinimumBalance function', async () => {
+        const client = await createClient();
+        expect(client.getMinimumBalance).toBeTypeOf('function');
+        expectTypeOf(client).toMatchObjectType<ClientWithGetMinimumBalance>();
     });
 
     it('it generates a new payer by default', async () => {

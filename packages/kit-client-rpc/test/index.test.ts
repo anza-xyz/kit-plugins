@@ -1,6 +1,7 @@
 import {
     airdropFactory,
     ClientWithAirdrop,
+    ClientWithGetMinimumBalance,
     Rpc,
     RpcSubscriptions,
     SolanaRpcApi,
@@ -45,6 +46,15 @@ describe('createClient', () => {
         const payer = {} as TransactionSigner;
         const client = createClient({ payer, url: 'https://api.mainnet-beta.solana.com' });
         expect(client.payer).toBe(payer);
+    });
+
+    it('it offers a getMinimumBalance function', () => {
+        const client = createClient({
+            payer: {} as TransactionSigner,
+            url: 'https://api.mainnet-beta.solana.com',
+        });
+        expect(client.getMinimumBalance).toBeTypeOf('function');
+        expectTypeOf(client).toMatchObjectType<ClientWithGetMinimumBalance>();
     });
 
     it('it offers a default transaction planner', () => {
@@ -122,6 +132,15 @@ describe('createLocalClient', () => {
         const payer = {} as TransactionSigner;
         const client = await createLocalClient({ payer });
         expect(client.payer).toBe(payer);
+    });
+
+    it('it offers a getMinimumBalance function', async () => {
+        const airdropFn = vi.fn().mockResolvedValue('MockSignature');
+        (airdropFactory as Mock).mockReturnValueOnce(airdropFn);
+
+        const client = await createLocalClient();
+        expect(client.getMinimumBalance).toBeTypeOf('function');
+        expectTypeOf(client).toMatchObjectType<ClientWithGetMinimumBalance>();
     });
 
     it('it offers a default transaction planner', async () => {

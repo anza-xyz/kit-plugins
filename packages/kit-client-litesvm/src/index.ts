@@ -3,6 +3,7 @@ import { planAndSendTransactions } from '@solana/kit-plugin-instruction-plan';
 import {
     litesvm,
     litesvmAirdrop,
+    litesvmGetMinimumBalance,
     litesvmTransactionPlanExecutor,
     litesvmTransactionPlanner,
 } from '@solana/kit-plugin-litesvm';
@@ -56,6 +57,7 @@ export function createClient(config: { payer?: TransactionSigner } = {}) {
     return createEmptyClient()
         .use(litesvm())
         .use(litesvmAirdrop())
+        .use(litesvmGetMinimumBalance())
         .use(payerOrGeneratedPayer(config.payer))
         .use(litesvmTransactionPlanner())
         .use(litesvmTransactionPlanExecutor())
