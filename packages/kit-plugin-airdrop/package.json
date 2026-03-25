@@ -1,6 +1,6 @@
 {
     "name": "@solana/kit-plugin-airdrop",
-    "version": "0.8.0",
+    "version": "0.9.0",
     "description": "[DEPRECATED] Airdrop helpers for Kit clients",
     "exports": {
         "types": "./dist/types/index.d.ts",
