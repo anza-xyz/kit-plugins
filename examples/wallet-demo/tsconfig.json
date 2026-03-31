@@ -1,0 +1,11 @@
+{
+    "$schema": "https://json.schemastore.org/tsconfig",
+    "compilerOptions": {
+        "jsx": "react-jsx",
+        "lib": ["DOM", "ESNext"],
+        "module": "ESNext"
+    },
+    "display": "@solana/examples-wallet-demo",
+    "extends": "../../tsconfig.json",
+    "include": ["src"]
+}
