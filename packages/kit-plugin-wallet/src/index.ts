@@ -1,7 +1,15 @@
-import { ClientWithPayer, extendClient, MessageSigner, SignatureBytes, TransactionSigner } from '@solana/kit';
+import { extendClient, MessageSigner, SignatureBytes, TransactionSigner } from '@solana/kit';
 import type { SolanaChain } from '@solana/wallet-standard-chains';
 import type { SolanaSignInInput, SolanaSignInOutput } from '@solana/wallet-standard-features';
 import type { UiWallet, UiWalletAccount } from '@wallet-standard/ui';
+
+/**
+ * The signer type for a connected wallet account.
+ *
+ * Always satisfies `TransactionSigner`. Additionally implements `MessageSigner`
+ * when the wallet supports `solana:signMessage`.
+ */
+export type WalletSigner = TransactionSigner | (MessageSigner & TransactionSigner);
 
 // -- Public types -----------------------------------------------------------
 
@@ -20,37 +28,12 @@ import type { UiWallet, UiWalletAccount } from '@wallet-standard/ui';
 export type WalletStatus = 'connected' | 'connecting' | 'disconnected' | 'disconnecting' | 'pending' | 'reconnecting';
 
 /**
- * The active wallet connection — the wallet, the selected account, and the
- * account's signer (or `null` for read-only / watch-only wallets that do not
- * support any signing feature).
- *
- * Available as `client.wallet.connected` when a wallet is connected.
- *
- * @see {@link WalletNamespace.connected}
- */
-export type WalletConnection = {
-    /** The currently selected account within the connected wallet. */
-    readonly account: UiWalletAccount;
-    /**
-     * The signer for the active account, or `null` for read-only wallets.
-     *
-     * Satisfies `TransactionSigner` when non-null. May additionally implement
-     * `MessageSigner` if the wallet supports `solana:signMessage`.
-     */
-    readonly signer: TransactionSigner | (MessageSigner & TransactionSigner) | null;
-    /** The connected wallet. */
-    readonly wallet: UiWallet;
-};
-
-/**
  * A snapshot of the wallet plugin state at a point in time.
  *
- * Referentially stable when unchanged — suitable for use with
- * `useSyncExternalStore` and similar framework primitives.
- *
- * The `connected` field uses `hasSigner` rather than the signer object itself
- * to avoid unnecessary re-renders when the signer reference changes. The
- * actual signer is accessible via {@link WalletConnection.signer}.
+ * Returned by {@link WalletNamespace.getSnapshot}. The same object reference
+ * is returned on successive calls as long as nothing has changed — a new
+ * object is only created when a field actually changes. This ensures
+ * `useSyncExternalStore` only triggers re-renders on meaningful state changes.
  *
  * @see {@link WalletNamespace.getSnapshot}
  */
@@ -58,12 +41,13 @@ export type WalletStateSnapshot = {
     /**
      * The active connection, or `null` when disconnected.
      *
-     * `hasSigner` is `false` for read-only / watch-only wallets.
+     * `signer` is `null` for read-only / watch-only wallets that do not
+     * support any signing feature.
      */
     readonly connected: {
         readonly account: UiWalletAccount;
-        /** Whether the connected account has a signer. */
-        readonly hasSigner: boolean;
+        /** The signer for the active account, or `null` for read-only wallets. */
+        readonly signer: WalletSigner | null;
         readonly wallet: UiWallet;
     } | null;
     /** The current connection status. */
@@ -102,7 +86,7 @@ export type WalletStorage = {
 };
 
 /**
- * Configuration for the {@link wallet} plugin.
+ * Configuration for the {@link wallet} and {@link walletAsPayer} plugins.
  */
 export type WalletPluginConfig = {
     /**
@@ -157,31 +141,20 @@ export type WalletPluginConfig = {
      * @default 'kit-wallet'
      */
     storageKey?: string;
-
-    /**
-     * Whether to sync the connected wallet's signer to `client.payer`.
-     *
-     * When `true` (default), a dynamic `payer` getter is defined on the client.
-     * When no wallet is connected the getter returns whatever `client.payer` was
-     * before the wallet plugin was installed (the fallback payer), or `undefined`
-     * if no prior payer was configured.
-     *
-     * @default true
-     */
-    usePayer?: boolean;
 };
 
 /**
  * The `wallet` namespace exposed on the client as `client.wallet`.
  *
- * Contains all wallet state, actions, and framework integration helpers.
- * Framework adapters (React, Vue, Svelte, etc.) should bind to
- * `subscribe` and `getSnapshot` rather than individual getters.
+ * All wallet state is accessed via {@link getSnapshot}. Use {@link subscribe}
+ * to be notified of changes and integrate with framework primitives such as
+ * React's `useSyncExternalStore`.
  *
- * @see {@link WalletApi}
+ * @see {@link ClientWithWallet}
  */
 export type WalletNamespace = {
     // -- Actions --
+
     /**
      * Connect to a wallet. Calls `standard:connect`, then selects the first
      * newly authorized account (or the first account if reconnecting). Creates
@@ -192,20 +165,14 @@ export type WalletNamespace = {
      */
     connect: (wallet: UiWallet) => Promise<readonly UiWalletAccount[]>;
 
-    /**
-     * The active connection — wallet, account, and signer — or `null` when
-     * disconnected. For rendering, prefer reading from {@link getSnapshot}
-     * to avoid tearing.
-     */
-    readonly connected: WalletConnection | null;
-
     /** Disconnect the active wallet. Calls `standard:disconnect` if supported. */
     disconnect: () => Promise<void>;
 
+    // -- State --
     /**
-     * Get a referentially stable snapshot of the full wallet state.
-     * The same object reference is returned on subsequent calls as long as
-     * nothing has changed.
+     * Get a referentially stable snapshot of the full wallet state. A new
+     * object is only created when a field actually changes, so React's
+     * `useSyncExternalStore` skips re-renders when nothing meaningful changed.
      *
      * @see {@link WalletStateSnapshot}
      */
@@ -253,11 +220,6 @@ export type WalletNamespace = {
      */
     signMessage: (message: Uint8Array) => Promise<SignatureBytes>;
 
-    /** Current connection status. */
-    readonly status: WalletStatus;
-
-    // -- Framework integration --
-
     /**
      * Subscribe to any wallet state change. Compatible with React's
      * `useSyncExternalStore` and similar framework primitives.
@@ -266,23 +228,18 @@ export type WalletNamespace = {
      *
      * @example
      * ```ts
-     * // React
      * const state = useSyncExternalStore(client.wallet.subscribe, client.wallet.getSnapshot);
      * ```
      */
     subscribe: (listener: () => void) => () => void;
-
-    // -- State (getters) --
-    /** All discovered wallets matching the configured chain and filter. */
-    readonly wallets: readonly UiWallet[];
 };
 
 /**
  * Properties added to the client by the {@link wallet} plugin.
  *
  * All wallet state and actions are namespaced under `client.wallet`.
- * `client.payer` remains at the top level and dynamically resolves to the
- * connected wallet's signer (with fallback to any previously configured payer).
+ * `client.payer` is not affected — use the {@link walletAsPayer} plugin to
+ * set the payer dynamically from the connected wallet.
  *
  * @see {@link wallet}
  * @see {@link WalletNamespace}
@@ -291,6 +248,22 @@ export type WalletNamespace = {
 export type ClientWithWallet = {
     /** The wallet namespace — state, actions, and framework integration. */
     readonly wallet: WalletNamespace;
+};
+
+/**
+ * Properties added to the client by the {@link walletAsPayer} plugin.
+ *
+ * Extends {@link ClientWithWallet} with a dynamic `payer` getter. When a
+ * signing-capable wallet is connected, `client.payer` returns the wallet
+ * signer. When disconnected or when the wallet is read-only, `client.payer`
+ * is `undefined`.
+ *
+ * @see {@link walletAsPayer}
+ * @see {@link ClientWithWallet}
+ */
+export type ClientWithWalletAsPayer = ClientWithWallet & {
+    /** The connected wallet signer, or `undefined` when disconnected / read-only. */
+    readonly payer: TransactionSigner | undefined;
 };
 
 // -- Error ------------------------------------------------------------------
@@ -327,7 +300,7 @@ export class WalletNotConnectedError extends Error {
 type WalletStoreState = {
     account: UiWalletAccount | null;
     connectedWallet: UiWallet | null;
-    signer: TransactionSigner | (MessageSigner & TransactionSigner) | null;
+    signer: WalletSigner | null;
     status: WalletStatus;
     wallets: readonly UiWallet[];
 };
@@ -336,7 +309,6 @@ type WalletStore = {
     connect: (wallet: UiWallet) => Promise<readonly UiWalletAccount[]>;
     [Symbol.dispose]: () => void;
     disconnect: () => Promise<void>;
-    getConnected: () => WalletConnection | null;
     getSnapshot: () => WalletStateSnapshot;
     getState: () => WalletStoreState;
     selectAccount: (account: UiWalletAccount) => void;
@@ -356,34 +328,42 @@ function createWalletStore(_config: WalletPluginConfig): WalletStore {
 
 // -- Plugin -----------------------------------------------------------------
 
-type WalletPluginReturn<T extends object> = ClientWithWallet &
-    Disposable &
-    Omit<T, 'payer' | 'wallet'> &
-    Partial<ClientWithPayer>;
+function buildWalletNamespace(store: WalletStore): WalletNamespace {
+    return {
+        connect: (w: UiWallet) => store.connect(w),
+        disconnect: () => store.disconnect(),
+        getSnapshot: () => store.getSnapshot(),
+        selectAccount: (a: UiWalletAccount) => store.selectAccount(a),
+        signIn: store.signIn,
+        signMessage: (msg: Uint8Array) => store.signMessage(msg),
+        subscribe: (l: () => void) => store.subscribe(l),
+    };
+}
 
 /**
  * A framework-agnostic Kit plugin that manages wallet discovery, connection
  * lifecycle, and signer creation using wallet-standard.
  *
- * When connected, the plugin syncs the wallet signer to `client.payer` via a
- * dynamic getter, falling back to any previously configured payer when
- * disconnected. All wallet state and actions are namespaced under
- * `client.wallet`. The plugin exposes subscribable state for framework adapters
- * (React, Vue, Svelte, Solid, etc.) to consume.
+ * Adds the `wallet` namespace to the client without touching `client.payer`.
+ * Use this alongside the `payer()` plugin for backend signers, or when the
+ * wallet's signer is used explicitly in instructions rather than as the
+ * default payer. To set `client.payer` dynamically from the connected wallet,
+ * use {@link walletAsPayer} instead.
  *
- * **SSR-safe.** The plugin can be included in a shared client chain that runs
- * on both server and browser. On the server, status stays `'pending'`, actions
- * throw {@link WalletNotConnectedError}, and no registry listeners or storage
- * reads are made. The same client chain works everywhere:
+ * **SSR-safe.** Can be included in a shared client chain that runs on both
+ * server and browser. On the server, status stays `'pending'`, actions throw
+ * {@link WalletNotConnectedError}, and no registry listeners or storage reads
+ * are made.
  *
  * ```ts
  * const client = createEmptyClient()
  *   .use(rpc('https://api.mainnet-beta.solana.com'))
  *   .use(payer(backendKeypair))
- *   .use(wallet({ chain: 'solana:mainnet' }));
+ *   .use(wallet({ chain: 'solana:mainnet' }))
+ *   .use(planAndSendTransactions());
  *
- * // Server: client.wallet.status === 'pending', client.payer === backendKeypair
- * // Browser: auto-connect fires, client.payer becomes the wallet signer
+ * // client.payer is always backendKeypair (wallet plugin does not touch it)
+ * // client.wallet.getSnapshot().connected?.signer for manual use
  * ```
  *
  * @param config - Plugin configuration.
@@ -399,57 +379,92 @@ type WalletPluginReturn<T extends object> = ClientWithWallet &
  *   .use(wallet({ chain: 'solana:mainnet' }));
  *
  * // Connect a wallet
- * const [firstAccount] = await client.wallet.connect(uiWallet);
+ * await client.wallet.connect(uiWallet);
  *
  * // Subscribe to state changes (React)
  * const state = useSyncExternalStore(client.wallet.subscribe, client.wallet.getSnapshot);
  * ```
  *
+ * @see {@link walletAsPayer}
  * @see {@link WalletPluginConfig}
- * @see {@link WalletApi}
+ * @see {@link ClientWithWallet}
  */
 export function wallet(config: WalletPluginConfig) {
-    return <T extends object>(client: T): WalletPluginReturn<T> => {
+    return <T extends object>(client: T): ClientWithWallet & Disposable & Omit<T, 'wallet'> => {
         const store = createWalletStore(config);
 
-        const fallbackClient = 'payer' in client ? (client as T & { payer: TransactionSigner }) : null;
+        return extendClient(client, {
+            wallet: buildWalletNamespace(store),
+            // TODO: This will use withCleanup after the next Kit release
+            [Symbol.dispose]: () => store[Symbol.dispose](),
+        }) as ClientWithWallet & Disposable & Omit<T, 'wallet'>;
+    };
+}
 
-        const walletObj: Omit<WalletNamespace, 'connected' | 'status' | 'wallets'> = {
-            connect: (w: UiWallet) => store.connect(w),
-            disconnect: () => store.disconnect(),
-            getSnapshot: () => store.getSnapshot(),
-            selectAccount: (a: UiWalletAccount) => store.selectAccount(a),
-            signIn: store.signIn,
-            signMessage: (msg: Uint8Array) => store.signMessage(msg),
-            subscribe: (l: () => void) => store.subscribe(l),
-        };
-
-        // Define getters for the rest of the state properties
-        for (const [key, fn] of Object.entries({
-            connected: () => store.getConnected(),
-            status: () => store.getState().status,
-            wallets: () => store.getState().wallets,
-        } as Record<string, () => unknown>)) {
-            Object.defineProperty(walletObj, key, { configurable: true, enumerable: true, get: fn });
-        }
+/**
+ * A framework-agnostic Kit plugin that manages wallet discovery, connection
+ * lifecycle, and signer creation using wallet-standard — and syncs the
+ * connected wallet's signer to `client.payer` via a dynamic getter.
+ *
+ * When a signing-capable wallet is connected, `client.payer` returns the
+ * wallet signer. When disconnected or when the wallet is read-only,
+ * `client.payer` is `undefined`. Use the base {@link wallet} plugin instead
+ * if you need `client.payer` to be controlled by a separate `payer()` plugin.
+ *
+ * **SSR-safe.** Can be included in a shared client chain that runs on both
+ * server and browser. On the server, status stays `'pending'`, `client.payer`
+ * is `undefined`, and no registry listeners or storage reads are made.
+ *
+ * ```ts
+ * const client = createEmptyClient()
+ *   .use(rpc('https://api.mainnet-beta.solana.com'))
+ *   .use(walletAsPayer({ chain: 'solana:mainnet' }))
+ *   .use(planAndSendTransactions());
+ *
+ * // Server: status === 'pending', client.payer === undefined
+ * // Browser: auto-connect fires, client.payer becomes the wallet signer
+ * ```
+ *
+ * @param config - Plugin configuration.
+ *
+ * @example
+ * ```ts
+ * import { createEmptyClient } from '@solana/kit';
+ * import { rpc } from '@solana/kit-plugin-rpc';
+ * import { walletAsPayer } from '@solana/kit-plugin-wallet';
+ *
+ * const client = createEmptyClient()
+ *   .use(rpc('https://api.mainnet-beta.solana.com'))
+ *   .use(walletAsPayer({ chain: 'solana:mainnet' }));
+ *
+ * // Connect a wallet
+ * await client.wallet.connect(uiWallet);
+ * // client.payer now returns the wallet signer
+ * ```
+ *
+ * @see {@link wallet}
+ * @see {@link WalletPluginConfig}
+ * @see {@link ClientWithWalletAsPayer}
+ */
+export function walletAsPayer(config: WalletPluginConfig) {
+    return <T extends object>(client: T): ClientWithWalletAsPayer & Disposable & Omit<T, 'payer' | 'wallet'> => {
+        const store = createWalletStore(config);
 
         const obj = extendClient(client, {
-            wallet: walletObj as WalletNamespace,
+            wallet: buildWalletNamespace(store),
             // TODO: This will use withCleanup after the next Kit release
             [Symbol.dispose]: () => store[Symbol.dispose](),
         });
 
-        if (config.usePayer !== false) {
-            Object.defineProperty(obj, 'payer', {
-                configurable: true,
-                enumerable: true,
-                get() {
-                    // Note that we only read `client.payer` here, to allow the fallback to be defined with a get function
-                    return store.getState().signer ?? fallbackClient?.payer;
-                },
-            });
-        }
+        Object.defineProperty(obj, 'payer', {
+            configurable: true,
+            enumerable: true,
+            get() {
+                const { signer } = store.getState();
+                return signer !== null ? signer : undefined;
+            },
+        });
 
-        return obj as WalletPluginReturn<T>;
+        return obj as ClientWithWalletAsPayer & Disposable & Omit<T, 'payer' | 'wallet'>;
     };
 }
