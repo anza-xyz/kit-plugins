@@ -1,4 +1,4 @@
-import { extendClient, MessageSigner, SignatureBytes, TransactionSigner } from '@solana/kit';
+import { extendClient, MessageSigner, SignatureBytes, TransactionSigner, withCleanup } from '@solana/kit';
 import type { SolanaChain } from '@solana/wallet-standard-chains';
 import type { SolanaSignInInput, SolanaSignInOutput } from '@solana/wallet-standard-features';
 import type { UiWallet, UiWalletAccount } from '@wallet-standard/ui';
@@ -393,11 +393,12 @@ export function wallet(config: WalletPluginConfig) {
     return <T extends object>(client: T): ClientWithWallet & Disposable & Omit<T, 'wallet'> => {
         const store = createWalletStore(config);
 
-        return extendClient(client, {
-            wallet: buildWalletNamespace(store),
-            // TODO: This will use withCleanup after the next Kit release
-            [Symbol.dispose]: () => store[Symbol.dispose](),
-        }) as ClientWithWallet & Disposable & Omit<T, 'wallet'>;
+        return withCleanup(
+            extendClient(client, {
+                wallet: buildWalletNamespace(store),
+            }),
+            () => store[Symbol.dispose](),
+        ) as ClientWithWallet & Disposable & Omit<T, 'wallet'>;
     };
 }
 
@@ -450,11 +451,12 @@ export function walletAsPayer(config: WalletPluginConfig) {
     return <T extends object>(client: T): ClientWithWalletAsPayer & Disposable & Omit<T, 'payer' | 'wallet'> => {
         const store = createWalletStore(config);
 
-        const obj = extendClient(client, {
-            wallet: buildWalletNamespace(store),
-            // TODO: This will use withCleanup after the next Kit release
-            [Symbol.dispose]: () => store[Symbol.dispose](),
-        });
+        const obj = withCleanup(
+            extendClient(client, {
+                wallet: buildWalletNamespace(store),
+            }),
+            () => store[Symbol.dispose](),
+        );
 
         Object.defineProperty(obj, 'payer', {
             configurable: true,
