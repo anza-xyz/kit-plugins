@@ -55,8 +55,8 @@ function render(): void {
         walletListEl.hidden = true;
         connectedEl.hidden = false;
         addressEl.textContent = connected.account.address;
-        readonlyBadge.hidden = connected.hasSigner;
-        sendButton.hidden = !connected.hasSigner;
+        readonlyBadge.hidden = connected.signer !== null;
+        sendButton.hidden = connected.signer === null;
     }
 }
 
@@ -69,7 +69,7 @@ disconnectButton.addEventListener('click', () => {
 });
 
 sendButton.addEventListener('click', async () => {
-    const signer = client.wallet.connected?.signer;
+    const signer = client.wallet.getSnapshot().connected?.signer;
     if (!signer) return; // wallet disconnected or read-only between render and click
 
     sendButton.disabled = true;

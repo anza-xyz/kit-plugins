@@ -24,7 +24,7 @@
  *     </div>
  *     <div v-else>
  *       <p>Connected: <code>{{ connected.account.address }}</code></p>
- *       <p v-if="!connected.hasSigner">Read-only wallet — cannot sign transactions</p>
+ *       <p v-if="!connected.signer">Read-only wallet — cannot sign transactions</p>
  *       <button v-else :disabled="pending" @click="sendTransfer">
  *         {{ pending ? 'Sending…' : 'Send 0.01 SOL' }}
  *       </button>
@@ -81,7 +81,7 @@ export function useWalletActions() {
     }
 
     async function sendTransfer() {
-        const signer = client.wallet.connected?.signer;
+        const signer = client.wallet.getSnapshot().connected?.signer;
         if (!signer) return; // wallet disconnected or read-only between render and click
 
         pending.value = true;
