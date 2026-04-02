@@ -2,7 +2,7 @@ import { getSolanaErrorFromTransactionError } from '@solana/kit';
 
 /**
  * A duck-typed interface for `FailedTransactionMetadata` from
- * `@loris-sandbox/litesvm-kit`. We avoid importing the class directly
+ * `litesvm`. We avoid importing the class directly
  * because LiteSVM is a Node-only native module and this file must be
  * resolvable in browser builds.
  */
@@ -12,7 +12,7 @@ export type FailedTransactionResult = {
 
 /**
  * The ordered names of the `TransactionErrorFieldless` enum variants
- * from `@loris-sandbox/litesvm-kit`. Each index corresponds to the
+ * from `litesvm`. Each index corresponds to the
  * enum's numeric value and maps to the string name expected by
  * {@link getSolanaErrorFromTransactionError}.
  */
@@ -56,7 +56,7 @@ const TRANSACTION_ERROR_NAMES: readonly string[] = [
 
 /**
  * The ordered names of the `InstructionErrorFieldless` enum variants
- * from `@loris-sandbox/litesvm-kit`. Each index corresponds to the
+ * from `litesvm`. Each index corresponds to the
  * enum's numeric value and maps to the string name expected by
  * {@link getSolanaErrorFromTransactionError}.
  */

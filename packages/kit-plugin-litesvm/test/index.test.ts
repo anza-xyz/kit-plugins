@@ -1,4 +1,3 @@
-import { LiteSVM } from '@loris-sandbox/litesvm-kit';
 import {
     createEmptyClient,
     GetAccountInfoApi,
@@ -11,6 +10,7 @@ import {
     RequestAirdropApi,
     Rpc,
 } from '@solana/kit';
+import { LiteSVM } from 'litesvm';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import { litesvm as nodeLitesvm } from '../src/index';

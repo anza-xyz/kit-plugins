@@ -1,10 +1,10 @@
-import { LiteSVM } from '@loris-sandbox/litesvm-kit';
 import { extendClient } from '@solana/kit';
+import { LiteSVM } from 'litesvm';
 
 import { createRpcFromSvm } from './litesvm-to-rpc';
 
 // Re-export the LiteSVM type to make the `litesvm` plugin type-portable.
-export type { LiteSVM } from '@loris-sandbox/litesvm-kit';
+export type { LiteSVM } from 'litesvm';
 
 /**
  * A Kit plugin that adds LiteSVM functionality to your client.

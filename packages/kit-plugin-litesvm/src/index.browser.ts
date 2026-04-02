@@ -1,4 +1,4 @@
-export type { FailedTransactionMetadata, TransactionMetadata } from '@loris-sandbox/litesvm-kit';
+export type { FailedTransactionMetadata, TransactionMetadata } from 'litesvm';
 export type { LiteSVM } from './litesvm';
 export type { LiteSvmRpcApi } from './litesvm-to-rpc';
 

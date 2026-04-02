@@ -1,4 +1,3 @@
-import type { FailedTransactionMetadata, LiteSVM, TransactionMetadata } from '@loris-sandbox/litesvm-kit';
 import {
     Address,
     appendTransactionMessageInstruction,
@@ -19,14 +18,12 @@ import {
     SolanaError,
 } from '@solana/kit';
 import { getTransferSolInstruction } from '@solana-program/system';
+import type { FailedTransactionMetadata, LiteSVM, TransactionMetadata } from 'litesvm';
 import { describe, expect, it, vi } from 'vitest';
 
 import { litesvm, litesvmTransactionPlanExecutor, litesvmTransactionPlanner } from '../src';
 
-const MOCK_BLOCKHASH = { blockhash: '11111111111111111111111111111111', lastValidBlockHeight: 0n };
-const MOCK_INSTRUCTION = {
-    programAddress: '11111111111111111111111111111111' as Address,
-};
+const MOCK_INSTRUCTION = { programAddress: '11111111111111111111111111111111' as Address };
 
 describe('litesvmTransactionPlanExecutor', () => {
     describe('with mocks', () => {
@@ -40,10 +37,10 @@ describe('litesvmTransactionPlanExecutor', () => {
 
         it('uses the SVM instance to send transactions', async () => {
             const payer = await generateKeyPairSigner();
-            const latestBlockhashLifetime = vi.fn().mockReturnValueOnce(MOCK_BLOCKHASH);
+            const setTransactionMessageLifetimeUsingLatestBlockhash = vi.fn().mockImplementation(<T>(m: T) => m);
             // Return a success result (no `.err` property).
             const sendTransaction = vi.fn().mockReturnValue({ signature: () => new Uint8Array(64) });
-            const svm = { latestBlockhashLifetime, sendTransaction } as unknown as LiteSVM;
+            const svm = { sendTransaction, setTransactionMessageLifetimeUsingLatestBlockhash } as unknown as LiteSVM;
             const client = createEmptyClient()
                 .use(() => ({ payer, svm }))
                 .use(litesvmTransactionPlanner())
@@ -55,16 +52,16 @@ describe('litesvmTransactionPlanExecutor', () => {
                 transactionPlan,
             )) as SingleTransactionPlanResult;
             expect(transactionPlanResult.kind).toBe('single');
-            expect(latestBlockhashLifetime).toHaveBeenCalledOnce();
+            expect(setTransactionMessageLifetimeUsingLatestBlockhash).toHaveBeenCalledOnce();
             expect(sendTransaction).toHaveBeenCalledOnce();
         });
 
         it('includes transactionMetadata in the result context on success', async () => {
             const payer = await generateKeyPairSigner();
-            const latestBlockhashLifetime = vi.fn().mockReturnValueOnce(MOCK_BLOCKHASH);
+            const setTransactionMessageLifetimeUsingLatestBlockhash = vi.fn().mockImplementation(<T>(m: T) => m);
             const mockMetadata = { logs: () => ['log1'], signature: () => new Uint8Array(64) };
             const sendTransaction = vi.fn().mockReturnValue(mockMetadata);
-            const svm = { latestBlockhashLifetime, sendTransaction } as unknown as LiteSVM;
+            const svm = { sendTransaction, setTransactionMessageLifetimeUsingLatestBlockhash } as unknown as LiteSVM;
             const client = createEmptyClient()
                 .use(() => ({ payer, svm }))
                 .use(litesvmTransactionPlanner())
@@ -78,10 +75,10 @@ describe('litesvmTransactionPlanExecutor', () => {
 
         it('includes transactionMetadata in the result context on failure', async () => {
             const payer = await generateKeyPairSigner();
-            const latestBlockhashLifetime = vi.fn().mockReturnValueOnce(MOCK_BLOCKHASH);
+            const setTransactionMessageLifetimeUsingLatestBlockhash = vi.fn().mockImplementation(<T>(m: T) => m);
             const mockMetadata = { err: () => 2 };
             const sendTransaction = vi.fn().mockReturnValue(mockMetadata);
-            const svm = { latestBlockhashLifetime, sendTransaction } as unknown as LiteSVM;
+            const svm = { sendTransaction, setTransactionMessageLifetimeUsingLatestBlockhash } as unknown as LiteSVM;
             const client = createEmptyClient()
                 .use(() => ({ payer, svm }))
                 .use(litesvmTransactionPlanExecutor());
@@ -98,10 +95,10 @@ describe('litesvmTransactionPlanExecutor', () => {
 
         it('throws a SolanaError when the transaction fails', async () => {
             const payer = await generateKeyPairSigner();
-            const latestBlockhashLifetime = vi.fn().mockReturnValueOnce(MOCK_BLOCKHASH);
+            const setTransactionMessageLifetimeUsingLatestBlockhash = vi.fn().mockImplementation(<T>(m: T) => m);
             // Return a failed result with a fieldless error (AccountNotFound = 2).
             const sendTransaction = vi.fn().mockReturnValue({ err: () => 2 });
-            const svm = { latestBlockhashLifetime, sendTransaction } as unknown as LiteSVM;
+            const svm = { sendTransaction, setTransactionMessageLifetimeUsingLatestBlockhash } as unknown as LiteSVM;
             const client = createEmptyClient()
                 .use(() => ({ payer, svm }))
                 .use(litesvmTransactionPlanExecutor());
@@ -124,7 +121,7 @@ describe('litesvmTransactionPlanExecutor', () => {
 
         it('throws a SolanaError for instruction errors', async () => {
             const payer = await generateKeyPairSigner();
-            const latestBlockhashLifetime = vi.fn().mockReturnValueOnce(MOCK_BLOCKHASH);
+            const setTransactionMessageLifetimeUsingLatestBlockhash = vi.fn().mockImplementation(<T>(m: T) => m);
             // Return a failed result with an instruction error.
             const instructionError = {
                 constructor: { name: 'TransactionErrorInstructionError' },
@@ -132,7 +129,7 @@ describe('litesvmTransactionPlanExecutor', () => {
                 index: 0,
             };
             const sendTransaction = vi.fn().mockReturnValue({ err: () => instructionError });
-            const svm = { latestBlockhashLifetime, sendTransaction } as unknown as LiteSVM;
+            const svm = { sendTransaction, setTransactionMessageLifetimeUsingLatestBlockhash } as unknown as LiteSVM;
             const client = createEmptyClient()
                 .use(() => ({ payer, svm }))
                 .use(litesvmTransactionPlanExecutor());
@@ -194,10 +191,10 @@ describe('litesvmTransactionPlanExecutor', () => {
                 .use(client => extendClient(client, { payer }))
                 .use(litesvmTransactionPlanner())
                 .use(litesvmTransactionPlanExecutor());
-            client.svm.airdrop(payer.address, lamports(1_000_000_000n));
+            client.svm.airdrop(payer.address, lamports(1_000_000_000n)); // 1 SOL
 
             const instruction = getTransferSolInstruction({
-                amount: lamports(1_000n),
+                amount: lamports(100_000_000n), // 0.1 SOL
                 destination: destination.address,
                 source: payer,
             });
