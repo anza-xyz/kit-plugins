@@ -23,7 +23,7 @@
  *     {/if}
  *   {:else}
  *     <p>Connected: <code>{$walletState.connected.account.address}</code></p>
- *     {#if !$walletState.connected.hasSigner}
+ *     {#if !$walletState.connected.signer}
  *       <p>Read-only wallet — cannot sign transactions</p>
  *     {:else}
  *       <button disabled={$pending} on:click={sendTransfer}>
@@ -63,7 +63,7 @@ export function disconnect() {
 }
 
 export async function sendTransfer() {
-    const signer = client.wallet.connected?.signer;
+    const signer = client.wallet.getSnapshot().connected?.signer;
     if (!signer) return; // wallet disconnected or read-only between render and click
 
     pending.set(true);

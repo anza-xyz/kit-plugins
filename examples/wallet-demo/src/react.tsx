@@ -40,8 +40,8 @@ function ConnectedView({ connected }: { connected: NonNullable<WalletStateSnapsh
     const [pending, setPending] = useState(false);
 
     async function sendTransfer() {
-        const signer = client.wallet.connected?.signer;
-        if (!signer) return; // wallet disconnected or read-only between render and click
+        const { signer } = connected;
+        if (!signer) return; // read-only wallet
 
         setPending(true);
         try {
@@ -66,7 +66,7 @@ function ConnectedView({ connected }: { connected: NonNullable<WalletStateSnapsh
             <p>
                 Connected: <code>{connected.account.address}</code>
             </p>
-            {connected.hasSigner ? (
+            {connected.signer ? (
                 <button disabled={pending} onClick={sendTransfer}>
                     {pending ? 'Sending…' : 'Send 0.01 SOL'}
                 </button>
