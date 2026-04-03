@@ -1,11 +1,5 @@
-import type { FailedTransactionMetadata, LiteSVM, TransactionMetadata } from '@loris-sandbox/litesvm-kit';
-import {
-    createTransactionPlanExecutor,
-    extendClient,
-    pipe,
-    setTransactionMessageLifetimeUsingBlockhash,
-    signTransactionMessageWithSigners,
-} from '@solana/kit';
+import { createTransactionPlanExecutor, extendClient, pipe, signTransactionMessageWithSigners } from '@solana/kit';
+import type { FailedTransactionMetadata, LiteSVM, TransactionMetadata } from 'litesvm';
 
 import { getSolanaErrorFromLiteSvmFailure, isFailedTransaction } from './transaction-error';
 
@@ -51,10 +45,9 @@ export function litesvmTransactionPlanExecutor() {
             transactionMetadata: FailedTransactionMetadata | TransactionMetadata;
         }>({
             executeTransactionMessage: async (context, transactionMessage, config) => {
-                const latestBlockhash = client.svm.latestBlockhashLifetime();
                 const signedTransaction = await pipe(
                     transactionMessage,
-                    tx => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, tx),
+                    tx => client.svm.setTransactionMessageLifetimeUsingLatestBlockhash(tx),
                     tx => (context.message = tx),
                     async tx => await signTransactionMessageWithSigners(tx, config),
                 );

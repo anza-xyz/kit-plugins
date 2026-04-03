@@ -1,4 +1,3 @@
-import type { LiteSVM } from '@loris-sandbox/litesvm-kit';
 import {
     AccountInfoBase,
     AccountInfoWithBase64EncodedData,
@@ -25,6 +24,7 @@ import {
     signature as toSignature,
     SolanaRpcResponse,
 } from '@solana/kit';
+import type { LiteSVM } from 'litesvm';
 
 import { getSolanaErrorFromLiteSvmFailure, isFailedTransaction } from './transaction-error';
 
@@ -70,7 +70,7 @@ type Encoding = 'base58' | 'base64' | 'base64+zstd' | 'jsonParsed';
  *
  * @example
  * ```ts
- * import { LiteSVM } from '@loris-sandbox/litesvm-kit';
+ * import { LiteSVM } from 'litesvm';
  * import { createRpcFromSvm } from '@solana/kit-plugin-litesvm';
  *
  * const svm = new LiteSVM();

@@ -1,4 +1,4 @@
-export type { FailedTransactionMetadata, TransactionMetadata } from '@loris-sandbox/litesvm-kit';
+export type { FailedTransactionMetadata, TransactionMetadata } from 'litesvm';
 
 export * from './airdrop';
 export * from './get-minimum-balance';
