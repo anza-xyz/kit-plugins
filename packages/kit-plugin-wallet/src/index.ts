@@ -30,14 +30,14 @@ export type WalletStatus = 'connected' | 'connecting' | 'disconnected' | 'discon
 /**
  * A snapshot of the wallet plugin state at a point in time.
  *
- * Returned by {@link WalletNamespace.getSnapshot}. The same object reference
+ * Returned by {@link WalletNamespace.getState}. The same object reference
  * is returned on successive calls as long as nothing has changed — a new
  * object is only created when a field actually changes. This ensures
  * `useSyncExternalStore` only triggers re-renders on meaningful state changes.
  *
- * @see {@link WalletNamespace.getSnapshot}
+ * @see {@link WalletNamespace.getState}
  */
-export type WalletStateSnapshot = {
+export type WalletState = {
     /**
      * The active connection, or `null` when disconnected.
      *
@@ -170,13 +170,13 @@ export type WalletNamespace = {
 
     // -- State --
     /**
-     * Get a referentially stable snapshot of the full wallet state. A new
-     * object is only created when a field actually changes, so React's
+     * Get the current wallet state. Referentially stable — a new object is
+     * only created when a field actually changes, so React's
      * `useSyncExternalStore` skips re-renders when nothing meaningful changed.
      *
-     * @see {@link WalletStateSnapshot}
+     * @see {@link WalletState}
      */
-    getSnapshot: () => WalletStateSnapshot;
+    getState: () => WalletState;
 
     /**
      * Switch to a different account within the connected wallet. Creates and
@@ -228,7 +228,7 @@ export type WalletNamespace = {
      *
      * @example
      * ```ts
-     * const state = useSyncExternalStore(client.wallet.subscribe, client.wallet.getSnapshot);
+     * const state = useSyncExternalStore(client.wallet.subscribe, client.wallet.getState);
      * ```
      */
     subscribe: (listener: () => void) => () => void;
@@ -297,27 +297,8 @@ export class WalletNotConnectedError extends Error {
 
 // -- Internal types ---------------------------------------------------------
 
-type WalletStoreState = {
-    account: UiWalletAccount | null;
-    connectedWallet: UiWallet | null;
-    signer: WalletSigner | null;
-    status: WalletStatus;
-    wallets: readonly UiWallet[];
-};
-
-type WalletStore = {
-    connect: (wallet: UiWallet) => Promise<readonly UiWalletAccount[]>;
+type WalletStore = WalletNamespace & {
     [Symbol.dispose]: () => void;
-    disconnect: () => Promise<void>;
-    getSnapshot: () => WalletStateSnapshot;
-    getState: () => WalletStoreState;
-    selectAccount: (account: UiWalletAccount) => void;
-    signIn: {
-        (input?: SolanaSignInInput): Promise<SolanaSignInOutput>;
-        (wallet: UiWallet, input?: SolanaSignInInput): Promise<SolanaSignInOutput>;
-    };
-    signMessage: (message: Uint8Array) => Promise<SignatureBytes>;
-    subscribe: (listener: () => void) => () => void;
 };
 
 // -- Store ------------------------------------------------------------------
@@ -327,18 +308,6 @@ function createWalletStore(_config: WalletPluginConfig): WalletStore {
 }
 
 // -- Plugin -----------------------------------------------------------------
-
-function buildWalletNamespace(store: WalletStore): WalletNamespace {
-    return {
-        connect: (w: UiWallet) => store.connect(w),
-        disconnect: () => store.disconnect(),
-        getSnapshot: () => store.getSnapshot(),
-        selectAccount: (a: UiWalletAccount) => store.selectAccount(a),
-        signIn: store.signIn,
-        signMessage: (msg: Uint8Array) => store.signMessage(msg),
-        subscribe: (l: () => void) => store.subscribe(l),
-    };
-}
 
 /**
  * A framework-agnostic Kit plugin that manages wallet discovery, connection
@@ -363,7 +332,7 @@ function buildWalletNamespace(store: WalletStore): WalletNamespace {
  *   .use(planAndSendTransactions());
  *
  * // client.payer is always backendKeypair (wallet plugin does not touch it)
- * // client.wallet.getSnapshot().connected?.signer for manual use
+ * // client.wallet.getState().connected?.signer for manual use
  * ```
  *
  * @param config - Plugin configuration.
@@ -382,7 +351,7 @@ function buildWalletNamespace(store: WalletStore): WalletNamespace {
  * await client.wallet.connect(uiWallet);
  *
  * // Subscribe to state changes (React)
- * const state = useSyncExternalStore(client.wallet.subscribe, client.wallet.getSnapshot);
+ * const state = useSyncExternalStore(client.wallet.subscribe, client.wallet.getState);
  * ```
  *
  * @see {@link walletAsPayer}
@@ -395,7 +364,7 @@ export function wallet(config: WalletPluginConfig) {
 
         return withCleanup(
             extendClient(client, {
-                wallet: buildWalletNamespace(store),
+                wallet: store,
             }),
             () => store[Symbol.dispose](),
         ) as ClientWithWallet & Disposable & Omit<T, 'wallet'>;
@@ -453,7 +422,7 @@ export function walletAsPayer(config: WalletPluginConfig) {
 
         const obj = withCleanup(
             extendClient(client, {
-                wallet: buildWalletNamespace(store),
+                wallet: store,
             }),
             () => store[Symbol.dispose](),
         );
@@ -462,11 +431,10 @@ export function walletAsPayer(config: WalletPluginConfig) {
             configurable: true,
             enumerable: true,
             get() {
-                const { signer } = store.getState();
-                return signer !== null ? signer : undefined;
+                return obj.wallet.getState().connected?.signer ?? undefined;
             },
         });
 
-        return obj as ClientWithWalletAsPayer & Disposable & Omit<T, 'payer' | 'wallet'>;
+        return obj as unknown as ClientWithWalletAsPayer & Disposable & Omit<T, 'payer' | 'wallet'>;
     };
 }
