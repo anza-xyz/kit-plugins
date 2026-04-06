@@ -6,7 +6,7 @@
  * client.payer is undefined when disconnected, so sendTransaction will fail
  * explicitly if called without a connected wallet.
  */
-import { createEmptyClient, TransactionSigner } from '@solana/kit';
+import { createEmptyClient } from '@solana/kit';
 import { planAndSendTransactions } from '@solana/kit-plugin-instruction-plan';
 import { rpc, rpcTransactionPlanExecutor, rpcTransactionPlanner } from '@solana/kit-plugin-rpc';
 import { walletAsPayer } from '@solana/kit-plugin-wallet';

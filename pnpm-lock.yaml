@@ -91,10 +91,10 @@ importers:
     dependencies:
       '@solana-program/system':
         specifier: ^0.12.0
-        version: 0.12.0(@solana/kit@6.5.0(typescript@5.9.3))
+        version: 0.12.0(@solana/kit@6.7.0(typescript@5.9.3))
       '@solana/kit':
-        specifier: ^6.5.0
-        version: 6.5.0(typescript@5.9.3)
+        specifier: ^6.7.0
+        version: 6.7.0(typescript@5.9.3)
       '@solana/kit-plugin-instruction-plan':
         specifier: workspace:*
         version: link:../../packages/kit-plugin-instruction-plan

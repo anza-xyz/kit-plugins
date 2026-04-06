@@ -36,7 +36,7 @@
  */
 import { getTransferSolInstruction } from '@solana-program/system';
 import { address, lamports } from '@solana/kit';
-import { type WalletStateSnapshot } from '@solana/kit-plugin-wallet';
+import { type WalletState } from '@solana/kit-plugin-wallet';
 import { type ComputedRef, computed, onMounted, onUnmounted, ref, shallowRef } from 'vue';
 import { client } from './client';
 
@@ -48,15 +48,15 @@ const DEMO_RECIPIENT = address('4Nd1mBQtrMJVYVfKf2PX98RQ1VJdTkzEFnQfqXFsqMRC');
  * Returns individual computed refs for easy destructuring in templates.
  */
 export function useWalletState(): {
-    wallets: ComputedRef<WalletStateSnapshot['wallets']>;
-    connected: ComputedRef<WalletStateSnapshot['connected']>;
-    status: ComputedRef<WalletStateSnapshot['status']>;
+    wallets: ComputedRef<WalletState['wallets']>;
+    connected: ComputedRef<WalletState['connected']>;
+    status: ComputedRef<WalletState['status']>;
 } {
-    const snapshot = shallowRef<WalletStateSnapshot>(client.wallet.getSnapshot());
+    const snapshot = shallowRef<WalletState>(client.wallet.getState());
 
     onMounted(() => {
         const unsub = client.wallet.subscribe(() => {
-            snapshot.value = client.wallet.getSnapshot();
+            snapshot.value = client.wallet.getState();
         });
         onUnmounted(unsub);
     });
@@ -72,7 +72,7 @@ export function useWalletState(): {
 export function useWalletActions() {
     const pending = ref(false);
 
-    function connect(w: WalletStateSnapshot['wallets'][number]) {
+    function connect(w: WalletState['wallets'][number]) {
         client.wallet.connect(w);
     }
 
@@ -81,7 +81,7 @@ export function useWalletActions() {
     }
 
     async function sendTransfer() {
-        const signer = client.wallet.getSnapshot().connected?.signer;
+        const signer = client.wallet.getState().connected?.signer;
         if (!signer) return; // wallet disconnected or read-only between render and click
 
         pending.value = true;

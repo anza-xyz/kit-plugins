@@ -48,8 +48,8 @@ const DEMO_RECIPIENT = address('4Nd1mBQtrMJVYVfKf2PX98RQ1VJdTkzEFnQfqXFsqMRC');
  * Subscribes to the wallet plugin and emits a new snapshot on every change.
  * Automatically unsubscribes when all Svelte subscribers are gone.
  */
-export const walletState = readable(client.wallet.getSnapshot(), (set) => {
-    return client.wallet.subscribe(() => set(client.wallet.getSnapshot()));
+export const walletState = readable(client.wallet.getState(), (set) => {
+    return client.wallet.subscribe(() => set(client.wallet.getState()));
 });
 
 export const pending = writable(false);
@@ -63,7 +63,7 @@ export function disconnect() {
 }
 
 export async function sendTransfer() {
-    const signer = client.wallet.getSnapshot().connected?.signer;
+    const signer = client.wallet.getState().connected?.signer;
     if (!signer) return; // wallet disconnected or read-only between render and click
 
     pending.set(true);

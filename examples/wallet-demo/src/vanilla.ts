@@ -29,7 +29,7 @@ const disconnectButton = document.getElementById('disconnect-button') as HTMLBut
 const DEMO_RECIPIENT = address('4Nd1mBQtrMJVYVfKf2PX98RQ1VJdTkzEFnQfqXFsqMRC');
 
 function render(): void {
-    const { wallets, connected, status } = client.wallet.getSnapshot();
+    const { wallets, connected, status } = client.wallet.getState();
 
     // Don't render anything until the plugin has checked storage.
     // This avoids flashing a connect button before auto-reconnect fires.
@@ -69,7 +69,7 @@ disconnectButton.addEventListener('click', () => {
 });
 
 sendButton.addEventListener('click', async () => {
-    const signer = client.wallet.getSnapshot().connected?.signer;
+    const signer = client.wallet.getState().connected?.signer;
     if (!signer) return; // wallet disconnected or read-only between render and click
 
     sendButton.disabled = true;

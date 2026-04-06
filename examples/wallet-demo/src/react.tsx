@@ -6,7 +6,7 @@
  */
 import { getTransferSolInstruction } from '@solana-program/system';
 import { address, lamports } from '@solana/kit';
-import { type WalletStateSnapshot } from '@solana/kit-plugin-wallet';
+import { type WalletState } from '@solana/kit-plugin-wallet';
 import { useState, useSyncExternalStore } from 'react';
 import { client } from './client';
 
@@ -17,11 +17,11 @@ const DEMO_RECIPIENT = address('4Nd1mBQtrMJVYVfKf2PX98RQ1VJdTkzEFnQfqXFsqMRC');
  * Bind client.wallet state to React. Compatible with concurrent mode.
  * Returns a referentially stable snapshot — only re-renders when state changes.
  */
-function useWalletState(): WalletStateSnapshot {
-    return useSyncExternalStore(client.wallet.subscribe, client.wallet.getSnapshot);
+function useWalletState(): WalletState {
+    return useSyncExternalStore(client.wallet.subscribe, client.wallet.getState);
 }
 
-function WalletList({ wallets }: { wallets: WalletStateSnapshot['wallets'] }) {
+function WalletList({ wallets }: { wallets: WalletState['wallets'] }) {
     if (wallets.length === 0) {
         return <p>No wallets found. Install a Solana wallet extension.</p>;
     }
@@ -36,7 +36,7 @@ function WalletList({ wallets }: { wallets: WalletStateSnapshot['wallets'] }) {
     );
 }
 
-function ConnectedView({ connected }: { connected: NonNullable<WalletStateSnapshot['connected']> }) {
+function ConnectedView({ connected }: { connected: NonNullable<WalletState['connected']> }) {
     const [pending, setPending] = useState(false);
 
     async function sendTransfer() {
