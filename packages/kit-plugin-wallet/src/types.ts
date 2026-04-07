@@ -249,8 +249,9 @@ export type WalletNamespace = {
  *
  * @see {@link walletSigner}
  * @see {@link WalletNamespace}
+ *
+ * @note this is not part of Kit plugin-interfaces, as it depends on wallet-standard types
  */
-// TODO: would be moved to kit plugin-interfaces
 export type ClientWithWallet = {
     /** The wallet namespace — state, actions, and framework integration. */
     readonly wallet: WalletNamespace;
