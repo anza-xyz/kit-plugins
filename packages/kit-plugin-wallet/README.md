@@ -7,7 +7,12 @@
 [npm-image]: https://img.shields.io/npm/v/@solana/kit-plugin-wallet.svg?style=flat&label=%40solana%2Fkit-plugin-wallet
 [npm-url]: https://www.npmjs.com/package/@solana/kit-plugin-wallet
 
-This package provides a plugin that adds browser wallet support to your Kit clients using [wallet-standard](https://github.com/wallet-standard/wallet-standard). It handles wallet discovery, connection lifecycle, account selection, and signer creation — and syncs the connected wallet's signer to `client.payer` automatically.
+This package provides a plugin that adds browser wallet support to your Kit clients using [wallet-standard](https://github.com/wallet-standard/wallet-standard). It handles wallet discovery, connection lifecycle, account selection, and signer creation.
+
+Two plugin functions are exported:
+
+- **`wallet()`** — adds a `client.wallet` namespace with state and actions, without touching `client.payer`.
+- **`walletAsPayer()`** — same as `wallet()`, but also syncs the connected wallet's signer to `client.payer` via a dynamic getter.
 
 ## Installation
 
@@ -15,84 +20,100 @@ This package provides a plugin that adds browser wallet support to your Kit clie
 pnpm install @solana/kit-plugin-wallet
 ```
 
-## `wallet` plugin
-
-The wallet plugin adds a `client.wallet` namespace with all wallet state and actions, and wires the connected wallet's signer to `client.payer`.
-
-### Setup
+## Quick start
 
 ```ts
 import { createEmptyClient } from '@solana/kit';
 import { rpc } from '@solana/kit-plugin-rpc';
+import { walletAsPayer } from '@solana/kit-plugin-wallet';
+
+const client = createEmptyClient()
+    .use(rpc('https://api.mainnet-beta.solana.com'))
+    .use(walletAsPayer({ chain: 'solana:mainnet' }));
+
+// Read discovered wallets from state
+const { wallets } = client.wallet.getState();
+
+// Connect a wallet
+await client.wallet.connect(wallets[0]);
+
+// client.payer is now the connected wallet's signer
+```
+
+## `wallet` plugin
+
+Adds `client.wallet` without touching `client.payer`. Use this alongside the `payer()` plugin for backend signers, or when the wallet's signer is used explicitly in instructions.
+
+```ts
 import { wallet } from '@solana/kit-plugin-wallet';
 
 const client = createEmptyClient()
     .use(rpc('https://api.mainnet-beta.solana.com'))
+    .use(payer(backendKeypair))
     .use(wallet({ chain: 'solana:mainnet' }));
+
+// client.payer is always backendKeypair
+// client.wallet.getState().connected?.signer for manual use
 ```
 
-Once a wallet is connected, `client.payer` resolves to the wallet's signer and you can pass it directly to transaction instructions:
+## `walletAsPayer` plugin
+
+Adds `client.wallet` and overrides `client.payer` with a dynamic getter. When a signing-capable wallet is connected, `client.payer` returns the wallet signer. When disconnected or read-only, `client.payer` is `undefined`.
 
 ```ts
-import { getTransferSolInstruction } from '@solana-program/system';
-import { lamports } from '@solana/kit';
+import { walletAsPayer } from '@solana/kit-plugin-wallet';
 
-// Read registered wallets
-const selectedWallet = client.wallet.wallets[0];
+const client = createEmptyClient()
+    .use(rpc('https://api.mainnet-beta.solana.com'))
+    .use(walletAsPayer({ chain: 'solana:mainnet' }));
 
-// Connect a wallet
 await client.wallet.connect(selectedWallet);
-
-// client.payer is now the connected wallet's signer
-await client.sendTransaction(
-    getTransferSolInstruction({
-        source: client.payer,
-        destination: recipientAddress,
-        amount: lamports(10_000_000n),
-    }),
-);
+// client.payer === client.wallet.getState().connected?.signer
 ```
 
-### Features
+## State and actions
 
-- `client.wallet.wallets` — All discovered wallets that support the configured chain.
+All wallet state is accessed via `client.wallet.getState()`, which returns a referentially stable `WalletState` object (new reference only when something changes).
+
+- **`getState().wallets`** — All discovered wallets that support the configured chain.
 
     ```ts
-    for (const w of client.wallet.wallets) {
+    const { wallets } = client.wallet.getState();
+    for (const w of wallets) {
         console.log(w.name, w.icon);
     }
     ```
 
-- `client.wallet.connected` — The active connection (wallet, account, and signer), or `null` when disconnected.
+- **`getState().connected`** — The active connection (wallet, account, and signer), or `null` when disconnected.
 
     ```ts
-    const { wallet, account, signer } = client.wallet.connected ?? {};
-    console.log(account?.address);
+    const { connected } = client.wallet.getState();
+    console.log(connected?.account.address);
     ```
 
-- `client.wallet.status` — The current connection status: `'pending'`, `'disconnected'`, `'connecting'`, `'connected'`, `'disconnecting'`, or `'reconnecting'`.
+- **`getState().status`** — The current connection status: `'pending'`, `'disconnected'`, `'connecting'`, `'connected'`, `'disconnecting'`, or `'reconnecting'`.
 
-- `client.wallet.connect(wallet)` — Connect to a wallet and select the first newly authorized account.
+- **`connect(wallet)`** — Connect to a wallet and select the first newly authorized account.
 
     ```ts
     const accounts = await client.wallet.connect(selectedWallet);
     ```
 
-- `client.wallet.disconnect()` — Disconnect the active wallet.
+- **`disconnect()`** — Disconnect the active wallet.
 
-- `client.wallet.selectAccount(account)` — Switch to a different account within an already-authorized wallet without reconnecting.
+- **`selectAccount(account)`** — Switch to a different account within an already-authorized wallet without reconnecting.
 
     ```ts
-    client.wallet.selectAccount(selectedWallet);
+    client.wallet.selectAccount(otherAccount);
     ```
 
-- `client.wallet.signMessage(message)` — Sign a raw message with the connected account.
+- **`signMessage(message)`** — Sign a raw message with the connected account.
 
     ```ts
     const signature = await client.wallet.signMessage(new TextEncoder().encode('Hello'));
     ```
 
-- `client.wallet.signIn(input?)` / `client.wallet.signIn(wallet, input?)` — Sign In With Solana (SIWS). The two-argument form connects the wallet implicitly.
+- **`signIn(input?)`** / **`signIn(wallet, input?)`** — Sign In With Solana (SIWS). The two-argument form connects the wallet implicitly.
 
     ```ts
     // Sign in with the already-connected wallet
@@ -102,9 +123,9 @@ await client.sendTransaction(
     const output = await client.wallet.signIn(selectedWallet, { domain: window.location.host });
     ```
 
-### Framework integration
+## Framework integration
 
-The plugin exposes `subscribe` and `getSnapshot` for binding wallet state to any UI framework.
+The plugin exposes `subscribe` and `getState` for binding wallet state to any UI framework.
 
 **React** — use `useSyncExternalStore` for concurrent-mode-safe rendering:
 
@@ -112,7 +133,7 @@ The plugin exposes `subscribe` and `getSnapshot` for binding wallet state to any
 import { useSyncExternalStore } from 'react';
 
 function useWalletState() {
-    return useSyncExternalStore(client.wallet.subscribe, client.wallet.getSnapshot);
+    return useSyncExternalStore(client.wallet.subscribe, client.wallet.getState);
 }
 
 function App() {
@@ -138,10 +159,10 @@ function App() {
 import { onMounted, onUnmounted, shallowRef } from 'vue';
 
 function useWalletState() {
-    const state = shallowRef(client.wallet.getSnapshot());
+    const state = shallowRef(client.wallet.getState());
     onMounted(() => {
         const unsub = client.wallet.subscribe(() => {
-            state.value = client.wallet.getSnapshot();
+            state.value = client.wallet.getState();
         });
         onUnmounted(unsub);
     });
@@ -154,52 +175,41 @@ function useWalletState() {
 ```ts
 import { readable } from 'svelte/store';
 
-export const walletState = readable(client.wallet.getSnapshot(), set => {
-    return client.wallet.subscribe(() => set(client.wallet.getSnapshot()));
+export const walletState = readable(client.wallet.getState(), set => {
+    return client.wallet.subscribe(() => set(client.wallet.getState()));
 });
 ```
 
-### Persistence
-
-By default the plugin uses `localStorage` to remember the last connected wallet and auto-reconnects on the next page load. Pass `storage: null` to disable, or provide a custom adapter (e.g. `sessionStorage` or an IndexedDB wrapper):
+## Configuration
 
 ```ts
 wallet({
-    chain: 'solana:mainnet',
-    storage: sessionStorage, // use session storage instead
-    storageKey: 'my-app:wallet', // custom key (default: 'kit-wallet')
-    autoConnect: false, // disable silent reconnect
+    chain: 'solana:mainnet', // required
+    storage: sessionStorage, // default: localStorage (null to disable)
+    storageKey: 'my-app:wallet', // default: 'kit-wallet'
+    autoConnect: false, // default: true (disable silent reconnect)
+    filter: w => w.features.includes('solana:signAndSendTransaction'), // optional
 });
 ```
 
-### SSR / server-side rendering
+## Persistence
 
-The plugin is safe to include in a shared client that runs on both server and browser. On the server, `status` stays `'pending'` permanently, all actions throw `WalletNotConnectedError`, and no registry listeners or storage reads are made. In the browser the plugin initializes normally.
+By default the plugin uses `localStorage` to remember the last connected wallet and auto-reconnects on the next page load. Pass `storage: null` to disable, or provide a custom adapter (e.g. `sessionStorage` or an IndexedDB wrapper).
+
+## SSR / server-side rendering
+
+Both `wallet` and `walletAsPayer` are safe to include in a shared client that runs on both server and browser. On the server, `status` stays `'pending'` permanently, all actions throw `WalletNotConnectedError`, and no registry listeners or storage reads are made. In the browser the plugin initializes normally.
 
 ```ts
-// This client chain works on both server and browser.
 const client = createEmptyClient()
     .use(rpc('https://api.mainnet-beta.solana.com'))
-    .use(payer(serverKeypair))
-    .use(wallet({ chain: 'solana:mainnet' }));
+    .use(walletAsPayer({ chain: 'solana:mainnet' }));
 
-// Server: client.wallet.status === 'pending', client.payer === serverKeypair
+// Server: status === 'pending', client.payer === undefined
 // Browser: auto-connects, client.payer becomes the wallet signer
 ```
 
-### Wallet discovery filtering
-
-Use the `filter` option to restrict which wallets appear in `client.wallet.wallets`:
-
-```ts
-wallet({
-    chain: 'solana:mainnet',
-    // Only show wallets that support signAndSendTransaction
-    filter: w => w.features.includes('solana:signAndSendTransaction'),
-});
-```
-
-### Cleanup
+## Cleanup
 
 The plugin implements `[Symbol.dispose]`, so it integrates with the `using` declaration or explicit disposal:
 
