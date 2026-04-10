@@ -114,22 +114,24 @@ export function walletAsPayer(config: WalletPluginConfig) {
     return <T extends object>(client: T): ClientWithWalletAsPayer & Disposable & Omit<T, 'payer' | 'wallet'> => {
         const store = createWalletStore(config);
 
-        const obj = withCleanup(
-            extendClient(client, {
-                wallet: store,
-            }),
-            () => store[Symbol.dispose](),
-        );
+        // Build an additions object with a dynamic payer getter. The getter
+        // must be part of the additions passed to extendClient (not defined
+        // after the fact) because extendClient freezes the result.
+        const additions = {
+            wallet: store,
+        };
 
-        Object.defineProperty(obj, 'payer', {
+        Object.defineProperty(additions, 'payer', {
             configurable: true,
             enumerable: true,
             get() {
                 // map null signer -> undefined payer, to match `client.payer` type
-                return obj.wallet.getState().connected?.signer ?? undefined;
+                return store.getState().connected?.signer ?? undefined;
             },
         });
 
-        return obj as unknown as ClientWithWalletAsPayer & Disposable & Omit<T, 'payer' | 'wallet'>;
+        return withCleanup(extendClient(client, additions), () =>
+            store[Symbol.dispose](),
+        ) as unknown as ClientWithWalletAsPayer & Disposable & Omit<T, 'payer' | 'wallet'>;
     };
 }
