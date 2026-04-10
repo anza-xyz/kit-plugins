@@ -187,34 +187,31 @@ export type WalletNamespace = {
     selectAccount: (account: UiWalletAccount) => void;
 
     /**
-     * Sign In With Solana.
+     * Sign In With Solana (SIWS-as-connect).
      *
-     * **Overload 1** — sign in with the already-connected wallet:
-     * ```ts
-     * const output = await client.wallet.signIn({ domain: window.location.host });
-     * ```
+     * Connects the wallet, calls `solana:signIn`, sets the returned account as
+     * active, and creates a signer. After completion, the client is in the same
+     * state as if {@link connect} had been called.
      *
-     * **Overload 2** — sign in with a specific wallet (SIWS-as-connect):
-     * implicitly connects, sets the returned account as active, and creates a
-     * signer, leaving the client in the same state as after `connect()`.
-     * ```ts
-     * const output = await client.wallet.signIn(uiWallet, { domain: window.location.host });
-     * ```
+     * All fields on `SolanaSignInInput` are optional — pass `{}` if no sign-in
+     * customization is needed.
      *
-     * @throws {@link WalletNotConnectedError} (overload 1) if no wallet is connected.
+     * To sign in with the already-connected wallet, pass
+     * `getState().connected.wallet`.
+     *
      * @throws `WalletStandardError(WALLET_STANDARD_ERROR__FEATURES__WALLET_ACCOUNT_FEATURE_UNIMPLEMENTED)`
      *   if the wallet does not support `solana:signIn`.
      */
-    signIn: {
-        (input?: SolanaSignInInput): Promise<SolanaSignInOutput>;
-        (wallet: UiWallet, input?: SolanaSignInInput): Promise<SolanaSignInOutput>;
-    };
+    signIn: (wallet: UiWallet, input: SolanaSignInInput) => Promise<SolanaSignInOutput>;
 
     /**
      * Sign an arbitrary message with the connected account.
      *
-     * @throws {@link WalletNotConnectedError} if no wallet is connected or the
-     *   wallet is read-only (no signer).
+     * Calls the wallet's `solana:signMessage` feature directly (does not go
+     * through the cached signer), so message signing works even for wallets
+     * that don't support transaction signing.
+     *
+     * @throws {@link WalletNotConnectedError} if no wallet is connected.
      * @throws `WalletStandardError(WALLET_STANDARD_ERROR__FEATURES__WALLET_ACCOUNT_FEATURE_UNIMPLEMENTED)`
      *   if the wallet does not support `solana:signMessage`.
      */
