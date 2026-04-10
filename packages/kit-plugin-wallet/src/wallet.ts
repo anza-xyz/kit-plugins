@@ -125,6 +125,7 @@ export function walletAsPayer(config: WalletPluginConfig) {
             configurable: true,
             enumerable: true,
             get() {
+                // map null signer -> undefined payer, to match `client.payer` type
                 return obj.wallet.getState().connected?.signer ?? undefined;
             },
         });
