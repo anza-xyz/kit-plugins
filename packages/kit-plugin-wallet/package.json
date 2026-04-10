@@ -34,6 +34,7 @@
         "kit",
         "plugin",
         "wallet",
+        "wallet-adapter",
         "wallet-standard",
         "signer"
     ],

@@ -146,7 +146,7 @@ export type WalletPluginConfig = {
 /**
  * The `wallet` namespace exposed on the client as `client.wallet`.
  *
- * All wallet state is accessed via {@link getSnapshot}. Use {@link subscribe}
+ * All wallet state is accessed via {@link getState}. Use {@link subscribe}
  * to be notified of changes and integrate with framework primitives such as
  * React's `useSyncExternalStore`.
  *
