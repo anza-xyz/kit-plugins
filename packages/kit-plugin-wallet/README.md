@@ -104,7 +104,7 @@ All wallet state is accessed via `client.wallet.getState()`, which returns a ref
 - **`selectAccount(account)`** — Switch to a different account within an already-authorized wallet without reconnecting.
 
     ```ts
-    client.wallet.selectAccount(otherAccount);
+    client.wallet.selectAccount(accounts[0]);
     ```
 
 - **`signMessage(message)`** — Sign a raw message with the connected account.
