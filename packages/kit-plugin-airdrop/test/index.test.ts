@@ -1,5 +1,5 @@
 import { address, createClient, lamports, mainnet } from '@solana/kit';
-import { litesvm } from '@solana/kit-plugin-litesvm';
+import { litesvmConnection } from '@solana/kit-plugin-litesvm';
 import { localhostRpc, rpc } from '@solana/kit-plugin-rpc';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -54,7 +54,7 @@ describe('airdrop', () => {
 
     if (__NODEJS__) {
         it('works with a LiteSVM instance', () => {
-            const client = createClient().use(litesvm()).use(airdrop());
+            const client = createClient().use(litesvmConnection()).use(airdrop());
             expect(client).toHaveProperty('airdrop');
         });
     }
