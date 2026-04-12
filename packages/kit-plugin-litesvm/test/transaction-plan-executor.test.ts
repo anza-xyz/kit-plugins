@@ -21,7 +21,7 @@ import { getTransferSolInstruction } from '@solana-program/system';
 import type { FailedTransactionMetadata, LiteSVM, TransactionMetadata } from 'litesvm';
 import { describe, expect, it, vi } from 'vitest';
 
-import { litesvm, litesvmTransactionPlanExecutor, litesvmTransactionPlanner } from '../src';
+import { litesvmConnection, litesvmTransactionPlanExecutor, litesvmTransactionPlanner } from '../src';
 
 const MOCK_INSTRUCTION = { programAddress: '11111111111111111111111111111111' as Address };
 
@@ -170,7 +170,7 @@ describe('litesvmTransactionPlanExecutor', () => {
         it('sends a real transaction successfully', async () => {
             const payer = await generateKeyPairSigner();
             const client = createClient()
-                .use(litesvm())
+                .use(litesvmConnection())
                 .use(client => extendClient(client, { payer }))
                 .use(litesvmTransactionPlanner())
                 .use(litesvmTransactionPlanExecutor());
@@ -187,7 +187,7 @@ describe('litesvmTransactionPlanExecutor', () => {
             const payer = await generateKeyPairSigner();
             const destination = await generateKeyPairSigner();
             const client = createClient()
-                .use(litesvm())
+                .use(litesvmConnection())
                 .use(client => extendClient(client, { payer }))
                 .use(litesvmTransactionPlanner())
                 .use(litesvmTransactionPlanExecutor());
@@ -207,7 +207,7 @@ describe('litesvmTransactionPlanExecutor', () => {
         it('throws a SolanaError when a real transaction fails with an instruction error', async () => {
             const payer = await generateKeyPairSigner();
             const client = createClient()
-                .use(litesvm())
+                .use(litesvmConnection())
                 .use(client => extendClient(client, { payer }))
                 .use(litesvmTransactionPlanner())
                 .use(litesvmTransactionPlanExecutor());
@@ -242,7 +242,7 @@ describe('litesvmTransactionPlanExecutor', () => {
         it('throws a SolanaError when the payer has no account', async () => {
             const payer = await generateKeyPairSigner();
             const client = createClient()
-                .use(litesvm())
+                .use(litesvmConnection())
                 .use(client => extendClient(client, { payer }))
                 .use(litesvmTransactionPlanner())
                 .use(litesvmTransactionPlanExecutor());
@@ -267,7 +267,7 @@ describe('litesvmTransactionPlanExecutor', () => {
         it('includes transactionMetadata with expected methods on success', async () => {
             const payer = await generateKeyPairSigner();
             const client = createClient()
-                .use(litesvm())
+                .use(litesvmConnection())
                 .use(client => extendClient(client, { payer }))
                 .use(litesvmTransactionPlanner())
                 .use(litesvmTransactionPlanExecutor());
@@ -289,7 +289,7 @@ describe('litesvmTransactionPlanExecutor', () => {
         it('includes transactionMetadata in the result context on failure', async () => {
             const payer = await generateKeyPairSigner();
             const client = createClient()
-                .use(litesvm())
+                .use(litesvmConnection())
                 .use(client => extendClient(client, { payer }))
                 .use(litesvmTransactionPlanner())
                 .use(litesvmTransactionPlanExecutor());

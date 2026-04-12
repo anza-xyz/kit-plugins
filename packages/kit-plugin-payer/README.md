@@ -74,7 +74,7 @@ const client = await createClient()
     .use(solanaRpcConnection('http://127.0.0.1:8899'))
     .use(solanaRpcSubscriptionsConnection('ws://127.0.0.1:8900'))
     .use(rpcAirdrop())
-    // or .use(litesvm()).use(litesvmAirdrop())
+    // or .use(litesvmConnection()).use(litesvmAirdrop())
     .use(generatedPayerWithSol(lamports(10_000_000_000n))); // 10 SOL
 ```
 
@@ -103,7 +103,7 @@ const client = await createClient()
     .use(solanaRpcConnection('http://127.0.0.1:8899'))
     .use(solanaRpcSubscriptionsConnection('ws://127.0.0.1:8900'))
     .use(rpcAirdrop())
-    // or .use(litesvm()).use(litesvmAirdrop())
+    // or .use(litesvmConnection()).use(litesvmAirdrop())
     .use(payerOrGeneratedPayer(undefined));
 ```
 

@@ -15,20 +15,20 @@ This package provides a plugin that adds LiteSVM functionality to your Kit clien
 pnpm install @solana/kit-plugin-litesvm
 ```
 
-## `litesvm` plugin
+## `litesvmConnection` plugin
 
 The LiteSVM plugin starts a new LiteSVM instance within your Kit client, allowing you to simulate Solana programs and accounts locally. Additionally, it derives a small RPC subset that interacts with the LiteSVM instance instead of making network requests.
 
 > [!IMPORTANT]
-> This plugin is only available in Node.js builds. Browser and React Native builds throw an error when calling `litesvm()`.
+> This plugin is only available in Node.js builds. Browser and React Native builds throw an error when calling `litesvmConnection()`.
 
 ### Installation
 
 ```ts
 import { createClient } from '@solana/kit';
-import { litesvm } from '@solana/kit-plugin-litesvm';
+import { litesvmConnection } from '@solana/kit-plugin-litesvm';
 
-const client = createClient().use(litesvm());
+const client = createClient().use(litesvmConnection());
 ```
 
 ### Features
@@ -49,13 +49,13 @@ This plugin adds an `airdrop` method to your Kit client that airdrops SOL using 
 
 ### Installation
 
-The client must have the `litesvm` plugin installed before applying this plugin.
+The client must have the `litesvmConnection` plugin installed before applying this plugin.
 
 ```ts
 import { createClient } from '@solana/kit';
-import { litesvm, litesvmAirdrop } from '@solana/kit-plugin-litesvm';
+import { litesvmConnection, litesvmAirdrop } from '@solana/kit-plugin-litesvm';
 
-const client = createClient().use(litesvm()).use(litesvmAirdrop());
+const client = createClient().use(litesvmConnection()).use(litesvmAirdrop());
 ```
 
 ### Features
@@ -71,13 +71,13 @@ This plugin adds a `getMinimumBalance` method to your Kit client that computes t
 
 ### Installation
 
-The client must have the `litesvm` plugin installed before applying this plugin.
+The client must have the `litesvmConnection` plugin installed before applying this plugin.
 
 ```ts
 import { createClient } from '@solana/kit';
-import { litesvm, litesvmGetMinimumBalance } from '@solana/kit-plugin-litesvm';
+import { litesvmConnection, litesvmGetMinimumBalance } from '@solana/kit-plugin-litesvm';
 
-const client = createClient().use(litesvm()).use(litesvmGetMinimumBalance());
+const client = createClient().use(litesvmConnection()).use(litesvmGetMinimumBalance());
 ```
 
 ### Features
@@ -102,11 +102,15 @@ This plugin requires a payer to be set on the client or passed as an option.
 
 ```ts
 import { createClient } from '@solana/kit';
-import { litesvm, litesvmTransactionPlanner, litesvmTransactionPlanExecutor } from '@solana/kit-plugin-litesvm';
+import {
+    litesvmConnection,
+    litesvmTransactionPlanner,
+    litesvmTransactionPlanExecutor,
+} from '@solana/kit-plugin-litesvm';
 import { generatedPayer } from '@solana/kit-plugin-payer';
 
 const client = await createClient()
-    .use(litesvm())
+    .use(litesvmConnection())
     .use(generatedPayer())
     .use(litesvmTransactionPlanner())
     .use(litesvmTransactionPlanExecutor());
@@ -134,11 +138,15 @@ This plugin requires an `svm` instance to be configured on the client.
 
 ```ts
 import { createClient } from '@solana/kit';
-import { litesvm, litesvmTransactionPlanner, litesvmTransactionPlanExecutor } from '@solana/kit-plugin-litesvm';
+import {
+    litesvmConnection,
+    litesvmTransactionPlanner,
+    litesvmTransactionPlanExecutor,
+} from '@solana/kit-plugin-litesvm';
 import { generatedPayer } from '@solana/kit-plugin-payer';
 
 const client = await createClient()
-    .use(litesvm())
+    .use(litesvmConnection())
     .use(generatedPayer())
     .use(litesvmTransactionPlanner())
     .use(litesvmTransactionPlanExecutor());

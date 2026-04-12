@@ -3,7 +3,7 @@ import { LiteSVM } from 'litesvm';
 
 import { createRpcFromSvm } from './litesvm-to-rpc';
 
-// Re-export the LiteSVM type to make the `litesvm` plugin type-portable.
+// Re-export the LiteSVM type to make the `litesvmConnection` plugin type-portable.
 export type { LiteSVM } from 'litesvm';
 
 /**
@@ -17,10 +17,10 @@ export type { LiteSVM } from 'litesvm';
  * @example
  * ```ts
  * import { createClient } from '@solana/kit';
- * import { litesvm } from '@solana/kit-plugin-litesvm';
+ * import { litesvmConnection } from '@solana/kit-plugin-litesvm';
  *
  * // Install the LiteSVM plugin.
- * const client = createClient().use(litesvm());
+ * const client = createClient().use(litesvmConnection());
  *
  * // Use LiteSVM to set up accounts and programs.
  * client.svm.setAccount(myAccount);
@@ -30,7 +30,7 @@ export type { LiteSVM } from 'litesvm';
  * const { value: latestBlockhash } = await client.rpc.getLatestBlockhash().send();
  * ```
  */
-export function litesvm() {
+export function litesvmConnection() {
     return <T extends object>(client: T) => {
         const svm = new LiteSVM();
         const rpc = createRpcFromSvm(svm);
