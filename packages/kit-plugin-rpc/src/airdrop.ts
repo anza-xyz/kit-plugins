@@ -10,24 +10,25 @@ type RpcClient = {
  * RPC and RPC Subscriptions transports.
  *
  * The client must already have `rpc` and `rpcSubscriptions` installed
- * (e.g. via the {@link rpc} or {@link localhostRpc} plugins). A
- * TypeScript error is raised when a mainnet RPC is used because
+ * (e.g. via {@link solanaRpcConnection} and {@link solanaRpcSubscriptionsConnection}).
+ * A TypeScript error is raised when a mainnet RPC is used because
  * airdrop methods are not available on mainnet.
  *
  * @example
  * ```ts
  * import { createClient } from '@solana/kit';
- * import { localhostRpc, rpcAirdrop } from '@solana/kit-plugin-rpc';
+ * import { solanaRpcConnection, solanaRpcSubscriptionsConnection, rpcAirdrop } from '@solana/kit-plugin-rpc';
  *
  * const client = createClient()
- *     .use(localhostRpc())
+ *     .use(solanaRpcConnection('http://127.0.0.1:8899'))
+ *     .use(solanaRpcSubscriptionsConnection('ws://127.0.0.1:8900'))
  *     .use(rpcAirdrop());
  *
  * await client.airdrop(myAddress, lamports(1_000_000_000n));
  * ```
  *
- * @see {@link rpc}
- * @see {@link localhostRpc}
+ * @see {@link solanaRpcConnection}
+ * @see {@link solanaRpcSubscriptionsConnection}
  */
 export function rpcAirdrop() {
     return <T extends RpcClient>(client: T) => {
