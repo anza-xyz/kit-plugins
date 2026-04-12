@@ -1,9 +1,13 @@
-import { createClient, createSolanaRpc, createSolanaRpcSubscriptions, mainnet } from '@solana/kit';
+import { createClient, createSolanaRpc, createSolanaRpcSubscriptions, mainnet, TransactionSigner } from '@solana/kit';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import {
     rpcConnection,
     rpcSubscriptionsConnection,
+    solanaDevnetRpc,
+    solanaLocalRpc,
+    solanaMainnetRpc,
+    solanaRpc,
     solanaRpcConnection,
     solanaRpcSubscriptionsConnection,
 } from '../src';
@@ -44,5 +48,102 @@ describe('solanaRpcSubscriptionsConnection', () => {
         const client = createClient().use(solanaRpcSubscriptionsConnection('wss://api.mainnet-beta.solana.com'));
         expect(client).toHaveProperty('rpcSubscriptions');
         expect(client.rpcSubscriptions.accountNotifications).toBeTypeOf('function');
+    });
+});
+
+describe('solanaRpc', () => {
+    const payer = {} as TransactionSigner;
+
+    it('sets up a full RPC client with all plugins', () => {
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
+        expect(client).toHaveProperty('rpc');
+        expect(client).toHaveProperty('rpcSubscriptions');
+        expect(client).toHaveProperty('getMinimumBalance');
+        expect(client).toHaveProperty('transactionPlanner');
+        expect(client).toHaveProperty('transactionPlanExecutor');
+        expect(client).toHaveProperty('sendTransactions');
+    });
+
+    it('derives the WebSocket URL from the RPC URL by default', () => {
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
+        expect(client).toHaveProperty('rpcSubscriptions');
+    });
+
+    it('accepts an explicit rpcSubscriptionsUrl', () => {
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(
+                solanaRpc({
+                    rpcSubscriptionsUrl: 'wss://custom-ws.solana.com',
+                    rpcUrl: 'https://api.mainnet-beta.solana.com',
+                }),
+            );
+        expect(client).toHaveProperty('rpcSubscriptions');
+    });
+});
+
+describe('solanaMainnetRpc', () => {
+    const payer = {} as TransactionSigner;
+
+    it('sets up a full mainnet RPC client', () => {
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(solanaMainnetRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
+        expect(client).toHaveProperty('rpc');
+        expect(client).toHaveProperty('rpcSubscriptions');
+        expect(client).toHaveProperty('sendTransactions');
+    });
+
+    it('does not include airdrop', () => {
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(solanaMainnetRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
+        expect(client).not.toHaveProperty('airdrop');
+    });
+});
+
+describe('solanaDevnetRpc', () => {
+    const payer = {} as TransactionSigner;
+
+    it('sets up a full devnet RPC client with airdrop', () => {
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(solanaDevnetRpc());
+        expect(client).toHaveProperty('rpc');
+        expect(client).toHaveProperty('rpcSubscriptions');
+        expect(client).toHaveProperty('sendTransactions');
+        expect(client).toHaveProperty('airdrop');
+    });
+
+    it('accepts custom config overrides', () => {
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(solanaDevnetRpc({ rpcUrl: 'https://my-devnet-rpc.com' }));
+        expect(client).toHaveProperty('rpc');
+    });
+});
+
+describe('solanaLocalRpc', () => {
+    const payer = {} as TransactionSigner;
+
+    it('sets up a full localhost RPC client with airdrop', () => {
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(solanaLocalRpc());
+        expect(client).toHaveProperty('rpc');
+        expect(client).toHaveProperty('rpcSubscriptions');
+        expect(client).toHaveProperty('sendTransactions');
+        expect(client).toHaveProperty('airdrop');
+    });
+
+    it('accepts custom config overrides', () => {
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(solanaLocalRpc({ rpcUrl: 'http://127.0.0.1:9999' }));
+        expect(client).toHaveProperty('rpc');
     });
 });
