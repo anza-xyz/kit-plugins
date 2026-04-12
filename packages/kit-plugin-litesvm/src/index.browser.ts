@@ -2,6 +2,13 @@ export type { FailedTransactionMetadata, TransactionMetadata } from 'litesvm';
 export type { LiteSVM } from './litesvm-connection';
 export type { LiteSvmRpcApi } from './litesvm-to-rpc';
 
+export function litesvm(): <T extends object>(_client: T) => never {
+    throw new Error(
+        'The `litesvm` plugin is unavailable in browser and react-native. ' +
+            'Use this plugin in a node environment instead.',
+    );
+}
+
 export function litesvmConnection(): <T extends object>(_client: T) => never {
     throw new Error(
         'The `litesvmConnection` plugin is unavailable in browser and react-native. ' +
