@@ -15,39 +15,70 @@ This package provides plugins that add RPC functionality to your Kit clients.
 pnpm install @solana/kit-plugin-rpc
 ```
 
-## `rpc` plugin
+## `rpcConnection` plugin
 
-The RPC plugin adds `rpc` and `rpcSubscriptions` objects to your Kit client, allowing you to call RPC methods and subscribe to RPC notifications.
+The `rpcConnection` plugin sets a provided `Rpc` instance on the client. This is the generic variant that works with any RPC API.
 
 ### Installation
 
-To use the `rpc` plugin, you must provide the URL of your desired Solana RPC endpoint.
+```ts
+import { createClient, createSolanaRpc } from '@solana/kit';
+import { rpcConnection } from '@solana/kit-plugin-rpc';
+
+const myRpc = createSolanaRpc('https://api.mainnet-beta.solana.com');
+const client = createClient().use(rpcConnection(myRpc));
+```
+
+### Features
+
+- `rpc`: Call any RPC method using type-safe methods.
+    ```ts
+    const { value: latestBlockhash } = await client.rpc.getLatestBlockhash().send();
+    ```
+
+## `rpcSubscriptionsConnection` plugin
+
+The `rpcSubscriptionsConnection` plugin sets a provided `RpcSubscriptions` instance on the client. This is the generic variant that works with any RPC Subscriptions API.
+
+### Installation
+
+```ts
+import { createClient, createSolanaRpcSubscriptions } from '@solana/kit';
+import { rpcSubscriptionsConnection } from '@solana/kit-plugin-rpc';
+
+const myRpcSubscriptions = createSolanaRpcSubscriptions('wss://api.mainnet-beta.solana.com');
+const client = createClient().use(rpcSubscriptionsConnection(myRpcSubscriptions));
+```
+
+### Features
+
+- `rpcSubscriptions`: Subscribe to RPC notifications using async iterators.
+    ```ts
+    const slotNotifications = await client.rpcSubscriptions.slotNotifications({ commitment: 'confirmed' }).subscribe();
+    for await (const slotNotification of slotNotifications) {
+        console.log('Got a slot notification', slotNotification);
+    }
+    ```
+
+## `solanaRpcConnection` plugin
+
+The `solanaRpcConnection` plugin creates a Solana RPC from a cluster URL and sets it on the client.
+
+### Installation
 
 ```ts
 import { createClient } from '@solana/kit';
-import { rpc } from '@solana/kit-plugin-rpc';
+import { solanaRpcConnection } from '@solana/kit-plugin-rpc';
 
-const client = createClient().use(rpc('https://api.mainnet-beta.solana.com'));
+const client = createClient().use(solanaRpcConnection('https://api.mainnet-beta.solana.com'));
 ```
 
-Note that you may wrap your RPC URL using the `mainnet`, `devnet`, or `testnet` helpers from `@solana/kit`. When you do, the returned RPC API will be adjusted to match the selected cluster since some RPC features are not available on all clusters.
+You may wrap your RPC URL using the `mainnet`, `devnet`, or `testnet` helpers from `@solana/kit`. When you do, the returned RPC API will be adjusted to match the selected cluster since some RPC features are not available on all clusters.
 
 ```ts
 import { mainnet } from '@solana/kit';
 
-const client = createClient().use(rpc(mainnet('https://api.mainnet-beta.solana.com')));
-```
-
-By default, the WebSocket URL is derived from the RPC's HTTP URL but you may configure it explicitly using the second parameter. This config object can also be used to customize other aspects of RPC Subscriptions behavior.
-
-```ts
-const client = createClient().use(
-    rpc('https://my-rpc-url.com', {
-        url: 'wss://my-rpc-ws-url.com',
-        minChannels: 5,
-        maxSubscriptionsPerChannel: 50,
-    }),
-);
+const client = createClient().use(solanaRpcConnection(mainnet('https://api.mainnet-beta.solana.com')));
 ```
 
 ### Features
@@ -56,6 +87,22 @@ const client = createClient().use(
     ```ts
     const { value: latestBlockhash } = await client.rpc.getLatestBlockhash().send();
     ```
+
+## `solanaRpcSubscriptionsConnection` plugin
+
+The `solanaRpcSubscriptionsConnection` plugin creates Solana RPC Subscriptions from a cluster URL and sets them on the client.
+
+### Installation
+
+```ts
+import { createClient } from '@solana/kit';
+import { solanaRpcSubscriptionsConnection } from '@solana/kit-plugin-rpc';
+
+const client = createClient().use(solanaRpcSubscriptionsConnection('wss://api.mainnet-beta.solana.com'));
+```
+
+### Features
+
 - `rpcSubscriptions`: Subscribe to Solana RPC notifications using async iterators.
     ```ts
     const slotNotifications = await client.rpcSubscriptions.slotNotifications({ commitment: 'confirmed' }).subscribe();
@@ -63,23 +110,6 @@ const client = createClient().use(
         console.log('Got a slot notification', slotNotification);
     }
     ```
-
-## `localhostRpc` plugin
-
-This plugin is an alias for the `rpc` plugin pre-configured to connect to a local Solana validator.
-
-### Installation
-
-```ts
-import { createClient } from '@solana/kit';
-import { localhostRpc } from '@solana/kit-plugin-rpc';
-
-const client = createClient().use(localhostRpc());
-```
-
-### Features
-
-_See the `rpc` plugin for available features_.
 
 ## `rpcAirdrop` plugin
 
@@ -94,9 +124,12 @@ The client must have `rpc` and `rpcSubscriptions` installed before applying this
 
 ```ts
 import { createClient } from '@solana/kit';
-import { localhostRpc, rpcAirdrop } from '@solana/kit-plugin-rpc';
+import { solanaRpcConnection, solanaRpcSubscriptionsConnection, rpcAirdrop } from '@solana/kit-plugin-rpc';
 
-const client = createClient().use(localhostRpc()).use(rpcAirdrop());
+const client = createClient()
+    .use(solanaRpcConnection('http://127.0.0.1:8899'))
+    .use(solanaRpcSubscriptionsConnection('ws://127.0.0.1:8900'))
+    .use(rpcAirdrop());
 ```
 
 ### Features
@@ -116,9 +149,11 @@ The client must have `rpc` installed before applying this plugin.
 
 ```ts
 import { createClient } from '@solana/kit';
-import { rpc, rpcGetMinimumBalance } from '@solana/kit-plugin-rpc';
+import { solanaRpcConnection, rpcGetMinimumBalance } from '@solana/kit-plugin-rpc';
 
-const client = createClient().use(rpc('https://api.mainnet-beta.solana.com')).use(rpcGetMinimumBalance());
+const client = createClient()
+    .use(solanaRpcConnection('https://api.mainnet-beta.solana.com'))
+    .use(rpcGetMinimumBalance());
 ```
 
 ### Features
@@ -143,11 +178,17 @@ This plugin requires a payer to be set on the client or passed as an option.
 
 ```ts
 import { createClient } from '@solana/kit';
-import { rpc, rpcTransactionPlanner, rpcTransactionPlanExecutor } from '@solana/kit-plugin-rpc';
+import {
+    solanaRpcConnection,
+    solanaRpcSubscriptionsConnection,
+    rpcTransactionPlanner,
+    rpcTransactionPlanExecutor,
+} from '@solana/kit-plugin-rpc';
 import { generatedPayer } from '@solana/kit-plugin-payer';
 
 const client = await createClient()
-    .use(rpc('https://api.mainnet-beta.solana.com'))
+    .use(solanaRpcConnection('https://api.mainnet-beta.solana.com'))
+    .use(solanaRpcSubscriptionsConnection('wss://api.mainnet-beta.solana.com'))
     .use(generatedPayer())
     .use(rpcTransactionPlanner())
     .use(rpcTransactionPlanExecutor());
@@ -175,11 +216,17 @@ This plugin requires `rpc` and `rpcSubscriptions` to be configured on the client
 
 ```ts
 import { createClient } from '@solana/kit';
-import { rpc, rpcTransactionPlanner, rpcTransactionPlanExecutor } from '@solana/kit-plugin-rpc';
+import {
+    solanaRpcConnection,
+    solanaRpcSubscriptionsConnection,
+    rpcTransactionPlanner,
+    rpcTransactionPlanExecutor,
+} from '@solana/kit-plugin-rpc';
 import { generatedPayer } from '@solana/kit-plugin-payer';
 
 const client = await createClient()
-    .use(rpc('https://api.mainnet-beta.solana.com'))
+    .use(solanaRpcConnection('https://api.mainnet-beta.solana.com'))
+    .use(solanaRpcSubscriptionsConnection('wss://api.mainnet-beta.solana.com'))
     .use(generatedPayer())
     .use(rpcTransactionPlanner())
     .use(rpcTransactionPlanExecutor());
