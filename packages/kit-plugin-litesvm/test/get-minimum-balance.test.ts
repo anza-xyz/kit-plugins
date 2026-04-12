@@ -1,7 +1,7 @@
 import { BASE_ACCOUNT_SIZE, createClient, lamports } from '@solana/kit';
 import { describe, expect, it, vi } from 'vitest';
 
-import { litesvm, litesvmGetMinimumBalance } from '../src';
+import { litesvmConnection, litesvmGetMinimumBalance } from '../src';
 
 // Default Solana rent: 3_480 lamports/byte/year * 2 years exemption threshold = 6_960 lamports/byte.
 const LAMPORTS_PER_BYTE = 6_960n;
@@ -42,7 +42,7 @@ describe('litesvmGetMinimumBalance', () => {
 
     if (__NODEJS__) {
         it('works with a LiteSVM instance', async () => {
-            const client = createClient().use(litesvm()).use(litesvmGetMinimumBalance());
+            const client = createClient().use(litesvmConnection()).use(litesvmGetMinimumBalance());
             expect(client).toHaveProperty('getMinimumBalance');
 
             const balance = await client.getMinimumBalance(100);
