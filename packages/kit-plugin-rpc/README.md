@@ -15,6 +15,111 @@ This package provides plugins that add RPC functionality to your Kit clients.
 pnpm install @solana/kit-plugin-rpc
 ```
 
+## `solanaRpc` plugin
+
+The `solanaRpc` plugin sets up a full Solana RPC client in a single call. It installs an RPC connection, RPC Subscriptions, minimum balance computation, transaction planning, and transaction execution on the client.
+
+The client must have a `payer` set before applying this plugin.
+
+### Installation
+
+```ts
+import { createClient } from '@solana/kit';
+import { solanaRpc } from '@solana/kit-plugin-rpc';
+import { payer } from '@solana/kit-plugin-payer';
+
+const client = createClient()
+    .use(payer(myPayer))
+    .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
+```
+
+### Options
+
+All options are provided via a `SolanaRpcConfig` object:
+
+- `rpcUrl` **(required)**: URL of the Solana RPC endpoint.
+- `rpcSubscriptionsUrl`: URL of the RPC Subscriptions endpoint. Defaults to the `rpcUrl` with the protocol changed from `http` to `ws`.
+- `rpcConfig`: Optional configuration forwarded to `createSolanaRpc`.
+- `rpcSubscriptionsConfig`: Optional configuration forwarded to `createSolanaRpcSubscriptions`.
+- `priorityFees`: Priority fees in micro-lamports per compute unit. Defaults to no priority fees.
+- `maxConcurrency`: Maximum number of concurrent transaction executions. Defaults to 10.
+- `skipPreflight`: Whether to always skip preflight simulation. Defaults to `false`.
+
+### Features
+
+- `rpc`: Call any Solana RPC method.
+- `rpcSubscriptions`: Subscribe to Solana RPC notifications.
+- `getMinimumBalance`: Compute minimum lamports for rent exemption.
+- `transactionPlanner`: Plan instructions into transaction messages.
+- `transactionPlanExecutor`: Sign and send planned transactions.
+- `sendTransaction(s)` / `planTransaction(s)`: Convenience helpers that combine planning and execution.
+
+## `solanaMainnetRpc` plugin
+
+A convenience wrapper around `solanaRpc` that types the connection as a mainnet URL, preventing accidental use of devnet-only features such as airdrops.
+
+### Installation
+
+```ts
+import { createClient } from '@solana/kit';
+import { solanaMainnetRpc } from '@solana/kit-plugin-rpc';
+import { payer } from '@solana/kit-plugin-payer';
+
+const client = createClient()
+    .use(payer(myPayer))
+    .use(solanaMainnetRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
+```
+
+### Features
+
+_See `solanaRpc` for available features._
+
+## `solanaDevnetRpc` plugin
+
+A convenience wrapper around `solanaRpc` that defaults to the public devnet endpoint (`https://api.devnet.solana.com`) and includes airdrop support for requesting SOL from the faucet.
+
+### Installation
+
+```ts
+import { createClient } from '@solana/kit';
+import { solanaDevnetRpc } from '@solana/kit-plugin-rpc';
+import { payerFromFile } from '@solana/kit-plugin-payer';
+
+const client = createClient().use(payerFromFile('~/.config/solana/id.json')).use(solanaDevnetRpc());
+```
+
+### Features
+
+_See `solanaRpc` for available features, plus:_
+
+- `airdrop`: Request SOL from the devnet faucet.
+    ```ts
+    await client.airdrop(address('HQVxiMVDoV9jzG4tpoxmDZsNfWvaHXm8DGGv93Gka75v'), lamports(1_000_000_000n));
+    ```
+
+## `solanaLocalRpc` plugin
+
+A convenience wrapper around `solanaRpc` that defaults to `http://127.0.0.1:8899` for the RPC and `ws://127.0.0.1:8900` for subscriptions, and includes airdrop support.
+
+### Installation
+
+```ts
+import { createClient } from '@solana/kit';
+import { solanaLocalRpc } from '@solana/kit-plugin-rpc';
+import { payerFromFile } from '@solana/kit-plugin-payer';
+
+const client = createClient().use(payerFromFile('~/.config/solana/id.json')).use(solanaLocalRpc());
+```
+
+### Features
+
+_See `solanaRpc` for available features, plus:_
+
+- `airdrop`: Request SOL from the local validator faucet.
+    ```ts
+    await client.airdrop(address('HQVxiMVDoV9jzG4tpoxmDZsNfWvaHXm8DGGv93Gka75v'), lamports(1_000_000_000n));
+    ```
+
 ## `rpcConnection` plugin
 
 The `rpcConnection` plugin sets a provided `Rpc` instance on the client. This is the generic variant that works with any RPC API.
