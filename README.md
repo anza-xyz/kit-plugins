@@ -5,73 +5,80 @@
 [ci-image]: https://img.shields.io/github/actions/workflow/status/anza-xyz/kit-plugins/main.yml?logo=GitHub
 [ci-url]: https://github.com/anza-xyz/kit-plugins/actions/workflows/main.yml
 
-A plugin library for [Solana Kit](https://github.com/anza-xyz/kit) that provides **ready-to-use clients** for your Solana applications!
+A library for [Solana Kit](https://github.com/anza-xyz/kit) that helps you **build composable Solana clients** with a modular plugin system.
 
 ## Features
 
-- ✨ **Ready-to-use clients** for production, local development, and local testing.
-- ✨ **Modular plugin system** to build custom clients by combining individual plugins.
+- ✨ **All-in-one bundle plugins** for production, local development, and local testing.
+- ✨ **Modular plugin system** to compose custom clients by combining granular plugins.
 - ✨ Default **transaction planning and execution** logic built-in, just call `client.sendTransaction(myInstructions)`.
 - ✨ Various **useful plugins** for RPC connectivity, payer management, SOL airdrops, LiteSVM support and more.
 
 ## Quick Start
 
-Choose from the following three ready-to-use clients!
+### Production
 
-### Production (Mainnet/Devnet/Testnet)
-
-Pre-configured client for production use with real Solana clusters.
+Use the `solanaRpc` bundle plugin to set up a full Solana RPC client with transaction planning and execution.
 
 ```sh
-pnpm install @solana/kit @solana/kit-client-rpc
+pnpm install @solana/kit @solana/kit-plugin-rpc @solana/kit-plugin-payer
 ```
 
 ```ts
-import { generateKeyPairSigner } from '@solana/kit';
-import { createClient } from '@solana/kit-client-rpc';
+import { createClient } from '@solana/kit';
+import { solanaRpc } from '@solana/kit-plugin-rpc';
+import { payer } from '@solana/kit-plugin-payer';
 
-const payer = await generateKeyPairSigner();
-const client = createClient({ payer, url: 'https://api.devnet.solana.com' });
+const client = createClient()
+    .use(payer(myProductionSigner))
+    .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
 
-// Send transactions
 await client.sendTransaction([myInstruction]);
 ```
 
-[See all features and configuration options](./packages/kit-client-rpc/README.md#createclient).
+For mainnet type safety (preventing accidental use of devnet-only features like airdrops), use `solanaMainnetRpc` instead.
+
+[See all features and configuration options](./packages/kit-plugin-rpc/README.md#solanarpc-plugin).
 
 ### Local Development
 
-Pre-configured client for localhost development with automatic payer funding.
+Use `solanaLocalRpc` which defaults to `http://127.0.0.1:8899` and includes airdrop support.
 
 ```sh
-pnpm install @solana/kit @solana/kit-client-rpc
+pnpm install @solana/kit @solana/kit-plugin-rpc @solana/kit-plugin-payer
 ```
 
 ```ts
-import { createLocalClient } from '@solana/kit-client-rpc';
-import { lamports } from '@solana/kit';
+import { createClient } from '@solana/kit';
+import { solanaLocalRpc } from '@solana/kit-plugin-rpc';
+import { payerFromFile } from '@solana/kit-plugin-payer';
 
-const client = await createLocalClient();
+const client = createClient().use(payerFromFile('~/.config/solana/id.json')).use(solanaLocalRpc());
 
-// Payer is auto-generated and funded with SOL
-console.log('Payer address:', client.payer.address);
 await client.sendTransaction([myInstruction]);
 ```
 
-[See all features and configuration options](./packages/kit-client-rpc/README.md#createlocalclient).
+For devnet, use `solanaDevnetRpc` which defaults to `https://api.devnet.solana.com` and also includes airdrop support.
+
+[See all features and configuration options](./packages/kit-plugin-rpc/README.md#solanalocalrpc-plugin).
 
 ### Local Testing with LiteSVM
 
-Pre-configured client using LiteSVM for testing without an RPC connection.
+Use the `litesvm` bundle plugin for fast local blockchain simulation without a network connection.
 
 ```sh
-pnpm install @solana/kit @solana/kit-client-litesvm
+pnpm install @solana/kit @solana/kit-plugin-litesvm @solana/kit-plugin-payer
 ```
 
 ```ts
-import { createClient } from '@solana/kit-client-litesvm';
+import { createClient, lamports } from '@solana/kit';
+import { litesvm } from '@solana/kit-plugin-litesvm';
+import { generatedPayer } from '@solana/kit-plugin-payer';
 
-const client = await createClient();
+const client = await createClient().use(generatedPayer()).use(litesvm());
+
+// Fund the payer
+await client.airdrop(client.payer.address, lamports(10_000_000_000n));
 
 // Set up test environment
 client.svm.setAccount(myTestAccount);
@@ -81,11 +88,11 @@ client.svm.addProgramFromFile(myProgramAddress, 'program.so');
 await client.sendTransaction([myInstruction]);
 ```
 
-[See all features and configuration options](./packages/kit-client-litesvm/README.md#createclient).
+[See all features and configuration options](./packages/kit-plugin-litesvm/README.md#litesvm-plugin).
 
-## Build Your Own Client
+## Compose Granular Plugins
 
-None of the ready-to-use clients fit your needs? No worries! You can **build your own custom clients** by combining individual plugins like so.
+The bundle plugins above are built from smaller, granular plugins. You can compose these granular plugins directly to build a custom setup tailored to your needs.
 
 ```ts
 import { createClient } from '@solana/kit';
@@ -99,28 +106,17 @@ import {
 import { payerFromFile } from '@solana/kit-plugin-payer';
 import { planAndSendTransactions } from '@solana/kit-plugin-instruction-plan';
 
-const client = await createClient() // An empty client with a `use` method to install plugins.
+const client = await createClient()
+    .use(payerFromFile('path/to/keypair.json')) // Adds `client.payer` using a local keypair file.
     .use(solanaRpcConnection('https://api.devnet.solana.com')) // Adds `client.rpc`.
     .use(solanaRpcSubscriptionsConnection('wss://api.devnet.solana.com')) // Adds `client.rpcSubscriptions`.
-    .use(payerFromFile('path/to/keypair.json')) // Adds `client.payer` using a local keypair file.
     .use(rpcAirdrop()) // Adds `client.airdrop` to request SOL from faucets.
     .use(rpcTransactionPlanner()) // Adds `client.transactionPlanner`.
     .use(rpcTransactionPlanExecutor()) // Adds `client.transactionPlanExecutor`.
     .use(planAndSendTransactions()); // Adds `client.planTransaction(s)` and `client.sendTransaction(s)`.
 ```
 
-Note that since plugins are defined in `@solana/kit` itself, you're not limited to the plugins in this repo! You can use [community plugins](#community-plugins) or even [create your own](#create-your-own-plugins).
-
-## Available Clients
-
-| Package                                                       | Version                                                                                                                                    | Description                   | Exports                             |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------- | ----------------------------------- |
-| [`@solana/kit-client-rpc`](./packages/kit-client-rpc)         | [![npm](https://img.shields.io/npm/v/@solana/kit-client-rpc.svg?style=flat)](https://www.npmjs.com/package/@solana/kit-client-rpc)         | Pre-configured RPC client     | `createClient`, `createLocalClient` |
-| [`@solana/kit-client-litesvm`](./packages/kit-client-litesvm) | [![npm](https://img.shields.io/npm/v/@solana/kit-client-litesvm.svg?style=flat)](https://www.npmjs.com/package/@solana/kit-client-litesvm) | Pre-configured LiteSVM client | `createClient`                      |
-
-## Community Clients
-
-_Do you know any? Please open a PR to add them here!_
+Note that since core plugin interfaces are defined in `@solana/kit` itself, you're not limited to the plugins in this repo! You can use [community plugins](#community-plugins) or even [create your own](#create-your-own-plugins).
 
 ## Available Plugins
 
