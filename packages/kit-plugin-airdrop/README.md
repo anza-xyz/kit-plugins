@@ -16,11 +16,13 @@
 
 ```diff
   import { createClient } from '@solana/kit';
-- import { airdrop, localhostRpc } from '@solana/kit-plugins';
-+ import { localhostRpc, rpcAirdrop } from '@solana/kit-plugin-rpc';
+- import { airdrop } from '@solana/kit-plugin-airdrop';
++ import { rpcAirdrop } from '@solana/kit-plugin-rpc';
+  import { solanaRpcConnection, solanaRpcSubscriptionsConnection } from '@solana/kit-plugin-rpc';
 
   const client = createClient()
-      .use(localhostRpc())
+      .use(solanaRpcConnection('http://127.0.0.1:8899'))
+      .use(solanaRpcSubscriptionsConnection('ws://127.0.0.1:8900'))
 -     .use(airdrop());
 +     .use(rpcAirdrop());
 ```
@@ -29,11 +31,12 @@
 
 ```diff
   import { createClient } from '@solana/kit';
-- import { airdrop, litesvm } from '@solana/kit-plugins';
-+ import { litesvm, litesvmAirdrop } from '@solana/kit-plugin-litesvm';
+- import { airdrop } from '@solana/kit-plugin-airdrop';
++ import { litesvmAirdrop } from '@solana/kit-plugin-litesvm';
+  import { litesvmConnection } from '@solana/kit-plugin-litesvm';
 
   const client = createClient()
-      .use(litesvm())
+      .use(litesvmConnection())
 -     .use(airdrop());
 +     .use(litesvmAirdrop());
 ```
