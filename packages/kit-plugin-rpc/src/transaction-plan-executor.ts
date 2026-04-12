@@ -38,11 +38,12 @@ const MAX_COMPUTE_UNIT_LIMIT = 1_400_000;
  * @example
  * ```ts
  * import { createClient } from '@solana/kit';
- * import { rpc, rpcTransactionPlanner, rpcTransactionPlanExecutor } from '@solana/kit-plugin-rpc';
+ * import { solanaRpcConnection, solanaRpcSubscriptionsConnection, rpcTransactionPlanner, rpcTransactionPlanExecutor } from '@solana/kit-plugin-rpc';
  * import { generatedPayer } from '@solana/kit-plugin-payer';
  *
  * const client = await createClient()
- *     .use(rpc('https://api.mainnet-beta.solana.com'))
+ *     .use(solanaRpcConnection('https://api.mainnet-beta.solana.com'))
+ *     .use(solanaRpcSubscriptionsConnection('wss://api.mainnet-beta.solana.com'))
  *     .use(generatedPayer())
  *     .use(rpcTransactionPlanner())
  *     .use(rpcTransactionPlanExecutor());

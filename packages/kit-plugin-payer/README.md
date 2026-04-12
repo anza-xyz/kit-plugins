@@ -67,12 +67,14 @@ Note that this plugin requires an airdrop plugin to be installed on the client b
 
 ```ts
 import { createClient } from '@solana/kit';
-import { localhostRpc, rpcAirdrop } from '@solana/kit-plugin-rpc';
+import { solanaRpcConnection, solanaRpcSubscriptionsConnection, rpcAirdrop } from '@solana/kit-plugin-rpc';
 import { generatedPayerWithSol } from '@solana/kit-plugin-payer';
 
 const client = await createClient()
-    .use(localhostRpc()) // or .use(litesvm()).use(litesvmAirdrop())
+    .use(solanaRpcConnection('http://127.0.0.1:8899'))
+    .use(solanaRpcSubscriptionsConnection('ws://127.0.0.1:8900'))
     .use(rpcAirdrop())
+    // or .use(litesvm()).use(litesvmAirdrop())
     .use(generatedPayerWithSol(lamports(10_000_000_000n))); // 10 SOL
 ```
 
@@ -90,7 +92,7 @@ When no explicit payer is given, this plugin requires an airdrop plugin to be in
 
 ```ts
 import { createClient } from '@solana/kit';
-import { localhostRpc, rpcAirdrop } from '@solana/kit-plugin-rpc';
+import { solanaRpcConnection, solanaRpcSubscriptionsConnection, rpcAirdrop } from '@solana/kit-plugin-rpc';
 import { payerOrGeneratedPayer } from '@solana/kit-plugin-payer';
 
 // With an explicit payer — no airdrop needed.
@@ -98,8 +100,10 @@ const client = await createClient().use(payerOrGeneratedPayer(mySigner));
 
 // Without a payer — generates one and airdrops 100 SOL.
 const client = await createClient()
-    .use(localhostRpc()) // or .use(litesvm()).use(litesvmAirdrop())
+    .use(solanaRpcConnection('http://127.0.0.1:8899'))
+    .use(solanaRpcSubscriptionsConnection('ws://127.0.0.1:8900'))
     .use(rpcAirdrop())
+    // or .use(litesvm()).use(litesvmAirdrop())
     .use(payerOrGeneratedPayer(undefined));
 ```
 
