@@ -15,6 +15,35 @@ This package provides a plugin that adds LiteSVM functionality to your Kit clien
 pnpm install @solana/kit-plugin-litesvm
 ```
 
+## `litesvm` plugin
+
+The `litesvm` plugin sets up a full LiteSVM client in a single call. It installs an SVM connection, airdrop support, minimum balance computation, transaction planning, and transaction execution on the client.
+
+The client must have a `payer` set before applying this plugin.
+
+> [!IMPORTANT]
+> This plugin is only available in Node.js builds. Browser and React Native builds throw an error when calling `litesvm()`.
+
+### Installation
+
+```ts
+import { createClient } from '@solana/kit';
+import { litesvm } from '@solana/kit-plugin-litesvm';
+import { payer } from '@solana/kit-plugin-payer';
+
+const client = createClient().use(payer(myPayer)).use(litesvm());
+```
+
+### Features
+
+- `svm`: Access the underlying LiteSVM instance.
+- `rpc`: Call a subset of Solana RPC methods against the LiteSVM instance.
+- `airdrop`: Request SOL from the LiteSVM faucet.
+- `getMinimumBalance`: Compute minimum lamports for rent exemption.
+- `transactionPlanner`: Plan instructions into transaction messages.
+- `transactionPlanExecutor`: Sign and send planned transactions.
+- `sendTransaction(s)` / `planTransaction(s)`: Convenience helpers that combine planning and execution.
+
 ## `litesvmConnection` plugin
 
 The LiteSVM plugin starts a new LiteSVM instance within your Kit client, allowing you to simulate Solana programs and accounts locally. Additionally, it derives a small RPC subset that interacts with the LiteSVM instance instead of making network requests.

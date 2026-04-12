@@ -49,6 +49,7 @@
         "@solana/kit": "^6.8.0"
     },
     "dependencies": {
+        "@solana/kit-plugin-instruction-plan": "workspace:*",
         "litesvm": "^1.0.0"
     },
     "devDependencies": {
