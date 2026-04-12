@@ -59,26 +59,16 @@ export type ClientConfig<TClusterUrl extends ClusterUrl = ClusterUrl> = {
 /**
  * Creates a default RPC client with all essential plugins configured.
  *
- * This function sets up a client with RPC capabilities, payer configuration,
- * transaction planning and execution, and instruction plan sending functionality.
- * It's designed for production use with real Solana clusters.
- *
- * @param config - Configuration object containing the payer, URL, and optional RPC subscriptions config.
- * @returns A fully configured default client ready for transaction operations.
- *
- * @example
+ * @deprecated Add a payer to your client using any payer plugin from
+ * `@solana/kit-plugin-payer`, then use `solanaRpc` from `@solana/kit-plugin-rpc`.
  * ```ts
- * import { createClient } from '@solana/kit-client-rpc';
- * import { generateKeyPairSigner } from '@solana/kit';
+ * import { createClient } from '@solana/kit';
+ * import { solanaRpc } from '@solana/kit-plugin-rpc';
+ * import { payer } from '@solana/kit-plugin-payer';
  *
- * const payer = await generateKeyPairSigner();
- * const client = createClient({
- *   url: 'https://api.mainnet-beta.solana.com',
- *   payer,
- * });
- *
- * // Use the client
- * const result = await client.sendTransaction([myInstruction]);
+ * const client = createClient()
+ *     .use(payer(myPayer))
+ *     .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
  * ```
  */
 export function createClient<TClusterUrl extends ClusterUrl>(config: ClientConfig<TClusterUrl>) {
@@ -94,33 +84,16 @@ export function createClient<TClusterUrl extends ClusterUrl>(config: ClientConfi
 /**
  * Creates a default RPC client configured for localhost development.
  *
- * This function sets up a client connected to a local validator with airdrop
- * functionality, automatic payer generation (if not provided), and all essential
- * transaction capabilities. Perfect for local development and testing.
- *
- * @param config - Optional configuration object with an optional payer.
- * @returns A fully configured client ready for localhost development.
- *
- * @example
+ * @deprecated Add a payer to your client using any payer plugin from
+ * `@solana/kit-plugin-payer`, then use `solanaLocalRpc` from `@solana/kit-plugin-rpc`.
  * ```ts
- * import { createLocalClient } from '@solana/kit-client-rpc';
+ * import { createClient } from '@solana/kit';
+ * import { solanaLocalRpc } from '@solana/kit-plugin-rpc';
+ * import { payerFromFile } from '@solana/kit-plugin-payer';
  *
- * // Creates a client with auto-generated and funded payer
- * const client = await createLocalClient();
- *
- * // Use the client
- * const result = await client.sendTransaction([myInstruction]);
- * console.log('Payer address:', client.payer.address);
- * ```
- *
- * @example
- * Using a custom payer.
- * ```ts
- * import { createLocalClient } from '@solana/kit-client-rpc';
- * import { generateKeyPairSigner } from '@solana/kit';
- *
- * const customPayer = await generateKeyPairSigner();
- * const client = await createLocalClient({ payer: customPayer });
+ * const client = createClient()
+ *     .use(payerFromFile('~/.config/solana/id.json'))
+ *     .use(solanaLocalRpc());
  * ```
  */
 export function createLocalClient(

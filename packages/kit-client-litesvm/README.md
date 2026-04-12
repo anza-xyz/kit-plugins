@@ -1,4 +1,4 @@
-# Kit Plugins ➤ LiteSVM Client
+# Kit Plugins ➤ LiteSVM Client (deprecated)
 
 [![npm][npm-image]][npm-url]
 [![npm-downloads][npm-downloads-image]][npm-url]
@@ -7,50 +7,21 @@
 [npm-image]: https://img.shields.io/npm/v/@solana/kit-client-litesvm.svg?style=flat&label=%40solana%2Fkit-client-litesvm
 [npm-url]: https://www.npmjs.com/package/@solana/kit-client-litesvm
 
-This package provides a pre-configured LiteSVM client for Solana Kit. It bundles several plugins together so you can get started with a single function call.
+> [!WARNING]
+> This package is deprecated. Add a payer to your client using any payer plugin from [`@solana/kit-plugin-payer`](../kit-plugin-payer), then use the `litesvm` all-in-one plugin from [`@solana/kit-plugin-litesvm`](../kit-plugin-litesvm) instead.
+>
+> | Deprecated export | Use instead                                                            |
+> | ----------------- | ---------------------------------------------------------------------- |
+> | `createClient()`  | `litesvm()` from [`@solana/kit-plugin-litesvm`](../kit-plugin-litesvm) |
 
-> [!NOTE]
-> This package is only available in Node.js environments. LiteSVM relies on Node.js APIs and cannot run in browsers or React Native.
+## Migration
 
-## Installation
+```diff
+- import { createClient } from '@solana/kit-client-litesvm';
++ import { createClient } from '@solana/kit';
++ import { litesvm } from '@solana/kit-plugin-litesvm';
++ import { payer } from '@solana/kit-plugin-payer';
 
-```sh
-pnpm install @solana/kit-client-litesvm
+- const client = await createClient({ payer: myPayer });
++ const client = createClient().use(payer(myPayer)).use(litesvm());
 ```
-
-## `createClient`
-
-Pre-configured client using LiteSVM for testing without an RPC connection.
-
-```ts
-import { createClient } from '@solana/kit-client-litesvm';
-
-const client = await createClient();
-
-// Set up test environment
-client.svm.setAccount(myTestAccount);
-client.svm.addProgramFromFile(myProgramAddress, 'program.so');
-
-// Execute transactions locally
-await client.sendTransaction([myInstruction]);
-```
-
-### Features
-
-- `client.svm`: Embedded LiteSVM instance for local blockchain simulation.
-- `client.rpc`: Subset of RPC methods that delegate to the LiteSVM instance.
-- `client.payer`: The main payer signer for transactions.
-- `client.airdrop`: Function to request SOL from the LiteSVM instance.
-- `client.getMinimumBalance`: Computes the minimum lamports required for an account with a given data size.
-- `client.transactionPlanner`: Plans instructions into transaction messages.
-- `client.transactionPlanExecutor`: Executes planned transaction messages.
-- `client.planTransactions`: Plans transaction messages, instructions or instruction plans into a transaction plan without executing it.
-- `client.planTransaction`: Same as `client.planTransactions` but asserts a single transaction message is returned.
-- `client.sendTransactions`: Sends transaction messages, instructions or instruction plans to the cluster by using the client's transaction planner and executor.
-- `client.sendTransaction`: Same as `client.sendTransactions` but ensuring only a single transaction is sent.
-
-### Configuration
-
-| Option  | Type                | Description                                                                                                     |
-| ------- | ------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `payer` | `TransactionSigner` | Signer used to pay for transaction fees and on-chain account storage. Defaults to a generated and funded payer. |
