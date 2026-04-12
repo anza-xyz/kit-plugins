@@ -1,6 +1,6 @@
 import {
     Address,
-    createEmptyClient,
+    createClient,
     generateKeyPairSigner,
     singleInstructionPlan,
     SingleTransactionPlan,
@@ -17,7 +17,7 @@ const MOCK_INSTRUCTION = {
 describe('litesvmTransactionPlanner', () => {
     it('provides a transactionPlanner on the client', () => {
         const payer = {} as TransactionSigner;
-        const client = createEmptyClient()
+        const client = createClient()
             .use(() => ({ payer }))
             .use(litesvmTransactionPlanner());
         expect(client).toHaveProperty('transactionPlanner');
@@ -25,7 +25,7 @@ describe('litesvmTransactionPlanner', () => {
 
     it('uses the provided payer as fee payer when planning transactions', async () => {
         const payer = await generateKeyPairSigner();
-        const client = createEmptyClient()
+        const client = createClient()
             .use(() => ({ payer }))
             .use(litesvmTransactionPlanner());
 
@@ -36,17 +36,17 @@ describe('litesvmTransactionPlanner', () => {
     });
 
     it('requires a payer on the client by default', () => {
-        expect(() => createEmptyClient().use(litesvmTransactionPlanner())).toThrow();
+        expect(() => createClient().use(litesvmTransactionPlanner())).toThrow();
     });
 
     it('also accepts a payer directly', () => {
         const payer = {} as TransactionSigner;
-        expect(() => createEmptyClient().use(litesvmTransactionPlanner({ payer }))).not.toThrow();
+        expect(() => createClient().use(litesvmTransactionPlanner({ payer }))).not.toThrow();
     });
 
     it('uses the provided payer over the one set on the client', async () => {
         const [clientPayer, explicitPayer] = await Promise.all([generateKeyPairSigner(), generateKeyPairSigner()]);
-        const client = createEmptyClient()
+        const client = createClient()
             .use(() => ({ payer: clientPayer }))
             .use(litesvmTransactionPlanner({ payer: explicitPayer }));
 

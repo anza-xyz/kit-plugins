@@ -16,10 +16,10 @@ type RpcClient = {
  *
  * @example
  * ```ts
- * import { createEmptyClient } from '@solana/kit';
+ * import { createClient } from '@solana/kit';
  * import { localhostRpc, rpcAirdrop } from '@solana/kit-plugin-rpc';
  *
- * const client = createEmptyClient()
+ * const client = createClient()
  *     .use(localhostRpc())
  *     .use(rpcAirdrop());
  *

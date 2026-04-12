@@ -25,10 +25,10 @@ The LiteSVM plugin starts a new LiteSVM instance within your Kit client, allowin
 ### Installation
 
 ```ts
-import { createEmptyClient } from '@solana/kit';
+import { createClient } from '@solana/kit';
 import { litesvm } from '@solana/kit-plugin-litesvm';
 
-const client = createEmptyClient().use(litesvm());
+const client = createClient().use(litesvm());
 ```
 
 ### Features
@@ -52,10 +52,10 @@ This plugin adds an `airdrop` method to your Kit client that airdrops SOL using 
 The client must have the `litesvm` plugin installed before applying this plugin.
 
 ```ts
-import { createEmptyClient } from '@solana/kit';
+import { createClient } from '@solana/kit';
 import { litesvm, litesvmAirdrop } from '@solana/kit-plugin-litesvm';
 
-const client = createEmptyClient().use(litesvm()).use(litesvmAirdrop());
+const client = createClient().use(litesvm()).use(litesvmAirdrop());
 ```
 
 ### Features
@@ -74,10 +74,10 @@ This plugin adds a `getMinimumBalance` method to your Kit client that computes t
 The client must have the `litesvm` plugin installed before applying this plugin.
 
 ```ts
-import { createEmptyClient } from '@solana/kit';
+import { createClient } from '@solana/kit';
 import { litesvm, litesvmGetMinimumBalance } from '@solana/kit-plugin-litesvm';
 
-const client = createEmptyClient().use(litesvm()).use(litesvmGetMinimumBalance());
+const client = createClient().use(litesvm()).use(litesvmGetMinimumBalance());
 ```
 
 ### Features
@@ -101,11 +101,11 @@ This plugin provides a default transaction planner that creates transaction mess
 This plugin requires a payer to be set on the client or passed as an option.
 
 ```ts
-import { createEmptyClient } from '@solana/kit';
+import { createClient } from '@solana/kit';
 import { litesvm, litesvmTransactionPlanner, litesvmTransactionPlanExecutor } from '@solana/kit-plugin-litesvm';
 import { generatedPayer } from '@solana/kit-plugin-payer';
 
-const client = await createEmptyClient()
+const client = await createClient()
     .use(litesvm())
     .use(generatedPayer())
     .use(litesvmTransactionPlanner())
@@ -133,11 +133,11 @@ This plugin provides a default transaction plan executor that signs and sends tr
 This plugin requires an `svm` instance to be configured on the client.
 
 ```ts
-import { createEmptyClient } from '@solana/kit';
+import { createClient } from '@solana/kit';
 import { litesvm, litesvmTransactionPlanner, litesvmTransactionPlanExecutor } from '@solana/kit-plugin-litesvm';
 import { generatedPayer } from '@solana/kit-plugin-payer';
 
-const client = await createEmptyClient()
+const client = await createClient()
     .use(litesvm())
     .use(generatedPayer())
     .use(litesvmTransactionPlanner())

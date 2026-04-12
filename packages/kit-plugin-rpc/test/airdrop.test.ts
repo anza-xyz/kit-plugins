@@ -1,4 +1,4 @@
-import { createEmptyClient, mainnet } from '@solana/kit';
+import { createClient, mainnet } from '@solana/kit';
 import { describe, expect, it, vi } from 'vitest';
 
 import { localhostRpc, rpc, rpcAirdrop } from '../src';
@@ -8,7 +8,7 @@ describe('rpcAirdrop', () => {
         const getSignatureStatuses = vi.fn();
         const requestAirdrop = vi.fn();
         const signatureNotifications = vi.fn();
-        const client = createEmptyClient()
+        const client = createClient()
             .use(() => ({
                 rpc: { getSignatureStatuses, requestAirdrop },
                 rpcSubscriptions: { signatureNotifications },
@@ -19,17 +19,17 @@ describe('rpcAirdrop', () => {
     });
 
     it('works with an arbitrary RPC', () => {
-        const client = createEmptyClient().use(rpc('https://my-rpc.com')).use(rpcAirdrop());
+        const client = createClient().use(rpc('https://my-rpc.com')).use(rpcAirdrop());
         expect(client).toHaveProperty('airdrop');
     });
 
     it('works with a localhost RPC', () => {
-        const client = createEmptyClient().use(localhostRpc()).use(rpcAirdrop());
+        const client = createClient().use(localhostRpc()).use(rpcAirdrop());
         expect(client).toHaveProperty('airdrop');
     });
 
     it('throws a TypeScript error with a mainnet RPC', () => {
-        const client = createEmptyClient()
+        const client = createClient()
             .use(rpc(mainnet('https://my-rpc.com')))
             // @ts-expect-error Airdrop RPC methods are not available on mainnet.
             .use(rpcAirdrop());

@@ -1,5 +1,5 @@
 import {
-    createEmptyClient,
+    createClient,
     GetAccountInfoApi,
     GetBalanceApi,
     GetEpochScheduleApi,
@@ -26,13 +26,13 @@ describe('litesvm', () => {
     }
 
     it('instantiates and attaches a new LiteSVM client', () => {
-        const client = createEmptyClient().use(litesvm());
+        const client = createClient().use(litesvm());
         expect(client).toHaveProperty('svm');
         expect(client.svm).toBeInstanceOf(LiteSVM);
     });
 
     it('derives a small RPC from the LiteSVM client', () => {
-        const client = createEmptyClient().use(litesvm());
+        const client = createClient().use(litesvm());
         expect(client).toHaveProperty('rpc');
         expect(client.rpc).toBeTypeOf('object');
         expect(client.rpc.getAccountInfo).toBeTypeOf('function');

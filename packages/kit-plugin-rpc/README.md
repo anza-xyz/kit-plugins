@@ -24,10 +24,10 @@ The RPC plugin adds `rpc` and `rpcSubscriptions` objects to your Kit client, all
 To use the `rpc` plugin, you must provide the URL of your desired Solana RPC endpoint.
 
 ```ts
-import { createEmptyClient } from '@solana/kit';
+import { createClient } from '@solana/kit';
 import { rpc } from '@solana/kit-plugin-rpc';
 
-const client = createEmptyClient().use(rpc('https://api.mainnet-beta.solana.com'));
+const client = createClient().use(rpc('https://api.mainnet-beta.solana.com'));
 ```
 
 Note that you may wrap your RPC URL using the `mainnet`, `devnet`, or `testnet` helpers from `@solana/kit`. When you do, the returned RPC API will be adjusted to match the selected cluster since some RPC features are not available on all clusters.
@@ -35,13 +35,13 @@ Note that you may wrap your RPC URL using the `mainnet`, `devnet`, or `testnet` 
 ```ts
 import { mainnet } from '@solana/kit';
 
-const client = createEmptyClient().use(rpc(mainnet('https://api.mainnet-beta.solana.com')));
+const client = createClient().use(rpc(mainnet('https://api.mainnet-beta.solana.com')));
 ```
 
 By default, the WebSocket URL is derived from the RPC's HTTP URL but you may configure it explicitly using the second parameter. This config object can also be used to customize other aspects of RPC Subscriptions behavior.
 
 ```ts
-const client = createEmptyClient().use(
+const client = createClient().use(
     rpc('https://my-rpc-url.com', {
         url: 'wss://my-rpc-ws-url.com',
         minChannels: 5,
@@ -71,10 +71,10 @@ This plugin is an alias for the `rpc` plugin pre-configured to connect to a loca
 ### Installation
 
 ```ts
-import { createEmptyClient } from '@solana/kit';
+import { createClient } from '@solana/kit';
 import { localhostRpc } from '@solana/kit-plugin-rpc';
 
-const client = createEmptyClient().use(localhostRpc());
+const client = createClient().use(localhostRpc());
 ```
 
 ### Features
@@ -93,10 +93,10 @@ This plugin adds an `airdrop` method to your Kit client that requests SOL airdro
 The client must have `rpc` and `rpcSubscriptions` installed before applying this plugin.
 
 ```ts
-import { createEmptyClient } from '@solana/kit';
+import { createClient } from '@solana/kit';
 import { localhostRpc, rpcAirdrop } from '@solana/kit-plugin-rpc';
 
-const client = createEmptyClient().use(localhostRpc()).use(rpcAirdrop());
+const client = createClient().use(localhostRpc()).use(rpcAirdrop());
 ```
 
 ### Features
@@ -115,10 +115,10 @@ This plugin adds a `getMinimumBalance` method to your Kit client that computes t
 The client must have `rpc` installed before applying this plugin.
 
 ```ts
-import { createEmptyClient } from '@solana/kit';
+import { createClient } from '@solana/kit';
 import { rpc, rpcGetMinimumBalance } from '@solana/kit-plugin-rpc';
 
-const client = createEmptyClient().use(rpc('https://api.mainnet-beta.solana.com')).use(rpcGetMinimumBalance());
+const client = createClient().use(rpc('https://api.mainnet-beta.solana.com')).use(rpcGetMinimumBalance());
 ```
 
 ### Features
@@ -142,11 +142,11 @@ This plugin provides a default transaction planner that creates transaction mess
 This plugin requires a payer to be set on the client or passed as an option.
 
 ```ts
-import { createEmptyClient } from '@solana/kit';
+import { createClient } from '@solana/kit';
 import { rpc, rpcTransactionPlanner, rpcTransactionPlanExecutor } from '@solana/kit-plugin-rpc';
 import { generatedPayer } from '@solana/kit-plugin-payer';
 
-const client = await createEmptyClient()
+const client = await createClient()
     .use(rpc('https://api.mainnet-beta.solana.com'))
     .use(generatedPayer())
     .use(rpcTransactionPlanner())
@@ -174,11 +174,11 @@ This plugin provides a default transaction plan executor that estimates compute 
 This plugin requires `rpc` and `rpcSubscriptions` to be configured on the client.
 
 ```ts
-import { createEmptyClient } from '@solana/kit';
+import { createClient } from '@solana/kit';
 import { rpc, rpcTransactionPlanner, rpcTransactionPlanExecutor } from '@solana/kit-plugin-rpc';
 import { generatedPayer } from '@solana/kit-plugin-payer';
 
-const client = await createEmptyClient()
+const client = await createClient()
     .use(rpc('https://api.mainnet-beta.solana.com'))
     .use(generatedPayer())
     .use(rpcTransactionPlanner())

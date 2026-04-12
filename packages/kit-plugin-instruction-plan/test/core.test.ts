@@ -1,7 +1,7 @@
 import {
     Address,
     canceledSingleTransactionPlanResult,
-    createEmptyClient,
+    createClient,
     createFailedToExecuteTransactionPlanError,
     createTransactionMessage,
     failedSingleTransactionPlanResult,
@@ -35,7 +35,7 @@ import { planAndSendTransactions, transactionPlanExecutor, transactionPlanner } 
 describe('transactionPlanner', () => {
     it('sets the provided transactionPlanner on the client', () => {
         const customTransactionPlanner = vi.fn();
-        const client = createEmptyClient().use(transactionPlanner(customTransactionPlanner));
+        const client = createClient().use(transactionPlanner(customTransactionPlanner));
         expect(client).toHaveProperty('transactionPlanner');
         expect(client.transactionPlanner).toBe(customTransactionPlanner);
     });
@@ -44,7 +44,7 @@ describe('transactionPlanner', () => {
 describe('transactionPlanExecutor', () => {
     it('sets the provided transactionPlanExecutor on the client', () => {
         const customTransactionPlanExecutor = vi.fn();
-        const client = createEmptyClient().use(transactionPlanExecutor(customTransactionPlanExecutor));
+        const client = createClient().use(transactionPlanExecutor(customTransactionPlanExecutor));
         expect(client).toHaveProperty('transactionPlanExecutor');
         expect(client.transactionPlanExecutor).toBe(customTransactionPlanExecutor);
     });
@@ -58,7 +58,7 @@ describe('planAndSendTransactions', () => {
 
             const customTransactionPlanner = vi.fn().mockResolvedValue(transactionPlan);
             const customTransactionPlanExecutor = vi.fn();
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
                 .use(planAndSendTransactions());
@@ -82,7 +82,7 @@ describe('planAndSendTransactions', () => {
             ]);
             const customTransactionPlanner = vi.fn().mockResolvedValue(transactionPlan);
             const customTransactionPlanExecutor = vi.fn();
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
                 .use(planAndSendTransactions());
@@ -101,7 +101,7 @@ describe('planAndSendTransactions', () => {
             const transactionPlan = singleTransactionPlan({} as TransactionMessage & TransactionMessageWithFeePayer);
             const customTransactionPlanner = vi.fn().mockResolvedValue(transactionPlan);
             const customTransactionPlanExecutor = vi.fn();
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
                 .use(planAndSendTransactions());
@@ -115,7 +115,7 @@ describe('planAndSendTransactions', () => {
         it('does not call the planner if the abort signal is already triggered', async () => {
             const customTransactionPlanner = vi.fn();
             const customTransactionPlanExecutor = vi.fn();
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
                 .use(planAndSendTransactions());
@@ -132,7 +132,7 @@ describe('planAndSendTransactions', () => {
             const transactionPlan = singleTransactionPlan({} as TransactionMessage & TransactionMessageWithFeePayer);
             const customTransactionPlanner = vi.fn().mockResolvedValue(transactionPlan);
             const customTransactionPlanExecutor = vi.fn();
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
                 .use(planAndSendTransactions());
@@ -155,7 +155,7 @@ describe('planAndSendTransactions', () => {
 
             const customTransactionPlanner = vi.fn().mockResolvedValue(transactionPlan);
             const customTransactionPlanExecutor = vi.fn();
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
                 .use(planAndSendTransactions());
@@ -175,7 +175,7 @@ describe('planAndSendTransactions', () => {
             const transactionPlan = singleTransactionPlan({} as TransactionMessage & TransactionMessageWithFeePayer);
             const customTransactionPlanner = vi.fn().mockResolvedValue(transactionPlan);
             const customTransactionPlanExecutor = vi.fn();
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
                 .use(planAndSendTransactions());
@@ -189,7 +189,7 @@ describe('planAndSendTransactions', () => {
         it('does not call the planner if the abort signal is already triggered', async () => {
             const customTransactionPlanner = vi.fn();
             const customTransactionPlanExecutor = vi.fn();
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
                 .use(planAndSendTransactions());
@@ -209,7 +209,7 @@ describe('planAndSendTransactions', () => {
             ]);
             const customTransactionPlanner = vi.fn().mockResolvedValue(transactionPlan);
             const customTransactionPlanExecutor = vi.fn();
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
                 .use(planAndSendTransactions());
@@ -233,7 +233,7 @@ describe('planAndSendTransactions', () => {
 
             const customTransactionPlanner = vi.fn().mockResolvedValue(transactionPlan);
             const customTransactionPlanExecutor = vi.fn().mockResolvedValue(transactionPlanResult);
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
                 .use(planAndSendTransactions());
@@ -258,7 +258,7 @@ describe('planAndSendTransactions', () => {
             ]);
             const customTransactionPlanner = vi.fn().mockResolvedValue(transactionPlan);
             const customTransactionPlanExecutor = vi.fn();
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
                 .use(planAndSendTransactions());
@@ -283,7 +283,7 @@ describe('planAndSendTransactions', () => {
             ]);
             const customTransactionPlanner = vi.fn().mockResolvedValue(transactionPlan);
             const customTransactionPlanExecutor = vi.fn().mockResolvedValue(transactionPlanResult);
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
                 .use(planAndSendTransactions());
@@ -306,7 +306,7 @@ describe('planAndSendTransactions', () => {
             );
             const customTransactionPlanner = vi.fn().mockResolvedValue(transactionPlan);
             const customTransactionPlanExecutor = vi.fn().mockResolvedValue(transactionPlanResult);
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
                 .use(planAndSendTransactions());
@@ -329,7 +329,7 @@ describe('planAndSendTransactions', () => {
             );
             const customTransactionPlanner = vi.fn().mockResolvedValue(transactionPlan);
             const customTransactionPlanExecutor = vi.fn().mockResolvedValue(transactionPlanResult);
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
                 .use(planAndSendTransactions());
@@ -343,7 +343,7 @@ describe('planAndSendTransactions', () => {
         it('does not call the planner if the abort signal is already triggered', async () => {
             const customTransactionPlanner = vi.fn();
             const customTransactionPlanExecutor = vi.fn();
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
                 .use(planAndSendTransactions());
@@ -363,7 +363,7 @@ describe('planAndSendTransactions', () => {
             });
             const customTransactionPlanner = vi.fn().mockResolvedValue(transactionPlan);
             const customTransactionPlanExecutor = vi.fn().mockResolvedValue(transactionPlanResult);
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
                 .use(planAndSendTransactions());
@@ -385,7 +385,7 @@ describe('planAndSendTransactions', () => {
             });
             const customTransactionPlanner = vi.fn();
             const customTransactionPlanExecutor = vi.fn().mockResolvedValue(transactionPlanResult);
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
                 .use(planAndSendTransactions());
@@ -407,7 +407,7 @@ describe('planAndSendTransactions', () => {
             });
             const customTransactionPlanner = vi.fn();
             const customTransactionPlanExecutor = vi.fn().mockResolvedValue(transactionPlanResult);
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
                 .use(planAndSendTransactions());
@@ -428,7 +428,7 @@ describe('planAndSendTransactions', () => {
 
             const customTransactionPlanner = vi.fn().mockResolvedValue(txPlan);
             const customTransactionPlanExecutor = vi.fn().mockRejectedValue(executionError);
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
                 .use(planAndSendTransactions());
@@ -460,7 +460,7 @@ describe('planAndSendTransactions', () => {
 
             const customTransactionPlanner = vi.fn().mockResolvedValue(txPlan);
             const customTransactionPlanExecutor = vi.fn().mockRejectedValue(executionError);
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
                 .use(planAndSendTransactions());
@@ -479,7 +479,7 @@ describe('planAndSendTransactions', () => {
 
             const customTransactionPlanner = vi.fn().mockResolvedValue(txPlan);
             const customTransactionPlanExecutor = vi.fn().mockRejectedValue(genericError);
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
                 .use(planAndSendTransactions());
@@ -497,7 +497,7 @@ describe('planAndSendTransactions', () => {
 
             const customTransactionPlanner = vi.fn().mockResolvedValue(transactionPlan);
             const customTransactionPlanExecutor = vi.fn().mockResolvedValue(transactionPlanResult);
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
                 .use(planAndSendTransactions());
@@ -516,7 +516,7 @@ describe('planAndSendTransactions', () => {
         it('passes the abort signal through the planner and executor', async () => {
             const customTransactionPlanner = vi.fn().mockResolvedValue({});
             const customTransactionPlanExecutor = vi.fn().mockResolvedValue({});
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
                 .use(planAndSendTransactions());
@@ -530,7 +530,7 @@ describe('planAndSendTransactions', () => {
         it('does not call the planner if the abort signal is already triggered', async () => {
             const customTransactionPlanner = vi.fn();
             const customTransactionPlanExecutor = vi.fn();
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
                 .use(planAndSendTransactions());
@@ -550,7 +550,7 @@ describe('planAndSendTransactions', () => {
             ]);
             const customTransactionPlanner = vi.fn().mockResolvedValue(transactionPlan);
             const customTransactionPlanExecutor = vi.fn();
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
                 .use(planAndSendTransactions());
@@ -569,7 +569,7 @@ describe('planAndSendTransactions', () => {
             const transaction = setTransactionMessageFeePayer(payer, createTransactionMessage({ version: 0 }));
             const customTransactionPlanner = vi.fn();
             const customTransactionPlanExecutor = vi.fn();
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
                 .use(planAndSendTransactions());
@@ -592,7 +592,7 @@ describe('planAndSendTransactions', () => {
             );
             const customTransactionPlanner = vi.fn();
             const customTransactionPlanExecutor = vi.fn();
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
                 .use(planAndSendTransactions());
@@ -612,7 +612,7 @@ describe('planAndSendTransactions', () => {
             ]);
             const customTransactionPlanner = vi.fn();
             const customTransactionPlanExecutor = vi.fn();
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
                 .use(planAndSendTransactions());
@@ -633,7 +633,7 @@ describe('planAndSendTransactions', () => {
 
             const customTransactionPlanner = vi.fn().mockResolvedValue(txPlan);
             const customTransactionPlanExecutor = vi.fn().mockRejectedValue(executionError);
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
                 .use(planAndSendTransactions());
@@ -665,7 +665,7 @@ describe('planAndSendTransactions', () => {
 
             const customTransactionPlanner = vi.fn().mockResolvedValue(txPlan);
             const customTransactionPlanExecutor = vi.fn().mockRejectedValue(executionError);
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
                 .use(planAndSendTransactions());
@@ -685,7 +685,7 @@ describe('planAndSendTransactions', () => {
 
             const customTransactionPlanner = vi.fn().mockResolvedValue(txPlan);
             const customTransactionPlanExecutor = vi.fn().mockRejectedValue(genericError);
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(transactionPlanner(customTransactionPlanner))
                 .use(transactionPlanExecutor(customTransactionPlanExecutor))
                 .use(planAndSendTransactions());

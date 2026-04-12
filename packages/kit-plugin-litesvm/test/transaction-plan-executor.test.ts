@@ -1,7 +1,7 @@
 import {
     Address,
     appendTransactionMessageInstruction,
-    createEmptyClient,
+    createClient,
     createTransactionMessage,
     extendClient,
     generateKeyPairSigner,
@@ -29,7 +29,7 @@ describe('litesvmTransactionPlanExecutor', () => {
     describe('with mocks', () => {
         it('provides a transactionPlanExecutor on the client', () => {
             const svm = {} as LiteSVM;
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(() => ({ svm }))
                 .use(litesvmTransactionPlanExecutor());
             expect(client).toHaveProperty('transactionPlanExecutor');
@@ -41,7 +41,7 @@ describe('litesvmTransactionPlanExecutor', () => {
             // Return a success result (no `.err` property).
             const sendTransaction = vi.fn().mockReturnValue({ signature: () => new Uint8Array(64) });
             const svm = { sendTransaction, setTransactionMessageLifetimeUsingLatestBlockhash } as unknown as LiteSVM;
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(() => ({ payer, svm }))
                 .use(litesvmTransactionPlanner())
                 .use(litesvmTransactionPlanExecutor());
@@ -62,7 +62,7 @@ describe('litesvmTransactionPlanExecutor', () => {
             const mockMetadata = { logs: () => ['log1'], signature: () => new Uint8Array(64) };
             const sendTransaction = vi.fn().mockReturnValue(mockMetadata);
             const svm = { sendTransaction, setTransactionMessageLifetimeUsingLatestBlockhash } as unknown as LiteSVM;
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(() => ({ payer, svm }))
                 .use(litesvmTransactionPlanner())
                 .use(litesvmTransactionPlanExecutor());
@@ -79,7 +79,7 @@ describe('litesvmTransactionPlanExecutor', () => {
             const mockMetadata = { err: () => 2 };
             const sendTransaction = vi.fn().mockReturnValue(mockMetadata);
             const svm = { sendTransaction, setTransactionMessageLifetimeUsingLatestBlockhash } as unknown as LiteSVM;
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(() => ({ payer, svm }))
                 .use(litesvmTransactionPlanExecutor());
 
@@ -99,7 +99,7 @@ describe('litesvmTransactionPlanExecutor', () => {
             // Return a failed result with a fieldless error (AccountNotFound = 2).
             const sendTransaction = vi.fn().mockReturnValue({ err: () => 2 });
             const svm = { sendTransaction, setTransactionMessageLifetimeUsingLatestBlockhash } as unknown as LiteSVM;
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(() => ({ payer, svm }))
                 .use(litesvmTransactionPlanExecutor());
 
@@ -130,7 +130,7 @@ describe('litesvmTransactionPlanExecutor', () => {
             };
             const sendTransaction = vi.fn().mockReturnValue({ err: () => instructionError });
             const svm = { sendTransaction, setTransactionMessageLifetimeUsingLatestBlockhash } as unknown as LiteSVM;
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(() => ({ payer, svm }))
                 .use(litesvmTransactionPlanExecutor());
 
@@ -155,7 +155,7 @@ describe('litesvmTransactionPlanExecutor', () => {
 
         it('requires an svm instance on the client', () => {
             // @ts-expect-error Missing svm instance on the client.
-            expect(() => createEmptyClient().use(litesvmTransactionPlanExecutor())).toThrow();
+            expect(() => createClient().use(litesvmTransactionPlanExecutor())).toThrow();
         });
     });
 
@@ -169,7 +169,7 @@ describe('litesvmTransactionPlanExecutor', () => {
 
         it('sends a real transaction successfully', async () => {
             const payer = await generateKeyPairSigner();
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(litesvm())
                 .use(client => extendClient(client, { payer }))
                 .use(litesvmTransactionPlanner())
@@ -186,7 +186,7 @@ describe('litesvmTransactionPlanExecutor', () => {
         it('successfully executes a planned instruction plan', async () => {
             const payer = await generateKeyPairSigner();
             const destination = await generateKeyPairSigner();
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(litesvm())
                 .use(client => extendClient(client, { payer }))
                 .use(litesvmTransactionPlanner())
@@ -206,7 +206,7 @@ describe('litesvmTransactionPlanExecutor', () => {
 
         it('throws a SolanaError when a real transaction fails with an instruction error', async () => {
             const payer = await generateKeyPairSigner();
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(litesvm())
                 .use(client => extendClient(client, { payer }))
                 .use(litesvmTransactionPlanner())
@@ -241,7 +241,7 @@ describe('litesvmTransactionPlanExecutor', () => {
 
         it('throws a SolanaError when the payer has no account', async () => {
             const payer = await generateKeyPairSigner();
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(litesvm())
                 .use(client => extendClient(client, { payer }))
                 .use(litesvmTransactionPlanner())
@@ -266,7 +266,7 @@ describe('litesvmTransactionPlanExecutor', () => {
 
         it('includes transactionMetadata with expected methods on success', async () => {
             const payer = await generateKeyPairSigner();
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(litesvm())
                 .use(client => extendClient(client, { payer }))
                 .use(litesvmTransactionPlanner())
@@ -288,7 +288,7 @@ describe('litesvmTransactionPlanExecutor', () => {
 
         it('includes transactionMetadata in the result context on failure', async () => {
             const payer = await generateKeyPairSigner();
-            const client = createEmptyClient()
+            const client = createClient()
                 .use(litesvm())
                 .use(client => extendClient(client, { payer }))
                 .use(litesvmTransactionPlanner())
