@@ -15,11 +15,11 @@
 ### RPC-based airdrop
 
 ```diff
-  import { createEmptyClient } from '@solana/kit';
+  import { createClient } from '@solana/kit';
 - import { airdrop, localhostRpc } from '@solana/kit-plugins';
 + import { localhostRpc, rpcAirdrop } from '@solana/kit-plugin-rpc';
 
-  const client = createEmptyClient()
+  const client = createClient()
       .use(localhostRpc())
 -     .use(airdrop());
 +     .use(rpcAirdrop());
@@ -28,11 +28,11 @@
 ### LiteSVM-based airdrop
 
 ```diff
-  import { createEmptyClient } from '@solana/kit';
+  import { createClient } from '@solana/kit';
 - import { airdrop, litesvm } from '@solana/kit-plugins';
 + import { litesvm, litesvmAirdrop } from '@solana/kit-plugin-litesvm';
 
-  const client = createEmptyClient()
+  const client = createClient()
       .use(litesvm())
 -     .use(airdrop());
 +     .use(litesvmAirdrop());

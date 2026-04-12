@@ -22,11 +22,11 @@ The `transactionPlanner` plugin sets a custom transaction planner on the client.
 ### Installation
 
 ```ts
-import { createEmptyClient, createTransactionPlanner } from '@solana/kit';
+import { createClient, createTransactionPlanner } from '@solana/kit';
 import { transactionPlanner } from '@solana/kit-plugin-instruction-plan';
 
 const myTransactionPlanner = createTransactionPlanner(/* ... */);
-const client = createEmptyClient().use(transactionPlanner(myTransactionPlanner));
+const client = createClient().use(transactionPlanner(myTransactionPlanner));
 ```
 
 ### Features
@@ -43,11 +43,11 @@ The `transactionPlanExecutor` plugin sets a custom transaction plan executor on 
 ### Installation
 
 ```ts
-import { createEmptyClient, createTransactionPlanExecutor } from '@solana/kit';
+import { createClient, createTransactionPlanExecutor } from '@solana/kit';
 import { transactionPlanExecutor } from '@solana/kit-plugin-instruction-plan';
 
 const myTransactionPlanExecutor = createTransactionPlanExecutor(/* ... */);
-const client = createEmptyClient().use(transactionPlanExecutor(myTransactionPlanExecutor));
+const client = createClient().use(transactionPlanExecutor(myTransactionPlanExecutor));
 ```
 
 ### Features
@@ -66,14 +66,14 @@ The `planAndSendTransactions` plugin adds helper functions for planning and send
 This plugin requires both `transactionPlanner` and `transactionPlanExecutor` to be installed on the client.
 
 ```ts
-import { createEmptyClient } from '@solana/kit';
+import { createClient } from '@solana/kit';
 import {
     transactionPlanner,
     transactionPlanExecutor,
     planAndSendTransactions,
 } from '@solana/kit-plugin-instruction-plan';
 
-const client = createEmptyClient()
+const client = createClient()
     .use(transactionPlanner(myTransactionPlanner))
     .use(transactionPlanExecutor(myTransactionPlanExecutor))
     .use(planAndSendTransactions());

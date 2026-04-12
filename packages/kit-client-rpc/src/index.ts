@@ -1,6 +1,6 @@
 import {
     ClusterUrl,
-    createEmptyClient,
+    createClient as createEmptyClient,
     DefaultRpcSubscriptionsChannelConfig,
     MicroLamports,
     TransactionSigner,

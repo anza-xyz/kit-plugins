@@ -1,4 +1,4 @@
-import { createEmptyClient, generateKeyPairSigner, KeyPairSigner, lamports, TransactionSigner } from '@solana/kit';
+import { createClient, generateKeyPairSigner, KeyPairSigner, lamports, TransactionSigner } from '@solana/kit';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 import { generatedPayer, generatedPayerWithSol, payer, payerFromFile, payerOrGeneratedPayer } from '../src';
@@ -6,7 +6,7 @@ import { generatedPayer, generatedPayerWithSol, payer, payerFromFile, payerOrGen
 describe('payer', () => {
     it('sets the payer attribute with the provided signer', async () => {
         const signer = await generateKeyPairSigner();
-        const client = createEmptyClient().use(payer(signer));
+        const client = createClient().use(payer(signer));
         expect(client).toHaveProperty('payer');
         expect(client.payer).toBe(signer);
     });
@@ -14,7 +14,7 @@ describe('payer', () => {
 
 describe('generatedPayer', () => {
     it('generates a new payer and set it on the client', async () => {
-        const client = await createEmptyClient().use(generatedPayer());
+        const client = await createClient().use(generatedPayer());
         expect(client).toHaveProperty('payer');
         expect(client.payer).toBeTypeOf('object');
         expectTypeOf(client.payer).toEqualTypeOf<KeyPairSigner>();
@@ -25,7 +25,7 @@ describe('generatedPayerWithSol', () => {
     it('generates a new payer with some initial SOL using the airdrop plugin', async () => {
         const amount = lamports(1_000_000_000n);
         const airdrop = vi.fn();
-        const client = await createEmptyClient()
+        const client = await createClient()
             .use(() => ({ airdrop }))
             .use(generatedPayerWithSol(amount));
 
@@ -40,7 +40,7 @@ describe('payerOrGeneratedPayer', () => {
     it('uses the provided payer when one is given', async () => {
         const signer = await generateKeyPairSigner();
         const airdrop = vi.fn();
-        const client = await createEmptyClient()
+        const client = await createClient()
             .use(() => ({ airdrop }))
             .use(payerOrGeneratedPayer(signer));
 
@@ -50,7 +50,7 @@ describe('payerOrGeneratedPayer', () => {
 
     it('generates a new payer and airdrops 100 SOL when no payer is given', async () => {
         const airdrop = vi.fn();
-        const client = await createEmptyClient()
+        const client = await createClient()
             .use(() => ({ airdrop }))
             .use(payerOrGeneratedPayer(undefined));
 
@@ -64,7 +64,7 @@ describe('payerOrGeneratedPayer', () => {
 describe('payerFromFile', () => {
     if (__NODEJS__) {
         it('generates a new payer and set it on the client', async () => {
-            const client = await createEmptyClient().use(payerFromFile('test/mock_payer.json'));
+            const client = await createClient().use(payerFromFile('test/mock_payer.json'));
             expect(client).toHaveProperty('payer');
             expect(client.payer).toBeTypeOf('object');
             expectTypeOf(client.payer).toEqualTypeOf<KeyPairSigner>();

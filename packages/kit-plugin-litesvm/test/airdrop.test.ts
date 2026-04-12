@@ -1,4 +1,4 @@
-import { address, createEmptyClient, lamports } from '@solana/kit';
+import { address, createClient, lamports } from '@solana/kit';
 import { describe, expect, it, vi } from 'vitest';
 
 import { litesvm, litesvmAirdrop } from '../src';
@@ -11,7 +11,7 @@ describe('litesvmAirdrop', () => {
                 signature: () => mockSignature,
             }),
         };
-        const client = createEmptyClient()
+        const client = createClient()
             .use(() => ({ svm }))
             .use(litesvmAirdrop());
         expect(client).toHaveProperty('airdrop');
@@ -26,7 +26,7 @@ describe('litesvmAirdrop', () => {
 
     it('throws when the airdrop returns null', () => {
         const svm = { airdrop: vi.fn().mockReturnValue(null) };
-        const client = createEmptyClient()
+        const client = createClient()
             .use(() => ({ svm }))
             .use(litesvmAirdrop());
 
@@ -40,7 +40,7 @@ describe('litesvmAirdrop', () => {
                 err: () => 2, // AccountNotFound
             }),
         };
-        const client = createEmptyClient()
+        const client = createClient()
             .use(() => ({ svm }))
             .use(litesvmAirdrop());
 
@@ -50,7 +50,7 @@ describe('litesvmAirdrop', () => {
 
     if (__NODEJS__) {
         it('works with a LiteSVM instance', async () => {
-            const client = createEmptyClient().use(litesvm()).use(litesvmAirdrop());
+            const client = createClient().use(litesvm()).use(litesvmAirdrop());
             expect(client).toHaveProperty('airdrop');
 
             const receiver = address('HQVxiMVDoV9jzG4tpoxmDZsNfWvaHXm8DGGv93Gka75v');

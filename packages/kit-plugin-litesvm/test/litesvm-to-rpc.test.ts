@@ -1,4 +1,4 @@
-import { address, createEmptyClient, generateKeyPairSigner, lamports, Rpc } from '@solana/kit';
+import { address, createClient, generateKeyPairSigner, lamports, Rpc } from '@solana/kit';
 import { describe, expect, it } from 'vitest';
 
 import { litesvm as nodeLitesvm } from '../src/index';
@@ -14,7 +14,7 @@ describe('createRpcFromSvm', () => {
     }
 
     it('can fetch an account set on the svm', async () => {
-        const client = createEmptyClient().use(litesvm());
+        const client = createClient().use(litesvm());
         const accountAddress = await generateKeyPairSigner().then(signer => signer.address);
 
         client.svm.setAccount({
@@ -37,7 +37,7 @@ describe('createRpcFromSvm', () => {
     });
 
     it('can fetch a missing account on the svm', async () => {
-        const client = createEmptyClient().use(litesvm());
+        const client = createClient().use(litesvm());
         const missingAddress = await generateKeyPairSigner().then(signer => signer.address);
 
         const { value } = await client.rpc.getAccountInfo(missingAddress).send();
@@ -45,7 +45,7 @@ describe('createRpcFromSvm', () => {
     });
 
     it('can fetch multiple accounts set on the svm', async () => {
-        const client = createEmptyClient().use(litesvm());
+        const client = createClient().use(litesvm());
 
         const [addressA, addressB, missingAddressC] = await Promise.all([
             generateKeyPairSigner().then(signer => signer.address),
@@ -91,7 +91,7 @@ describe('createRpcFromSvm', () => {
     });
 
     it('can fetch the balance of an account set on the svm', async () => {
-        const client = createEmptyClient().use(litesvm());
+        const client = createClient().use(litesvm());
         const accountAddress = await generateKeyPairSigner().then(signer => signer.address);
 
         client.svm.setAccount({
@@ -108,7 +108,7 @@ describe('createRpcFromSvm', () => {
     });
 
     it('returns zero balance for a missing account', async () => {
-        const client = createEmptyClient().use(litesvm());
+        const client = createClient().use(litesvm());
         const missingAddress = await generateKeyPairSigner().then(signer => signer.address);
 
         const { value } = await client.rpc.getBalance(missingAddress).send();
@@ -116,7 +116,7 @@ describe('createRpcFromSvm', () => {
     });
 
     it('can fetch the epoch schedule', async () => {
-        const client = createEmptyClient().use(litesvm());
+        const client = createClient().use(litesvm());
 
         const response = await client.rpc.getEpochSchedule().send();
         expect(typeof response.firstNormalEpoch).toBe('bigint');
@@ -127,7 +127,7 @@ describe('createRpcFromSvm', () => {
     });
 
     it('can fetch the latest blockhash', async () => {
-        const client = createEmptyClient().use(litesvm());
+        const client = createClient().use(litesvm());
 
         const { value } = await client.rpc.getLatestBlockhash({ commitment: 'finalized' }).send();
         expect(value).toStrictEqual({
@@ -137,7 +137,7 @@ describe('createRpcFromSvm', () => {
     });
 
     it('can fetch the minimum balance for rent exemption', async () => {
-        const client = createEmptyClient().use(litesvm());
+        const client = createClient().use(litesvm());
 
         const response = await client.rpc.getMinimumBalanceForRentExemption(100n).send();
         expect(response).toBeGreaterThan(0n);
@@ -145,7 +145,7 @@ describe('createRpcFromSvm', () => {
     });
 
     it('can fetch the current slot', async () => {
-        const client = createEmptyClient().use(litesvm());
+        const client = createClient().use(litesvm());
 
         const slot = await client.rpc.getSlot().send();
         expect(typeof slot).toBe('bigint');
@@ -153,7 +153,7 @@ describe('createRpcFromSvm', () => {
     });
 
     it('can request an airdrop', async () => {
-        const client = createEmptyClient().use(litesvm());
+        const client = createClient().use(litesvm());
         const recipientAddress = await generateKeyPairSigner().then(signer => signer.address);
 
         const signature = await client.rpc.requestAirdrop(recipientAddress, lamports(1_000_000_000n)).send();
@@ -166,7 +166,7 @@ describe('createRpcFromSvm', () => {
     });
 
     it('throws when calling an unsupported RPC method', async () => {
-        const client = createEmptyClient().use(litesvm());
+        const client = createClient().use(litesvm());
         const rpc = client.rpc as unknown as Rpc<{ unsupportedMethod: () => unknown }>;
         const promise = rpc.unsupportedMethod().send();
         await expect(promise).rejects.toThrow('Unsupported RPC method for LiteSVM client: unsupportedMethod');

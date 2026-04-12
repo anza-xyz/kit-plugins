@@ -16,11 +16,11 @@ export type { LiteSVM } from 'litesvm';
  *
  * @example
  * ```ts
- * import { createEmptyClient } from '@solana/kit';
+ * import { createClient } from '@solana/kit';
  * import { litesvm } from '@solana/kit-plugin-litesvm';
  *
  * // Install the LiteSVM plugin.
- * const client = createEmptyClient().use(litesvm());
+ * const client = createClient().use(litesvm());
  *
  * // Use LiteSVM to set up accounts and programs.
  * client.svm.setAccount(myAccount);

@@ -1,4 +1,4 @@
-import { createEmptyClient, TransactionSigner } from '@solana/kit';
+import { createClient as createEmptyClient, TransactionSigner } from '@solana/kit';
 import { planAndSendTransactions } from '@solana/kit-plugin-instruction-plan';
 import {
     litesvm,

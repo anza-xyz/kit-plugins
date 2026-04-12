@@ -25,11 +25,11 @@ import {
  *
  * @example
  * ```ts
- * import { createEmptyClient, createTransactionPlanner } from '@solana/kit';
+ * import { createClient, createTransactionPlanner } from '@solana/kit';
  * import { transactionPlanner } from '@solana/kit-plugin-instruction-plan';
  *
  * // Install the transactionPlanner plugin using a custom transaction planner.
- * const client = createEmptyClient()
+ * const client = createClient()
  *     .use(transactionPlanner(createTransactionPlanner(...)));
  *
  * // Use the transaction planner.
@@ -45,11 +45,11 @@ export function transactionPlanner(transactionPlanner: TransactionPlanner) {
  *
  * @example
  * ```ts
- * import { createEmptyClient, createTransactionPlanExecutor } from '@solana/kit';
+ * import { createClient, createTransactionPlanExecutor } from '@solana/kit';
  * import { transactionPlanExecutor } from '@solana/kit-plugin-instruction-plan';
  *
  * // Install the transactionPlanExecutor plugin using a custom transaction plan executor.
- * const client = createEmptyClient()
+ * const client = createClient()
  *     .use(transactionPlanExecutor(createTransactionPlanExecutor(...)));
  *
  * // Use the transaction plan executor.
@@ -79,11 +79,11 @@ export function transactionPlanExecutor(transactionPlanExecutor: TransactionPlan
  *
  * @example
  * ```ts
- * import { createEmptyClient } from '@solana/kit';
+ * import { createClient } from '@solana/kit';
  * import { transactionPlanner, transactionPlanExecutor, planAndSendTransactions } from '@solana/kit-plugin-instruction-plan';
  *
  * // Install the planAndSendTransactions plugin and its requirements.
- * const client = createEmptyClient()
+ * const client = createClient()
  *     .use(transactionPlanner(myTransactionPlanner))
  *     .use(transactionPlanExecutor(myTransactionPlanExecutor))
  *     .use(planAndSendTransactions());

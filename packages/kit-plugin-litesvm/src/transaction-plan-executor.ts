@@ -21,11 +21,11 @@ import { getSolanaErrorFromLiteSvmFailure, isFailedTransaction } from './transac
  *
  * @example
  * ```ts
- * import { createEmptyClient } from '@solana/kit';
+ * import { createClient } from '@solana/kit';
  * import { litesvm, litesvmTransactionPlanner, litesvmTransactionPlanExecutor } from '@solana/kit-plugin-litesvm';
  * import { generatedPayer } from '@solana/kit-plugin-payer';
  *
- * const client = await createEmptyClient()
+ * const client = await createClient()
  *     .use(litesvm())
  *     .use(generatedPayer())
  *     .use(litesvmTransactionPlanner())

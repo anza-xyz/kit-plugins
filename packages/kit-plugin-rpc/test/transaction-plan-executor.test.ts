@@ -1,6 +1,6 @@
 import {
     Address,
-    createEmptyClient,
+    createClient,
     createTransactionMessage,
     generateKeyPairSigner,
     parallelTransactionPlan,
@@ -38,7 +38,7 @@ describe('rpcTransactionPlanExecutor', () => {
     it('provides a transactionPlanExecutor on the client', () => {
         const rpc = {} as Rpc<SolanaRpcApi>;
         const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
-        const client = createEmptyClient()
+        const client = createClient()
             .use(() => ({ rpc, rpcSubscriptions }))
             .use(rpcTransactionPlanExecutor());
         expect(client).toHaveProperty('transactionPlanExecutor');
@@ -56,7 +56,7 @@ describe('rpcTransactionPlanExecutor', () => {
         const sendAndConfirmTransaction = vi.fn().mockResolvedValue('MockTransactionSignature');
         (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
 
-        const client = createEmptyClient()
+        const client = createClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
             .use(rpcTransactionPlanner())
             .use(rpcTransactionPlanExecutor());
@@ -84,7 +84,7 @@ describe('rpcTransactionPlanExecutor', () => {
         const sendAndConfirmTransaction = vi.fn().mockResolvedValue('MockTransactionSignature');
         (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
 
-        const client = createEmptyClient()
+        const client = createClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
             .use(rpcTransactionPlanExecutor());
 
@@ -114,7 +114,7 @@ describe('rpcTransactionPlanExecutor', () => {
         const sendAndConfirmTransaction = vi.fn().mockResolvedValue('MockTransactionSignature');
         (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
 
-        const client = createEmptyClient()
+        const client = createClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
             .use(rpcTransactionPlanExecutor());
 
@@ -148,7 +148,7 @@ describe('rpcTransactionPlanExecutor', () => {
         const sendAndConfirmTransaction = vi.fn().mockResolvedValue('MockTransactionSignature');
         (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
 
-        const client = createEmptyClient()
+        const client = createClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
             .use(rpcTransactionPlanExecutor({ skipPreflight: true }));
 
@@ -184,7 +184,7 @@ describe('rpcTransactionPlanExecutor', () => {
         const sendAndConfirmTransaction = vi.fn().mockResolvedValue('MockTransactionSignature');
         (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
 
-        const client = createEmptyClient()
+        const client = createClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
             .use(rpcTransactionPlanExecutor());
 
@@ -212,7 +212,7 @@ describe('rpcTransactionPlanExecutor', () => {
         const sendAndConfirmTransaction = vi.fn().mockResolvedValue('MockTransactionSignature');
         (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
 
-        const client = createEmptyClient()
+        const client = createClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
             .use(rpcTransactionPlanExecutor({ skipPreflight: true }));
 
@@ -241,7 +241,7 @@ describe('rpcTransactionPlanExecutor', () => {
         });
         (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
 
-        const client = createEmptyClient()
+        const client = createClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
             .use(rpcTransactionPlanner())
             .use(rpcTransactionPlanExecutor({ maxConcurrency: 2 }));
@@ -273,7 +273,7 @@ describe('rpcTransactionPlanExecutor', () => {
     it('requires an RPC API on the client', () => {
         const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
         expect(() =>
-            createEmptyClient()
+            createClient()
                 .use(() => ({ rpcSubscriptions }))
                 // @ts-expect-error Missing RPC on the client.
                 .use(rpcTransactionPlanExecutor()),
@@ -283,7 +283,7 @@ describe('rpcTransactionPlanExecutor', () => {
     it('requires an RPC Subscriptions API on the client', () => {
         const rpc = {} as Rpc<SolanaRpcApi>;
         expect(() =>
-            createEmptyClient()
+            createClient()
                 .use(() => ({ rpc }))
                 // @ts-expect-error Missing RPC Subscriptions on the client.
                 .use(rpcTransactionPlanExecutor()),

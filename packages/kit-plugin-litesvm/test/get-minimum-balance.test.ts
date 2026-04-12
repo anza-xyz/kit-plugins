@@ -1,4 +1,4 @@
-import { BASE_ACCOUNT_SIZE, createEmptyClient, lamports } from '@solana/kit';
+import { BASE_ACCOUNT_SIZE, createClient, lamports } from '@solana/kit';
 import { describe, expect, it, vi } from 'vitest';
 
 import { litesvm, litesvmGetMinimumBalance } from '../src';
@@ -9,7 +9,7 @@ const LAMPORTS_PER_BYTE = 6_960n;
 describe('litesvmGetMinimumBalance', () => {
     it('provides a getMinimumBalance function that relies on a LiteSVM instance', () => {
         const minimumBalanceForRentExemption = vi.fn();
-        const client = createEmptyClient()
+        const client = createClient()
             .use(() => ({ svm: { minimumBalanceForRentExemption } }))
             .use(litesvmGetMinimumBalance());
         expect(client).toHaveProperty('getMinimumBalance');
@@ -18,7 +18,7 @@ describe('litesvmGetMinimumBalance', () => {
 
     it('calls svm with the space as data length by default', async () => {
         const minimumBalanceForRentExemption = vi.fn().mockReturnValue(42n);
-        const client = createEmptyClient()
+        const client = createClient()
             .use(() => ({ svm: { minimumBalanceForRentExemption } }))
             .use(litesvmGetMinimumBalance());
 
@@ -30,7 +30,7 @@ describe('litesvmGetMinimumBalance', () => {
     it('computes the per-byte rate when withoutHeader is true', async () => {
         const headerBalance = LAMPORTS_PER_BYTE * BigInt(BASE_ACCOUNT_SIZE);
         const minimumBalanceForRentExemption = vi.fn().mockReturnValue(headerBalance);
-        const client = createEmptyClient()
+        const client = createClient()
             .use(() => ({ svm: { minimumBalanceForRentExemption } }))
             .use(litesvmGetMinimumBalance());
 
@@ -42,7 +42,7 @@ describe('litesvmGetMinimumBalance', () => {
 
     if (__NODEJS__) {
         it('works with a LiteSVM instance', async () => {
-            const client = createEmptyClient().use(litesvm()).use(litesvmGetMinimumBalance());
+            const client = createClient().use(litesvm()).use(litesvmGetMinimumBalance());
             expect(client).toHaveProperty('getMinimumBalance');
 
             const balance = await client.getMinimumBalance(100);
