@@ -15,6 +15,7 @@ This is a monorepo managed with [pnpm](https://pnpm.io/) and [Turborepo](https:/
 | [`@solana/kit-client-litesvm`](./packages/kit-client-litesvm)                   | Pre-configured LiteSVM client factory.                         |
 | [`@solana/kit-plugin-rpc`](./packages/kit-plugin-rpc)                           | RPC connection plugins.                                        |
 | [`@solana/kit-plugin-payer`](./packages/kit-plugin-payer)                       | Transaction fee payer plugins.                                 |
+| [`@solana/kit-plugin-signer`](./packages/kit-plugin-signer)                     | Signer, payer, and identity plugins.                           |
 | [`@solana/kit-plugin-airdrop`](./packages/kit-plugin-airdrop)                   | SOL airdrop plugin.                                            |
 | [`@solana/kit-plugin-litesvm`](./packages/kit-plugin-litesvm)                   | LiteSVM support plugin.                                        |
 | [`@solana/kit-plugin-instruction-plan`](./packages/kit-plugin-instruction-plan) | Transaction planning and execution plugins.                    |

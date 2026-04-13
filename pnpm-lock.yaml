@@ -167,6 +167,12 @@ importers:
         specifier: workspace:*
         version: link:../kit-plugin-instruction-plan
 
+  packages/kit-plugin-signer:
+    dependencies:
+      '@solana/kit':
+        specifier: ^6.8.0
+        version: 6.8.0(typescript@5.9.3)
+
   packages/kit-plugins:
     dependencies:
       '@solana/kit':
