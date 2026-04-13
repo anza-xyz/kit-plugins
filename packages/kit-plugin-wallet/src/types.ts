@@ -95,10 +95,10 @@ export type WalletActionOptions = {
  * @example
  * ```ts
  * // Use sessionStorage
- * wallet({ chain: 'solana:mainnet', storage: sessionStorage });
+ * walletSigner({ chain: 'solana:mainnet', storage: sessionStorage });
  *
  * // Custom async adapter
- * wallet({
+ * walletSigner({
  *   chain: 'solana:mainnet',
  *   storage: {
  *     getItem: (key) => myStore.get(key),
@@ -115,8 +115,12 @@ export type WalletStorage = {
 };
 
 /**
- * Configuration for the wallet plugins ({@link walletSigner},
- * {@link walletPayer}, {@link walletIdentity}, {@link walletWithoutSigner}).
+ * Configuration for the wallet plugins.
+ *
+ * @see {@link walletSigner}
+ * @see {@link walletIdentity}
+ * @see {@link walletPayer}
+ * @see {@link walletWithoutSigner}
  */
 export type WalletPluginConfig = {
     /**
@@ -289,8 +293,13 @@ export type WalletNamespace = {
  * Properties added to the client by the wallet plugins.
  *
  * All wallet state and actions are namespaced under `client.wallet`.
+ * Depending on which plugin variant is used, `client.payer` and/or
+ * `client.identity` may also be set to the connected wallet's signer.
  *
  * @see {@link walletSigner}
+ * @see {@link walletPayer}
+ * @see {@link walletIdentity}
+ * @see {@link walletWithoutSigner}
  * @see {@link WalletNamespace}
  *
  * @note this is not part of Kit plugin-interfaces, as it depends on wallet-standard types
