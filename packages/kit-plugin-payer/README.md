@@ -1,4 +1,4 @@
-# Kit Plugins ➤ Payer
+# Kit Plugins ➤ Payer (deprecated)
 
 [![npm][npm-image]][npm-url]
 [![npm-downloads][npm-downloads-image]][npm-url]
@@ -7,125 +7,50 @@
 [npm-image]: https://img.shields.io/npm/v/@solana/kit-plugin-payer.svg?style=flat&label=%40solana%2Fkit-plugin-payer
 [npm-url]: https://www.npmjs.com/package/@solana/kit-plugin-payer
 
-This package offers plugins that set up the main "payer" signer on your Kit clients. It does this by adding a `payer` property to the client, which can then be used to sign transactions, pay for fees, etc. This is a good way to feed signer information to subsequent plugins.
+> [!WARNING]
+> This package is deprecated. Use [`@solana/kit-plugin-signer`](../kit-plugin-signer) instead, which provides the same payer plugins plus new `identity` and `signer` variants.
 
-## Installation
+## Migration
 
-```sh
-pnpm install @solana/kit-plugin-payer
+All exports are available under the same name in `@solana/kit-plugin-signer`. Simply update your import path:
+
+```diff
+  import { createClient } from '@solana/kit';
+- import { payer } from '@solana/kit-plugin-payer';
++ import { payer } from '@solana/kit-plugin-signer';
+
+  const client = createClient().use(payer(mySigner));
 ```
 
-## `payer` plugin
+The full mapping is:
 
-This plugin simply accepts a `TransactionSigner` and sets it as the `payer` property on the client.
+| `@solana/kit-plugin-payer` | `@solana/kit-plugin-signer`                                                                          |
+| -------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `payer()`                  | `payer()` (also available: `identity()`, `signer()`)                                                 |
+| `generatedPayer()`         | `generatedPayer()` (also available: `generatedIdentity()`, `generatedSigner()`)                      |
+| `generatedPayerWithSol()`  | `generatedPayerWithSol()` (also available: `generatedIdentityWithSol()`, `generatedSignerWithSol()`) |
+| `payerFromFile()`          | `payerFromFile()` (also available: `identityFromFile()`, `signerFromFile()`)                         |
+| `payerOrGeneratedPayer()`  | Use `payer()` and/or `generatedPayerWithSol()` directly                                              |
 
-### Installation
+### `payerOrGeneratedPayer` migration
 
-```ts
-import { createClient } from '@solana/kit';
-import { payer } from '@solana/kit-plugin-payer';
+`payerOrGeneratedPayer` has no direct replacement. Use `payer()` for the explicit case and `generatedPayerWithSol()` for the generated case:
 
-const client = createClient().use(payer(mySigner));
+```diff
+  import { createClient, lamports } from '@solana/kit';
+  import { solanaRpcConnection, solanaRpcSubscriptionsConnection, rpcAirdrop } from '@solana/kit-plugin-rpc';
+- import { payerOrGeneratedPayer } from '@solana/kit-plugin-payer';
++ import { payer, generatedPayerWithSol } from '@solana/kit-plugin-signer';
+
+  // With an explicit payer.
+- const client = await createClient().use(payerOrGeneratedPayer(mySigner));
++ const client = createClient().use(payer(mySigner));
+
+  // With a generated payer funded with SOL.
+  const client = await createClient()
+      .use(solanaRpcConnection('http://127.0.0.1:8899'))
+      .use(solanaRpcSubscriptionsConnection('ws://127.0.0.1:8900'))
+      .use(rpcAirdrop())
+-     .use(payerOrGeneratedPayer(undefined));
++     .use(generatedPayerWithSol(lamports(100_000_000_000n)));
 ```
-
-### Features
-
-- `payer`: The main payer signer for your Kit client.
-    ```ts
-    console.log(client.payer.address);
-    const transactionMessage = pipe(
-        createTransactionMessage({ version: 0 }),
-        tx => setTransactionFeePayerSigner(client.payer, tx),
-        tx => appendTransactionMessageInstruction(getTransferSolInstruction({ source: client.payer, ... }), tx),
-    );
-    ```
-
-## `generatedPayer` plugin
-
-This asynchronous plugin generates a new random `KeyPairSigner` to be used as the `payer` property on the client.
-
-### Installation
-
-```ts
-import { createClient } from '@solana/kit';
-import { generatedPayer } from '@solana/kit-plugin-payer';
-
-const client = await createClient().use(generatedPayer());
-```
-
-### Features
-
-_See the `payer` plugin for available features_.
-
-## `generatedPayerWithSol` plugin
-
-This asynchronous plugin generates a new random `KeyPairSigner`, airdrops some SOL to it and sets it as the `payer` property on the client.
-
-### Installation
-
-Note that this plugin requires an airdrop plugin to be installed on the client beforehand (e.g. `rpcAirdrop` or `litesvmAirdrop`) which itself either requires an RPC connection or a LiteSVM instance.
-
-```ts
-import { createClient } from '@solana/kit';
-import { solanaRpcConnection, solanaRpcSubscriptionsConnection, rpcAirdrop } from '@solana/kit-plugin-rpc';
-import { generatedPayerWithSol } from '@solana/kit-plugin-payer';
-
-const client = await createClient()
-    .use(solanaRpcConnection('http://127.0.0.1:8899'))
-    .use(solanaRpcSubscriptionsConnection('ws://127.0.0.1:8900'))
-    .use(rpcAirdrop())
-    // or .use(litesvmConnection()).use(litesvmAirdrop())
-    .use(generatedPayerWithSol(lamports(10_000_000_000n))); // 10 SOL
-```
-
-### Features
-
-_See the `payer` plugin for available features_.
-
-## `payerOrGeneratedPayer` plugin
-
-This asynchronous plugin uses the provided `TransactionSigner` as the payer if one is given. Otherwise, it generates a new random `KeyPairSigner`, airdrops 100 SOL to it, and sets it as the `payer` property on the client. This is useful when you want to optionally accept a payer from the caller but fall back to a generated and funded payer for convenience (e.g. in testing or local development).
-
-### Installation
-
-When no explicit payer is given, this plugin requires an airdrop plugin to be installed on the client beforehand (e.g. `rpcAirdrop` or `litesvmAirdrop`) which itself either requires an RPC connection or a LiteSVM instance.
-
-```ts
-import { createClient } from '@solana/kit';
-import { solanaRpcConnection, solanaRpcSubscriptionsConnection, rpcAirdrop } from '@solana/kit-plugin-rpc';
-import { payerOrGeneratedPayer } from '@solana/kit-plugin-payer';
-
-// With an explicit payer — no airdrop needed.
-const client = await createClient().use(payerOrGeneratedPayer(mySigner));
-
-// Without a payer — generates one and airdrops 100 SOL.
-const client = await createClient()
-    .use(solanaRpcConnection('http://127.0.0.1:8899'))
-    .use(solanaRpcSubscriptionsConnection('ws://127.0.0.1:8900'))
-    .use(rpcAirdrop())
-    // or .use(litesvmConnection()).use(litesvmAirdrop())
-    .use(payerOrGeneratedPayer(undefined));
-```
-
-### Features
-
-_See the `payer` plugin for available features_.
-
-## `payerFromFile` plugin
-
-This plugin loads a `KeyPairSigner` from a local file and sets it as the `payer` property on the client.
-
-### Installation
-
-Note that this plugin requires access to the local filesystem and therefore can only work in Node.js environments. Other environments (like browsers) will throw an error when trying to use this plugin.
-
-```ts
-import { createClient } from '@solana/kit';
-import { payerFromFile } from '@solana/kit-plugin-payer';
-
-const client = createClient().use(payerFromFile('path/to/keypair.json'));
-```
-
-### Features
-
-_See the `payer` plugin for available features_.

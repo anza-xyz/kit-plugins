@@ -16,17 +16,12 @@ import {
  *
  * @param payer - The `TransactionSigner` to set as the payer.
  *
- * @example
+ * @deprecated Use `payer` from `@solana/kit-plugin-signer` instead.
  * ```ts
  * import { createClient } from '@solana/kit';
- * import { payer } from '@solana/kit-plugin-payer';
+ * import { payer } from '@solana/kit-plugin-signer';
  *
- * // Install the payer plugin with your signer.
  * const client = createClient().use(payer(mySigner));
- *
- * // Use the payer in your client.
- * console.log(client.payer.address);
- * setTransactionFeePayerSigner(client.payer, transactionMessage);
  * ```
  */
 export function payer(payer: TransactionSigner) {
@@ -36,17 +31,12 @@ export function payer(payer: TransactionSigner) {
 /**
  * Generates a new `KeyPairSigner` and sets it as the `payer` property on the client.
  *
- * @example
+ * @deprecated Use `generatedPayer` from `@solana/kit-plugin-signer` instead.
  * ```ts
  * import { createClient } from '@solana/kit';
- * import { generatedPayer } from '@solana/kit-plugin-payer';
+ * import { generatedPayer } from '@solana/kit-plugin-signer';
  *
- * // Install the generatedPayer plugin.
  * const client = await createClient().use(generatedPayer());
- *
- * // Use the payer in your client.
- * console.log(client.payer.address);
- * setTransactionFeePayerSigner(client.payer, transactionMessage);
  * ```
  */
 export function generatedPayer() {
@@ -60,18 +50,13 @@ export function generatedPayer() {
  *
  * @param amount - The amount of lamports to airdrop to the generated payer.
  *
- * @example
+ * @deprecated Use `generatedPayerWithSol` from `@solana/kit-plugin-signer` instead.
  * ```ts
- * import { createClient } from '@solana/kit';
- * import { generatedPayerWithSol } from '@solana/kit-plugin-payer';
+ * import { createClient, lamports } from '@solana/kit';
+ * import { generatedPayerWithSol } from '@solana/kit-plugin-signer';
  *
- * // Install the generatedPayerWithSol plugin.
- * const amount = lamports(10_000_000_000n); // 10 SOL.
- * const client = await createClient().use(generatedPayerWithSol(amount));
- *
- * // Use the payer in your client.
- * console.log(client.payer.address);
- * setTransactionFeePayerSigner(client.payer, transactionMessage);
+ * const client = await createClient()
+ *     .use(generatedPayerWithSol(lamports(10_000_000_000n)));
  * ```
  */
 export function generatedPayerWithSol(amount: Lamports) {
@@ -93,17 +78,12 @@ export function generatedPayerWithSol(amount: Lamports) {
  *
  * @param path - The file path to the JSON file containing the keypair bytes.
  *
- * @example
+ * @deprecated Use `payerFromFile` from `@solana/kit-plugin-signer` instead.
  * ```ts
  * import { createClient } from '@solana/kit';
- * import { payerFromFile } from '@solana/kit-plugin-payer';
+ * import { payerFromFile } from '@solana/kit-plugin-signer';
  *
- * // Install the payerFromFile plugin.
- * const client = createClient().use(payerFromFile('path/to/keypair.json'));
- *
- * // Use the payer in your client.
- * console.log(client.payer.address);
- * setTransactionFeePayerSigner(client.payer, transactionMessage);
+ * const client = await createClient().use(payerFromFile('path/to/keypair.json'));
  * ```
  */
 export function payerFromFile(path: string) {
@@ -130,21 +110,21 @@ export function payerFromFile(path: string) {
  * @param explicitPayer - An optional `TransactionSigner` to use as the payer.
  *                        When `undefined`, a new payer is generated and airdropped 100 SOL.
  *
- * @example
+ * @deprecated Use `payer` and/or `generatedPayerWithSol` from `@solana/kit-plugin-signer` instead.
  * ```ts
- * import { createClient } from '@solana/kit';
+ * import { createClient, lamports } from '@solana/kit';
  * import { solanaRpcConnection, solanaRpcSubscriptionsConnection, rpcAirdrop } from '@solana/kit-plugin-rpc';
- * import { payerOrGeneratedPayer } from '@solana/kit-plugin-payer';
+ * import { payer, generatedPayerWithSol } from '@solana/kit-plugin-signer';
  *
  * // With an explicit payer.
- * const client = await createClient().use(payerOrGeneratedPayer(mySigner));
+ * const client = createClient().use(payer(mySigner));
  *
- * // Without a payer — generates one and airdrops 100 SOL.
+ * // With a generated payer funded with SOL.
  * const client = await createClient()
  *     .use(solanaRpcConnection('http://127.0.0.1:8899'))
  *     .use(solanaRpcSubscriptionsConnection('ws://127.0.0.1:8900'))
  *     .use(rpcAirdrop())
- *     .use(payerOrGeneratedPayer(undefined));
+ *     .use(generatedPayerWithSol(lamports(100_000_000_000n)));
  * ```
  */
 export function payerOrGeneratedPayer(explicitPayer: TransactionSigner | undefined) {

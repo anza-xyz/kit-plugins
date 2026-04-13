@@ -1,7 +1,7 @@
 {
     "name": "@solana/kit-plugin-payer",
     "version": "0.9.0",
-    "description": "Payer helpers for Kit clients",
+    "description": "[DEPRECATED] Payer helpers for Kit clients",
     "exports": {
         "types": "./dist/types/index.d.ts",
         "react-native": "./dist/index.react-native.mjs",
