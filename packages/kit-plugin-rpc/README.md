@@ -41,7 +41,7 @@ All options are provided via a `SolanaRpcConfig` object:
 - `rpcSubscriptionsUrl`: URL of the RPC Subscriptions endpoint. Defaults to the `rpcUrl` with the protocol changed from `http` to `ws`.
 - `rpcConfig`: Optional configuration forwarded to `createSolanaRpc`.
 - `rpcSubscriptionsConfig`: Optional configuration forwarded to `createSolanaRpcSubscriptions`.
-- `priorityFees`: Priority fees in micro-lamports per compute unit. Defaults to no priority fees.
+- `transactionConfig`: Options to configure how transaction messages are created. See `rpcTransactionPlanner` options below.
 - `maxConcurrency`: Maximum number of concurrent transaction executions. Defaults to 10.
 - `skipPreflight`: Whether to always skip preflight simulation. Defaults to `false`.
 
@@ -301,7 +301,10 @@ const client = await createClient()
 
 ### Options
 
-- `priorityFees`: Priority fees in micro lamports per compute unit.
+All options are provided via a `TransactionPlannerConfig` object:
+
+- `version`: The transaction message version to use. Accepts `0` or `'legacy'`. Defaults to `0`.
+- `microLamportsPerComputeUnit`: Priority fees in micro lamports per compute unit. Defaults to no priority fees.
 
 ### Features
 

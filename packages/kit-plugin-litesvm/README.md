@@ -34,6 +34,12 @@ import { payer } from '@solana/kit-plugin-payer';
 const client = createClient().use(payer(myPayer)).use(litesvm());
 ```
 
+### Options
+
+All options are provided via a `LiteSvmConfig` object:
+
+- `transactionConfig`: Options to configure how transaction messages are created. See `litesvmTransactionPlanner` options below.
+
 ### Features
 
 - `svm`: Access the underlying LiteSVM instance.
@@ -123,7 +129,7 @@ const client = createClient().use(litesvmConnection()).use(litesvmGetMinimumBala
 
 ## `litesvmTransactionPlanner` plugin
 
-This plugin provides a default transaction planner that creates transaction messages with a fee payer, a provisory compute unit limit, and optional priority fees.
+This plugin provides a default transaction planner that creates transaction messages with a fee payer and optional priority fees.
 
 ### Installation
 
@@ -147,7 +153,10 @@ const client = await createClient()
 
 ### Options
 
-- `priorityFees`: Priority fees in micro lamports per compute unit.
+All options are provided via a `TransactionPlannerConfig` object:
+
+- `version`: The transaction message version to use. Accepts `0` or `'legacy'`. Defaults to `0`.
+- `microLamportsPerComputeUnit`: Priority fees in micro lamports per compute unit. Defaults to no priority fees.
 
 ### Features
 

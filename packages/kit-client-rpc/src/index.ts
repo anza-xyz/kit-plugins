@@ -76,7 +76,7 @@ export function createClient<TClusterUrl extends ClusterUrl>(config: ClientConfi
         .use(rpc<TClusterUrl>(config.url, config.rpcSubscriptionsConfig))
         .use(payer(config.payer))
         .use(rpcGetMinimumBalance())
-        .use(rpcTransactionPlanner({ priorityFees: config.priorityFees }))
+        .use(rpcTransactionPlanner({ microLamportsPerComputeUnit: config.priorityFees }))
         .use(rpcTransactionPlanExecutor({ maxConcurrency: config.maxConcurrency, skipPreflight: config.skipPreflight }))
         .use(planAndSendTransactions());
 }
@@ -109,7 +109,7 @@ export function createLocalClient(
         .use(rpcAirdrop())
         .use(rpcGetMinimumBalance())
         .use(payerOrGeneratedPayer(config.payer))
-        .use(rpcTransactionPlanner({ priorityFees: config.priorityFees }))
+        .use(rpcTransactionPlanner({ microLamportsPerComputeUnit: config.priorityFees }))
         .use(rpcTransactionPlanExecutor({ maxConcurrency: config.maxConcurrency, skipPreflight: config.skipPreflight }))
         .use(planAndSendTransactions());
 }

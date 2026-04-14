@@ -7,7 +7,6 @@ import {
     DevnetUrl,
     extendClient,
     MainnetUrl,
-    MicroLamports,
     pipe,
 } from '@solana/kit';
 import { planAndSendTransactions } from '@solana/kit-plugin-instruction-plan';
@@ -16,7 +15,7 @@ import { rpcAirdrop } from './airdrop';
 import { rpcGetMinimumBalance } from './get-minimum-balance';
 import { rpcConnection, rpcSubscriptionsConnection } from './rpc';
 import { rpcTransactionPlanExecutor } from './transaction-plan-executor';
-import { rpcTransactionPlanner } from './transaction-planner';
+import { rpcTransactionPlanner, TransactionPlannerConfig } from './transaction-planner';
 
 /**
  * Configuration for the Solana RPC plugins.
@@ -29,11 +28,6 @@ export type SolanaRpcConfig<TClusterUrl extends ClusterUrl = ClusterUrl> = {
      * Defaults to 10.
      */
     maxConcurrency?: number;
-    /**
-     * The priority fees to set on transactions in micro-lamports per compute unit.
-     * Defaults to no priority fees.
-     */
-    priorityFees?: MicroLamports;
     /** Optional configuration forwarded to {@link createSolanaRpc}. */
     rpcConfig?: Parameters<typeof createSolanaRpc>[1];
     /** Optional configuration forwarded to {@link createSolanaRpcSubscriptions}. */
@@ -57,6 +51,11 @@ export type SolanaRpcConfig<TClusterUrl extends ClusterUrl = ClusterUrl> = {
      * Defaults to `false`.
      */
     skipPreflight?: boolean;
+    /**
+     * Options to configure how transaction messages are created such as
+     * choosing a transaction version or setting priority fees.
+     */
+    transactionConfig?: TransactionPlannerConfig;
 };
 
 /**
@@ -96,7 +95,7 @@ export function solanaRpc<TClusterUrl extends ClusterUrl>(config: SolanaRpcConfi
                 config.rpcSubscriptionsConfig,
             ),
             rpcGetMinimumBalance(),
-            rpcTransactionPlanner({ priorityFees: config.priorityFees }),
+            rpcTransactionPlanner(config.transactionConfig),
             rpcTransactionPlanExecutor({ maxConcurrency: config.maxConcurrency, skipPreflight: config.skipPreflight }),
             planAndSendTransactions(),
         );

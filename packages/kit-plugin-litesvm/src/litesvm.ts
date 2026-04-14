@@ -5,7 +5,15 @@ import { litesvmAirdrop } from './airdrop';
 import { litesvmGetMinimumBalance } from './get-minimum-balance';
 import { litesvmConnection } from './litesvm-connection';
 import { litesvmTransactionPlanExecutor } from './transaction-plan-executor';
-import { litesvmTransactionPlanner } from './transaction-planner';
+import { litesvmTransactionPlanner, TransactionPlannerConfig } from './transaction-planner';
+
+export type LiteSvmConfig = {
+    /**
+     * Options to configure how transaction messages are created such as
+     * choosing a transaction version or setting priority fees.
+     */
+    transactionConfig?: TransactionPlannerConfig;
+};
 
 /**
  * Enhances a client with a full LiteSVM setup including an SVM connection,
@@ -31,14 +39,14 @@ import { litesvmTransactionPlanner } from './transaction-planner';
  *
  * @see {@link litesvmConnection}
  */
-export function litesvm() {
+export function litesvm(config: LiteSvmConfig = {}) {
     return <T extends ClientWithPayer>(client: T) => {
         return pipe(
             client,
             litesvmConnection(),
             litesvmAirdrop(),
             litesvmGetMinimumBalance(),
-            litesvmTransactionPlanner(),
+            litesvmTransactionPlanner(config.transactionConfig),
             litesvmTransactionPlanExecutor(),
             planAndSendTransactions(),
         );

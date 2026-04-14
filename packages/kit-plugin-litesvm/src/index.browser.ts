@@ -1,4 +1,5 @@
 export type { FailedTransactionMetadata, TransactionMetadata } from 'litesvm';
+export type { LiteSvmConfig } from './litesvm';
 export type { LiteSVM } from './litesvm-connection';
 export type { LiteSvmRpcApi } from './litesvm-to-rpc';
 
