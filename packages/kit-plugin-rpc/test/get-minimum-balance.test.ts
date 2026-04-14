@@ -1,7 +1,7 @@
 import { BASE_ACCOUNT_SIZE, createClient, lamports } from '@solana/kit';
 import { describe, expect, it, vi } from 'vitest';
 
-import { localhostRpc, rpc, rpcGetMinimumBalance } from '../src';
+import { rpcGetMinimumBalance, solanaRpcConnection } from '../src';
 
 // Default Solana rent: 3_480 lamports/byte/year * 2 years exemption threshold = 6_960 lamports/byte.
 const LAMPORTS_PER_BYTE = 6_960n;
@@ -18,13 +18,8 @@ describe('rpcGetMinimumBalance', () => {
         expect(client.getMinimumBalance).toBeTypeOf('function');
     });
 
-    it('works with an arbitrary RPC', () => {
-        const client = createClient().use(rpc('https://my-rpc.com')).use(rpcGetMinimumBalance());
-        expect(client).toHaveProperty('getMinimumBalance');
-    });
-
-    it('works with a localhost RPC', () => {
-        const client = createClient().use(localhostRpc()).use(rpcGetMinimumBalance());
+    it('works with a Solana RPC connection', () => {
+        const client = createClient().use(solanaRpcConnection('https://my-rpc.com')).use(rpcGetMinimumBalance());
         expect(client).toHaveProperty('getMinimumBalance');
     });
 

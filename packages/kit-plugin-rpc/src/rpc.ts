@@ -1,74 +1,54 @@
-import {
-    ClusterUrl,
-    createSolanaRpc,
-    createSolanaRpcSubscriptions,
-    DefaultRpcSubscriptionsChannelConfig,
-    extendClient,
-} from '@solana/kit';
+import { extendClient, Rpc, RpcSubscriptions } from '@solana/kit';
 
 /**
- * Enhances a client with Solana RPC and RPC Subscriptions capabilities.
+ * Enhances a client with an RPC connection from a provided {@link Rpc} instance.
  *
- * @param url - The URL of the Solana cluster.
- * @param rpcSubscriptionsConfig - Optional configuration for RPC subscriptions.
+ * This is a generic plugin that works with any RPC API. For a Solana-specific
+ * alternative that creates the RPC from a URL, see {@link solanaRpcConnection}.
+ *
+ * @param rpc - The RPC instance to install on the client.
+ * @return A plugin that adds `client.rpc`.
  *
  * @example
  * ```ts
- * import { createClient } from '@solana/kit';
- * import { rpc } from '@solana/kit-plugin-rpc';
+ * import { createClient, createSolanaRpc } from '@solana/kit';
+ * import { rpcConnection } from '@solana/kit-plugin-rpc';
  *
- * // Install the RPC plugin.
- * const client = createClient().use(rpc('https://api.mainnet-beta.solana.com'));
- *
- * // Make RPC calls.
+ * const myRpc = createSolanaRpc('https://api.mainnet-beta.solana.com');
+ * const client = createClient().use(rpcConnection(myRpc));
  * const { value: latestBlockhash } = await client.rpc.getLatestBlockhash().send();
- *
- * // Subscribe to RPC notifications.
- * const slotNotifications = await client.rpcSubscriptions.slotNotifications({ commitment: 'confirmed' }).subscribe();
- * for await (const slotNotification of slotNotifications) {
- *     console.log('Got a slot notification', slotNotification);
- * }
  * ```
  *
- * @see {@link localhostRpc}
+ * @see {@link solanaRpcConnection}
+ * @see {@link rpcSubscriptionsConnection}
  */
-export function rpc<TClusterUrl extends ClusterUrl>(
-    url: TClusterUrl,
-    rpcSubscriptionsConfig?: DefaultRpcSubscriptionsChannelConfig<TClusterUrl>,
-) {
-    const rpc = createSolanaRpc(url);
-    const rpcSubscriptionsUrl = rpcSubscriptionsConfig?.url ?? url.replace(/^http/, 'ws');
-    const rpcSubscriptions = createSolanaRpcSubscriptions(rpcSubscriptionsUrl, rpcSubscriptionsConfig);
-    return <T extends object>(client: T) => extendClient(client, { rpc, rpcSubscriptions });
+export function rpcConnection<TApi>(rpc: Rpc<TApi>) {
+    return <T extends object>(client: T) => extendClient(client, { rpc });
 }
 
 /**
- * Enhances a client with Solana RPC and RPC Subscriptions capabilities
- * using to a local validator.
+ * Enhances a client with an RPC Subscriptions connection from a provided
+ * {@link RpcSubscriptions} instance.
  *
- * @param url - Custom RPC URL. Defaults to `http://127.0.0.1:8899`.
- * @param rpcSubscriptionsConfig - Configuration for RPC subscriptions. Defaults to `{ url: 'ws://127.0.0.1:8900' }`.
+ * This is a generic plugin that works with any RPC Subscriptions API. For a
+ * Solana-specific alternative that creates the subscriptions from a URL,
+ * see {@link solanaRpcSubscriptionsConnection}.
+ *
+ * @param rpcSubscriptions - The RPC Subscriptions instance to install on the client.
+ * @return A plugin that adds `client.rpcSubscriptions`.
  *
  * @example
  * ```ts
- * import { createClient } from '@solana/kit';
- * import { localhostRpc } from '@solana/kit-plugin-rpc';
+ * import { createClient, createSolanaRpcSubscriptions } from '@solana/kit';
+ * import { rpcSubscriptionsConnection } from '@solana/kit-plugin-rpc';
  *
- * // Install the Localhost RPC plugin.
- * const client = createClient().use(localhostRpc());
- *
- * // Make RPC calls.
- * const { value: latestBlockhash } = await client.rpc.getLatestBlockhash().send();
- *
- * // Subscribe to RPC notifications.
- * const slotNotifications = await client.rpcSubscriptions.slotNotifications({ commitment: 'confirmed' }).subscribe();
- * for await (const slotNotification of slotNotifications) {
- *     console.log('Got a slot notification', slotNotification);
- * }
+ * const myRpcSubscriptions = createSolanaRpcSubscriptions('wss://api.mainnet-beta.solana.com');
+ * const client = createClient().use(rpcSubscriptionsConnection(myRpcSubscriptions));
  * ```
  *
- * @see {@link rpc}
+ * @see {@link solanaRpcSubscriptionsConnection}
+ * @see {@link rpcConnection}
  */
-export function localhostRpc(url?: string, rpcSubscriptionsConfig?: DefaultRpcSubscriptionsChannelConfig<string>) {
-    return rpc<string>(url ?? 'http://127.0.0.1:8899', rpcSubscriptionsConfig ?? { url: 'ws://127.0.0.1:8900' });
+export function rpcSubscriptionsConnection<TApi>(rpcSubscriptions: RpcSubscriptions<TApi>) {
+    return <T extends object>(client: T) => extendClient(client, { rpcSubscriptions });
 }

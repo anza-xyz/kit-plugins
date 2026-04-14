@@ -1,7 +1,7 @@
 import { createClient, mainnet } from '@solana/kit';
 import { describe, expect, it, vi } from 'vitest';
 
-import { localhostRpc, rpc, rpcAirdrop } from '../src';
+import { rpcAirdrop, solanaRpcConnection, solanaRpcSubscriptionsConnection } from '../src';
 
 describe('rpcAirdrop', () => {
     it('provides an airdrop function that relies on RPCs', () => {
@@ -18,19 +18,18 @@ describe('rpcAirdrop', () => {
         expect(client.airdrop).toBeTypeOf('function');
     });
 
-    it('works with an arbitrary RPC', () => {
-        const client = createClient().use(rpc('https://my-rpc.com')).use(rpcAirdrop());
-        expect(client).toHaveProperty('airdrop');
-    });
-
-    it('works with a localhost RPC', () => {
-        const client = createClient().use(localhostRpc()).use(rpcAirdrop());
+    it('works with a Solana RPC connection', () => {
+        const client = createClient()
+            .use(solanaRpcConnection('https://my-rpc.com'))
+            .use(solanaRpcSubscriptionsConnection('wss://my-rpc.com'))
+            .use(rpcAirdrop());
         expect(client).toHaveProperty('airdrop');
     });
 
     it('throws a TypeScript error with a mainnet RPC', () => {
         const client = createClient()
-            .use(rpc(mainnet('https://my-rpc.com')))
+            .use(solanaRpcConnection(mainnet('https://my-rpc.com')))
+            .use(solanaRpcSubscriptionsConnection(mainnet('wss://my-rpc.com')))
             // @ts-expect-error Airdrop RPC methods are not available on mainnet.
             .use(rpcAirdrop());
         expect(client).toHaveProperty('airdrop');
