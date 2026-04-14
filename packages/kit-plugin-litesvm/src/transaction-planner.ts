@@ -23,11 +23,11 @@ import {
  * @example
  * ```ts
  * import { createClient } from '@solana/kit';
- * import { litesvm, litesvmTransactionPlanner, litesvmTransactionPlanExecutor } from '@solana/kit-plugin-litesvm';
+ * import { litesvmConnection, litesvmTransactionPlanner, litesvmTransactionPlanExecutor } from '@solana/kit-plugin-litesvm';
  * import { generatedPayer } from '@solana/kit-plugin-payer';
  *
  * const client = await createClient()
- *     .use(litesvm())
+ *     .use(litesvmConnection())
  *     .use(generatedPayer())
  *     .use(litesvmTransactionPlanner())
  *     .use(litesvmTransactionPlanExecutor());

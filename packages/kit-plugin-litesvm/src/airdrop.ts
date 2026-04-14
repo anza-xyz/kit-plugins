@@ -18,23 +18,23 @@ type LiteSVMClient = {
  * underlying LiteSVM instance.
  *
  * The client must already have a `svm` property installed (e.g. via
- * the {@link litesvm} plugin). The airdrop is executed synchronously
+ * the {@link litesvmConnection} plugin). The airdrop is executed synchronously
  * against the in-process SVM and the resulting transaction signature
  * is returned.
  *
  * @example
  * ```ts
  * import { createClient } from '@solana/kit';
- * import { litesvm, litesvmAirdrop } from '@solana/kit-plugin-litesvm';
+ * import { litesvmConnection, litesvmAirdrop } from '@solana/kit-plugin-litesvm';
  *
  * const client = createClient()
- *     .use(litesvm())
+ *     .use(litesvmConnection())
  *     .use(litesvmAirdrop());
  *
  * await client.airdrop(myAddress, lamports(1_000_000_000n));
  * ```
  *
- * @see {@link litesvm}
+ * @see {@link litesvmConnection}
  */
 export function litesvmAirdrop() {
     return <T extends LiteSVMClient>(client: T) => {

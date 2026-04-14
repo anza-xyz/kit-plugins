@@ -15,22 +15,22 @@ type LiteSVMClient = {
  * underlying LiteSVM instance.
  *
  * The client must already have a `svm` property installed (e.g. via
- * the {@link litesvm} plugin). The balance is computed synchronously
+ * the {@link litesvmConnection} plugin). The balance is computed synchronously
  * against the in-process SVM.
  *
  * @example
  * ```ts
  * import { createClient } from '@solana/kit';
- * import { litesvm, litesvmGetMinimumBalance } from '@solana/kit-plugin-litesvm';
+ * import { litesvmConnection, litesvmGetMinimumBalance } from '@solana/kit-plugin-litesvm';
  *
  * const client = createClient()
- *     .use(litesvm())
+ *     .use(litesvmConnection())
  *     .use(litesvmGetMinimumBalance());
  *
  * const balance = await client.getMinimumBalance(100);
  * ```
  *
- * @see {@link litesvm}
+ * @see {@link litesvmConnection}
  */
 export function litesvmGetMinimumBalance() {
     return <T extends LiteSVMClient>(client: T) => {
