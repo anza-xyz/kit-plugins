@@ -175,19 +175,15 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         });
         registerWallet(mockWallet);
 
-        let resolveConnect!: () => void;
-        connectMock.mockReturnValueOnce(
-            new Promise<void>(r => {
-                resolveConnect = r;
-            }),
-        );
+        const { promise, resolve } = Promise.withResolvers<void>();
+        connectMock.mockReturnValueOnce(promise);
 
         const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
         const connectPromise = store.connect(mockWallet);
 
         expect(store.getState().status).toBe('connecting');
 
-        resolveConnect();
+        resolve();
         await connectPromise;
 
         expect(store.getState().status).toBe('connected');
@@ -221,12 +217,8 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         });
         registerWallet(mockWallet);
 
-        let resolveDisconnect!: () => void;
-        disconnectMock.mockReturnValueOnce(
-            new Promise<void>(r => {
-                resolveDisconnect = r;
-            }),
-        );
+        const { promise, resolve } = Promise.withResolvers<void>();
+        disconnectMock.mockReturnValueOnce(promise);
 
         const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
         await store.connect(mockWallet);
@@ -235,7 +227,7 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
 
         expect(store.getState().status).toBe('disconnecting');
 
-        resolveDisconnect();
+        resolve();
         await disconnectPromise;
 
         expect(store.getState().status).toBe('disconnected');
@@ -292,6 +284,25 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
         const account = createMockAccount();
         expect(() => store.selectAccount(account)).toThrow(WalletNotConnectedError);
+    });
+
+    it('does not notify listeners when nothing changed', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(mockWallet);
+
+        const listener = vi.fn();
+        store.subscribe(listener);
+
+        // selectAccount with the same account — no state change.
+        store.selectAccount(account);
+        expect(listener).not.toHaveBeenCalled();
     });
 
     it('selectAccount switches accounts', async () => {
@@ -386,6 +397,43 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         expect(state.connected!.account.address).toBe(account.address);
     });
 
+    it('signIn reverts to disconnected if rejected', async () => {
+        const mockWallet = createMockUiWallet({
+            features: ['standard:connect', 'standard:events', 'solana:signIn'],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        signInMock.mockRejectedValueOnce(new Error('User rejected'));
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await expect(store.signIn(mockWallet, {})).rejects.toThrow('User rejected');
+        expect(store.getState().status).toBe('disconnected');
+    });
+
+    it('signIn transitions through connecting status', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            features: ['standard:connect', 'standard:events', 'solana:signIn'],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        const { promise, resolve } = Promise.withResolvers<unknown[]>();
+        signInMock.mockReturnValueOnce(promise);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        const signInPromise = store.signIn(mockWallet, {});
+
+        expect(store.getState().status).toBe('connecting');
+
+        resolve([{ account: { address: account.address } }]);
+        await signInPromise;
+
+        expect(store.getState().status).toBe('connected');
+    });
+
     it('signIn disconnects when signed-in account is not in wallet', async () => {
         const account = createMockAccount();
         const mockWallet = createMockUiWallet({
@@ -452,6 +500,242 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
 
         expect(store.getState().status).toBe('disconnected');
         expect(store.getState().connected).toBeNull();
+    });
+
+    it('stale connect rejection does not disconnect the active connection', async () => {
+        const account1 = createMockAccount();
+        const account2 = createMockAccount('Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ');
+        const wallet1 = createMockUiWallet({ accounts: [account1], name: 'Wallet1' });
+        const wallet2 = createMockUiWallet({ accounts: [account2], name: 'Wallet2' });
+        registerWallet(wallet1);
+        registerWallet(wallet2);
+
+        const first = Promise.withResolvers<void>();
+        connectMock.mockReturnValueOnce(first.promise);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+
+        // Start connecting to wallet1.
+        const firstPromise = store.connect(wallet1);
+
+        // User gives up on wallet1 and connects to wallet2 instead.
+        await store.connect(wallet2);
+        expect(store.getState().connected!.account.address).toBe(account2.address);
+
+        // Wallet1 prompt is dismissed — rejection should not disconnect wallet2.
+        first.reject(new Error('User rejected'));
+        await expect(firstPromise).rejects.toThrow('User rejected');
+
+        expect(store.getState().status).toBe('connected');
+        expect(store.getState().connected!.account.address).toBe(account2.address);
+    });
+
+    it('stale connect rejection does not interfere with in-flight connect', async () => {
+        const account1 = createMockAccount();
+        const account2 = createMockAccount('Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ');
+        const wallet1 = createMockUiWallet({ accounts: [account1], name: 'Wallet1' });
+        const wallet2 = createMockUiWallet({ accounts: [account2], name: 'Wallet2' });
+        registerWallet(wallet1);
+        registerWallet(wallet2);
+
+        const first = Promise.withResolvers<void>();
+        const second = Promise.withResolvers<void>();
+        connectMock.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+
+        // Both connects are in flight.
+        const firstPromise = store.connect(wallet1);
+        const secondPromise = store.connect(wallet2);
+
+        // Wallet1 is dismissed while wallet2 is still pending.
+        first.reject(new Error('User rejected'));
+        await expect(firstPromise).rejects.toThrow('User rejected');
+
+        // Store should still be connecting (wallet2 is in flight).
+        expect(store.getState().status).toBe('connecting');
+
+        // Wallet2 completes — should connect normally.
+        second.resolve();
+        await secondPromise;
+
+        expect(store.getState().status).toBe('connected');
+        expect(store.getState().connected!.account.address).toBe(account2.address);
+    });
+
+    it('concurrent connect calls do not leak event subscriptions', async () => {
+        const account1 = createMockAccount();
+        const account2 = createMockAccount('Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ');
+        const wallet1 = createMockUiWallet({ accounts: [account1], name: 'Wallet1' });
+        const wallet2 = createMockUiWallet({ accounts: [account2], name: 'Wallet2' });
+        registerWallet(wallet1);
+        registerWallet(wallet2);
+
+        const first = Promise.withResolvers<void>();
+        connectMock.mockReturnValueOnce(first.promise);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+
+        // Start connecting to wallet1, but don't await yet.
+        const firstPromise = store.connect(wallet1);
+
+        // Start connecting to wallet2 — this should supersede wallet1.
+        const secondPromise = store.connect(wallet2);
+
+        // Resolve the first connect — it should be stale and bail.
+        first.resolve();
+        await firstPromise;
+        await secondPromise;
+
+        // wallet2 should be connected, not wallet1.
+        expect(store.getState().status).toBe('connected');
+        expect(store.getState().connected!.account.address).toBe(account2.address);
+    });
+
+    it('concurrent signIn does not apply stale result', async () => {
+        const account1 = createMockAccount();
+        const account2 = createMockAccount('Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ');
+        const wallet1 = createMockUiWallet({
+            accounts: [account1],
+            features: ['standard:connect', 'standard:events', 'solana:signIn'],
+            name: 'Wallet1',
+        });
+        const wallet2 = createMockUiWallet({
+            accounts: [account2],
+            features: ['standard:connect', 'standard:events', 'solana:signIn'],
+            name: 'Wallet2',
+        });
+        registerWallet(wallet1);
+        registerWallet(wallet2);
+
+        const first = Promise.withResolvers<unknown[]>();
+        signInMock
+            .mockReturnValueOnce(first.promise)
+            .mockResolvedValueOnce([{ account: { address: account2.address } }]);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+
+        // Start signIn to wallet1, but don't await yet.
+        const firstPromise = store.signIn(wallet1, {});
+
+        // Start signIn to wallet2 — this should supersede wallet1.
+        const secondPromise = store.signIn(wallet2, {});
+
+        // Resolve the first signIn — it should be stale and bail.
+        first.resolve([{ account: { address: account1.address } }]);
+        await firstPromise;
+        await secondPromise;
+
+        // wallet2 should be connected, not wallet1.
+        expect(store.getState().status).toBe('connected');
+        expect(store.getState().connected!.account.address).toBe(account2.address);
+    });
+
+    it('connect supersedes in-flight signIn', async () => {
+        const account1 = createMockAccount();
+        const account2 = createMockAccount('Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ');
+        const wallet1 = createMockUiWallet({
+            accounts: [account1],
+            features: ['standard:connect', 'standard:events', 'solana:signIn'],
+            name: 'Wallet1',
+        });
+        const wallet2 = createMockUiWallet({ accounts: [account2], name: 'Wallet2' });
+        registerWallet(wallet1);
+        registerWallet(wallet2);
+
+        const pendingSignIn = Promise.withResolvers<unknown[]>();
+        signInMock.mockReturnValueOnce(pendingSignIn.promise);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+
+        // Start signIn, then connect to a different wallet before it resolves.
+        const signInPromise = store.signIn(wallet1, {});
+        await store.connect(wallet2);
+
+        // signIn resolves stale — should not overwrite wallet2's connection.
+        pendingSignIn.resolve([{ account: { address: account1.address } }]);
+        await signInPromise;
+
+        expect(store.getState().status).toBe('connected');
+        expect(store.getState().connected!.account.address).toBe(account2.address);
+    });
+
+    it('explicit connect supersedes in-flight auto-reconnect', async () => {
+        vi.useFakeTimers();
+
+        const savedAccount = createMockAccount();
+        const userAccount = createMockAccount('Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ');
+        const savedWallet = createMockUiWallet({ accounts: [savedAccount], name: 'SavedWallet' });
+        const userWallet = createMockUiWallet({ accounts: [userAccount], name: 'UserWallet' });
+        registerWallet(userWallet);
+
+        const storage = createMockStorage({ 'kit-wallet': `SavedWallet:${savedAccount.address}` });
+        const store = createWalletStore({ chain: 'solana:mainnet', storage });
+
+        await vi.advanceTimersByTimeAsync(0);
+        expect(store.getState().status).toBe('reconnecting');
+
+        // User explicitly connects while waiting for saved wallet.
+        await store.connect(userWallet);
+        expect(store.getState().connected!.account.address).toBe(userAccount.address);
+
+        // Saved wallet registers late — reconnect should be stale.
+        const reconnectConnect = Promise.withResolvers<void>();
+        connectMock.mockReturnValueOnce(reconnectConnect.promise);
+        lateRegisterWallet(savedWallet);
+        reconnectConnect.resolve();
+        await vi.advanceTimersByTimeAsync(0);
+
+        // User's explicit choice should not be overridden.
+        expect(store.getState().connected!.account.address).toBe(userAccount.address);
+
+        vi.useRealTimers();
+    });
+
+    it('in-flight connect supersedes concurrent auto-reconnect via generation counter', async () => {
+        vi.useFakeTimers();
+
+        const savedAccount = createMockAccount();
+        const userAccount = createMockAccount('Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ');
+        const savedWallet = createMockUiWallet({ accounts: [savedAccount], name: 'SavedWallet' });
+        const userWallet = createMockUiWallet({ accounts: [userAccount], name: 'UserWallet' });
+        registerWallet(userWallet);
+
+        // Hold user's connect pending so both are in flight simultaneously.
+        const userConnect = Promise.withResolvers<void>();
+        const reconnectConnect = Promise.withResolvers<void>();
+        connectMock
+            .mockReturnValueOnce(userConnect.promise) // user's connect
+            .mockReturnValueOnce(reconnectConnect.promise); // auto-reconnect's silent connect
+
+        const storage = createMockStorage({ 'kit-wallet': `SavedWallet:${savedAccount.address}` });
+        const store = createWalletStore({ chain: 'solana:mainnet', storage });
+
+        await vi.advanceTimersByTimeAsync(0);
+        expect(store.getState().status).toBe('reconnecting');
+
+        // User starts connecting — still pending.
+        const userPromise = store.connect(userWallet);
+        expect(store.getState().status).toBe('connecting');
+
+        // Saved wallet registers — auto-reconnect fires while user connect is in flight.
+        lateRegisterWallet(savedWallet);
+        await vi.advanceTimersByTimeAsync(0);
+
+        // Auto-reconnect resolves first — but stale, so user's connecting status holds.
+        reconnectConnect.resolve();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(store.getState().status).toBe('connecting');
+
+        // User's connect resolves second.
+        userConnect.resolve();
+        await userPromise;
+
+        // User's connect should win — it has the later generation.
+        expect(store.getState().status).toBe('connected');
+        expect(store.getState().connected!.account.address).toBe(userAccount.address);
+
+        vi.useRealTimers();
     });
 
     it('getState returns referentially stable snapshots', () => {
