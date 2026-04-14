@@ -14,11 +14,11 @@ import {
  *
  * @example
  * ```ts
- * import { createEmptyClient } from '@solana/kit';
+ * import { createClient } from '@solana/kit';
  * import { rpc } from '@solana/kit-plugin-rpc';
  *
  * // Install the RPC plugin.
- * const client = createEmptyClient().use(rpc('https://api.mainnet-beta.solana.com'));
+ * const client = createClient().use(rpc('https://api.mainnet-beta.solana.com'));
  *
  * // Make RPC calls.
  * const { value: latestBlockhash } = await client.rpc.getLatestBlockhash().send();
@@ -51,11 +51,11 @@ export function rpc<TClusterUrl extends ClusterUrl>(
  *
  * @example
  * ```ts
- * import { createEmptyClient } from '@solana/kit';
+ * import { createClient } from '@solana/kit';
  * import { localhostRpc } from '@solana/kit-plugin-rpc';
  *
  * // Install the Localhost RPC plugin.
- * const client = createEmptyClient().use(localhostRpc());
+ * const client = createClient().use(localhostRpc());
  *
  * // Make RPC calls.
  * const { value: latestBlockhash } = await client.rpc.getLatestBlockhash().send();

@@ -21,10 +21,10 @@ type RpcClient = {
  * @example
  * RPC-based airdrop.
  * ```ts
- * import { createEmptyClient } from '@solana/kit';
+ * import { createClient } from '@solana/kit';
  * import { localhostRpc, rpcAirdrop } from '@solana/kit-plugin-rpc';
  *
- * const client = createEmptyClient()
+ * const client = createClient()
  *     .use(localhostRpc())
  *     .use(rpcAirdrop());
  * ```
@@ -32,10 +32,10 @@ type RpcClient = {
  * @example
  * LiteSVM-based airdrop.
  * ```ts
- * import { createEmptyClient } from '@solana/kit';
+ * import { createClient } from '@solana/kit';
  * import { litesvm, litesvmAirdrop } from '@solana/kit-plugin-litesvm';
  *
- * const client = createEmptyClient()
+ * const client = createClient()
  *     .use(litesvm())
  *     .use(litesvmAirdrop());
  * ```

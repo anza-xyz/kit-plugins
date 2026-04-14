@@ -17,10 +17,10 @@ import {
  *
  * @example
  * ```ts
- * import { createEmptyClient } from '@solana/kit';
+ * import { createClient } from '@solana/kit';
  * import { rpc, rpcGetMinimumBalance } from '@solana/kit-plugin-rpc';
  *
- * const client = createEmptyClient()
+ * const client = createClient()
  *     .use(rpc('https://api.mainnet-beta.solana.com'))
  *     .use(rpcGetMinimumBalance());
  *

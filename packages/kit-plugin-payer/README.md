@@ -22,10 +22,10 @@ This plugin simply accepts a `TransactionSigner` and sets it as the `payer` prop
 ### Installation
 
 ```ts
-import { createEmptyClient } from '@solana/kit';
+import { createClient } from '@solana/kit';
 import { payer } from '@solana/kit-plugin-payer';
 
-const client = createEmptyClient().use(payer(mySigner));
+const client = createClient().use(payer(mySigner));
 ```
 
 ### Features
@@ -47,10 +47,10 @@ This asynchronous plugin generates a new random `KeyPairSigner` to be used as th
 ### Installation
 
 ```ts
-import { createEmptyClient } from '@solana/kit';
+import { createClient } from '@solana/kit';
 import { generatedPayer } from '@solana/kit-plugin-payer';
 
-const client = await createEmptyClient().use(generatedPayer());
+const client = await createClient().use(generatedPayer());
 ```
 
 ### Features
@@ -66,11 +66,11 @@ This asynchronous plugin generates a new random `KeyPairSigner`, airdrops some S
 Note that this plugin requires an airdrop plugin to be installed on the client beforehand (e.g. `rpcAirdrop` or `litesvmAirdrop`) which itself either requires an RPC connection or a LiteSVM instance.
 
 ```ts
-import { createEmptyClient } from '@solana/kit';
+import { createClient } from '@solana/kit';
 import { localhostRpc, rpcAirdrop } from '@solana/kit-plugin-rpc';
 import { generatedPayerWithSol } from '@solana/kit-plugin-payer';
 
-const client = await createEmptyClient()
+const client = await createClient()
     .use(localhostRpc()) // or .use(litesvm()).use(litesvmAirdrop())
     .use(rpcAirdrop())
     .use(generatedPayerWithSol(lamports(10_000_000_000n))); // 10 SOL
@@ -89,15 +89,15 @@ This asynchronous plugin uses the provided `TransactionSigner` as the payer if o
 When no explicit payer is given, this plugin requires an airdrop plugin to be installed on the client beforehand (e.g. `rpcAirdrop` or `litesvmAirdrop`) which itself either requires an RPC connection or a LiteSVM instance.
 
 ```ts
-import { createEmptyClient } from '@solana/kit';
+import { createClient } from '@solana/kit';
 import { localhostRpc, rpcAirdrop } from '@solana/kit-plugin-rpc';
 import { payerOrGeneratedPayer } from '@solana/kit-plugin-payer';
 
 // With an explicit payer — no airdrop needed.
-const client = await createEmptyClient().use(payerOrGeneratedPayer(mySigner));
+const client = await createClient().use(payerOrGeneratedPayer(mySigner));
 
 // Without a payer — generates one and airdrops 100 SOL.
-const client = await createEmptyClient()
+const client = await createClient()
     .use(localhostRpc()) // or .use(litesvm()).use(litesvmAirdrop())
     .use(rpcAirdrop())
     .use(payerOrGeneratedPayer(undefined));
@@ -116,10 +116,10 @@ This plugin loads a `KeyPairSigner` from a local file and sets it as the `payer`
 Note that this plugin requires access to the local filesystem and therefore can only work in Node.js environments. Other environments (like browsers) will throw an error when trying to use this plugin.
 
 ```ts
-import { createEmptyClient } from '@solana/kit';
+import { createClient } from '@solana/kit';
 import { payerFromFile } from '@solana/kit-plugin-payer';
 
-const client = createEmptyClient().use(payerFromFile('path/to/keypair.json'));
+const client = createClient().use(payerFromFile('path/to/keypair.json'));
 ```
 
 ### Features

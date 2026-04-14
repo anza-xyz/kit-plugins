@@ -20,10 +20,10 @@ type LiteSVMClient = {
  *
  * @example
  * ```ts
- * import { createEmptyClient } from '@solana/kit';
+ * import { createClient } from '@solana/kit';
  * import { litesvm, litesvmGetMinimumBalance } from '@solana/kit-plugin-litesvm';
  *
- * const client = createEmptyClient()
+ * const client = createClient()
  *     .use(litesvm())
  *     .use(litesvmGetMinimumBalance());
  *
