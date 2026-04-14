@@ -241,9 +241,10 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
     });
 
     it('notifies subscribers on state change', async () => {
-        const account = createMockAccount();
+        const account1 = createMockAccount();
+        const account2 = createMockAccount('Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ');
         const mockWallet = createMockUiWallet({
-            accounts: [account],
+            accounts: [account1, account2],
             name: 'TestWallet',
         });
         registerWallet(mockWallet);
@@ -255,15 +256,15 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         store.subscribe(listener);
 
         // selectAccount is a single, synchronous state change.
-        const account2 = createMockAccount('Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ');
         store.selectAccount(account2);
         expect(listener).toHaveBeenCalledOnce();
     });
 
     it('unsubscribe stops notifications', async () => {
-        const account = createMockAccount();
+        const account1 = createMockAccount();
+        const account2 = createMockAccount('Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ');
         const mockWallet = createMockUiWallet({
-            accounts: [account],
+            accounts: [account1, account2],
             name: 'TestWallet',
         });
         registerWallet(mockWallet);
@@ -275,7 +276,6 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         const unsub = store.subscribe(listener);
         unsub();
 
-        const account2 = createMockAccount('Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ');
         store.selectAccount(account2);
         expect(listener).not.toHaveBeenCalled();
     });
@@ -320,6 +320,21 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
 
         store.selectAccount(account2);
         expect(store.getState().connected!.account.address).toBe(account2.address);
+    });
+
+    it('selectAccount throws for account not in wallet', async () => {
+        const account = createMockAccount();
+        const foreignAccount = createMockAccount('Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ');
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(mockWallet);
+
+        expect(() => store.selectAccount(foreignAccount)).toThrow('not available in wallet');
     });
 
     it('signMessage throws when not connected', async () => {
@@ -738,6 +753,38 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         vi.useRealTimers();
     });
 
+    it('disconnect does not clobber concurrent connect', async () => {
+        const account1 = createMockAccount();
+        const account2 = createMockAccount('Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ');
+        const wallet1 = createMockUiWallet({
+            accounts: [account1],
+            features: ['standard:connect', 'standard:disconnect', 'standard:events'],
+            name: 'Wallet1',
+        });
+        const wallet2 = createMockUiWallet({ accounts: [account2], name: 'Wallet2' });
+        registerWallet(wallet1);
+        registerWallet(wallet2);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(wallet1);
+
+        // Hold disconnect pending.
+        const pendingDisconnect = Promise.withResolvers<void>();
+        disconnectMock.mockReturnValueOnce(pendingDisconnect.promise);
+        const disconnectPromise = store.disconnect();
+
+        // User connects to wallet2 while disconnect is in flight.
+        await store.connect(wallet2);
+        expect(store.getState().connected!.account.address).toBe(account2.address);
+
+        // Disconnect resolves — should not wipe out wallet2's connection.
+        pendingDisconnect.resolve();
+        await disconnectPromise;
+
+        expect(store.getState().status).toBe('connected');
+        expect(store.getState().connected!.account.address).toBe(account2.address);
+    });
+
     it('getState returns referentially stable snapshots', () => {
         const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
         const snap1 = store.getState();
@@ -934,6 +981,36 @@ describe.skipIf(!__BROWSER__)('store wallet events (browser)', () => {
         const state = store.getState();
         expect(state.status).toBe('connected');
         expect(state.connected!.signer).toBeNull();
+    });
+    it('uses new account signer when both accounts and features change', async () => {
+        const account1 = createMockAccount();
+        const account2 = createMockAccount('Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ');
+        const mockWallet = createMockUiWallet({
+            accounts: [account1, account2],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await connectToWallet(store, mockWallet);
+
+        // Clear calls from connect so we only see the event-triggered call.
+        createSignerMock.mockClear();
+
+        // Wallet removes account1 and changes features in the same event.
+        updateRegisteredWallet(
+            createMockUiWallet({
+                accounts: [account2],
+                features: ['standard:connect', 'standard:events', 'solana:signAndSendTransaction'],
+                name: 'TestWallet',
+            }),
+        );
+        walletEventHandler!({ accounts: true, features: true });
+
+        // Signer should be created for account2 (the new account), not account1.
+        expect(store.getState().connected!.account.address).toBe(account2.address);
+        expect(createSignerMock).toHaveBeenCalledOnce();
+        expect(createSignerMock.mock.calls[0][0]).toHaveProperty('address', account2.address);
     });
 });
 

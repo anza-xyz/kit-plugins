@@ -252,7 +252,11 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
                 }
                 updates = { ...updates, ...result };
             }
-            if (properties.features) {
+            // Skip features handler when accounts also changed — the account
+            // handler already creates a fresh signer for the new account.
+            // Running both would compute the signer from the stale account
+            // in state (setState hasn't been called yet).
+            if (properties.features && !properties.accounts) {
                 updates = { ...updates, ...handleFeaturesChanged() };
             }
 
@@ -339,6 +343,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         if (!state.connectedWallet) return;
 
         const currentWallet = state.connectedWallet;
+        const generation = connectGeneration;
         setState({ status: 'disconnecting' });
 
         try {
@@ -350,7 +355,10 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
                 await disconnectFeature.disconnect();
             }
         } finally {
-            disconnectLocally();
+            // Only clean up if no new connect/signIn started while we were awaiting.
+            if (generation === connectGeneration) {
+                disconnectLocally();
+            }
         }
     }
 
@@ -371,6 +379,10 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
     function selectAccount(account: UiWalletAccount): void {
         if (!state.connectedWallet) {
             throw new WalletNotConnectedError('selectAccount');
+        }
+        const refreshed = refreshUiWallet(state.connectedWallet);
+        if (!refreshed.accounts.some(a => a.address === account.address)) {
+            throw new Error(`Account ${account.address} is not available in wallet "${state.connectedWallet.name}"`);
         }
         userHasSelected = true;
         const signer = tryCreateSigner(account);
