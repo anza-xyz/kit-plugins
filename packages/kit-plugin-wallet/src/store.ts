@@ -95,6 +95,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
     let walletEventsCleanup: (() => void) | null = null;
     let reconnectCleanup: (() => void) | null = null;
     let userHasSelected = false;
+    let connectGeneration = 0;
 
     // Resolve storage: default to localStorage in browser, null to disable.
     const storage: WalletStorage | null = config.storage === null ? null : (config.storage ?? localStorage);
@@ -123,8 +124,10 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         const prev = state;
         state = { ...state, ...updates };
 
-        // Only create a new snapshot when a snapshot-relevant field changed.
-        // This ensures referential stability for useSyncExternalStore.
+        // Only create a new snapshot and notify listeners when a
+        // snapshot-relevant field actually changed. This ensures
+        // referential stability for useSyncExternalStore and avoids
+        // unnecessary re-renders in non-React frameworks.
         if (
             state.wallets !== prev.wallets ||
             state.connectedWallet !== prev.connectedWallet ||
@@ -133,9 +136,8 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             state.signer !== prev.signer
         ) {
             snapshot = deriveSnapshot(state);
+            listeners.forEach(l => l());
         }
-
-        listeners.forEach(l => l());
     }
 
     // -- Signer creation ---------------------------------------------------
@@ -292,6 +294,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
     async function connect(uiWallet: UiWallet): Promise<readonly UiWalletAccount[]> {
         userHasSelected = true;
         cancelReconnect();
+        const generation = ++connectGeneration;
         setState({ status: 'connecting' });
 
         try {
@@ -305,12 +308,14 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
 
             await connectFeature.connect();
 
+            // A newer connect/signIn was started while we were awaiting — bail.
+            if (generation !== connectGeneration) return [];
+
             // Refresh UiWallet to get updated accounts after connect.
             const refreshedWallet = refreshUiWallet(uiWallet);
             const allAccounts = refreshedWallet.accounts;
 
             if (allAccounts.length === 0) {
-                // New wallet has no accounts — disconnect
                 disconnectLocally();
                 return allAccounts;
             }
@@ -322,7 +327,10 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             setConnected(activeAccount, refreshedWallet);
             return allAccounts;
         } catch (error) {
-            disconnectLocally();
+            // Only clean up if we're still the active connection attempt.
+            if (generation === connectGeneration) {
+                disconnectLocally();
+            }
             throw error;
         }
     }
@@ -334,7 +342,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         setState({ status: 'disconnecting' });
 
         try {
-            if (currentWallet && currentWallet.features.includes(StandardDisconnect)) {
+            if (currentWallet.features.includes(StandardDisconnect)) {
                 const disconnectFeature = getWalletFeature(
                     currentWallet,
                     StandardDisconnect,
@@ -395,24 +403,36 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
     async function signIn(uiWallet: UiWallet, input: SolanaSignInInput): Promise<SolanaSignInOutput> {
         userHasSelected = true;
         cancelReconnect();
+        const generation = ++connectGeneration;
+        setState({ status: 'connecting' });
 
-        // getWalletFeature throws WalletStandardError if not supported.
-        const signInFeature = getWalletFeature(uiWallet, SolanaSignIn) as SolanaSignInFeature[typeof SolanaSignIn];
-        const [result] = await signInFeature.signIn(input);
+        try {
+            // getWalletFeature throws WalletStandardError if not supported.
+            const signInFeature = getWalletFeature(uiWallet, SolanaSignIn) as SolanaSignInFeature[typeof SolanaSignIn];
+            const [result] = await signInFeature.signIn(input);
 
-        // Set up full connection state using the account from the sign-in response.
-        const refreshedWallet = refreshUiWallet(uiWallet);
-        const activeAccount = refreshedWallet.accounts.find(a => a.address === result.account.address);
+            // A newer connect/signIn was started while we were awaiting — bail.
+            if (generation !== connectGeneration) return result;
 
-        if (!activeAccount) {
-            // The signed-in account isn't in the wallet — bad state, disconnect
-            // so the user can try a fresh connect/sign-in.
-            disconnectLocally();
+            // Set up full connection state using the account from the sign-in response.
+            const refreshedWallet = refreshUiWallet(uiWallet);
+            const activeAccount = refreshedWallet.accounts.find(a => a.address === result.account.address);
+
+            if (!activeAccount) {
+                // The signed-in account isn't in the wallet — bad state, disconnect
+                // so the user can try a fresh connect/sign-in.
+                disconnectLocally();
+                return result;
+            }
+
+            setConnected(activeAccount, refreshedWallet);
             return result;
+        } catch (error) {
+            if (generation === connectGeneration) {
+                disconnectLocally();
+            }
+            throw error;
         }
-
-        setConnected(activeAccount, refreshedWallet);
-        return result;
     }
 
     // -- Persistence -------------------------------------------------------
@@ -499,7 +519,10 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
                                 setState({ status: 'disconnected' });
                                 await storage.removeItem(storageKey);
                             }
-                        })(),
+                        })().catch(() => {
+                            // Reconnect failed — fall back to disconnected.
+                            setState({ status: 'disconnected' });
+                        }),
                 );
 
                 reconnectCleanup = () => {
@@ -519,6 +542,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
     }
 
     async function attemptSilentReconnect(savedAddress: string, uiWallet: UiWallet): Promise<void> {
+        const generation = ++connectGeneration;
         setState({ status: 'reconnecting' });
 
         try {
@@ -527,6 +551,9 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
                 StandardConnect,
             ) as StandardConnectFeature[typeof StandardConnect];
             await connectFeature.connect({ silent: true });
+
+            // A newer connect/signIn was started while we were awaiting — bail.
+            if (generation !== connectGeneration) return;
 
             const refreshedWallet = refreshUiWallet(uiWallet);
             const allAccounts = refreshedWallet.accounts;
@@ -537,16 +564,15 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
                 return;
             }
 
-            // Check again: user may have connected manually while we were awaiting.
-            if (userHasSelected) return;
-
             // Restore the specific saved account, fall back to first from same wallet.
             const activeAccount = allAccounts.find(a => a.address === savedAddress) ?? allAccounts[0];
 
             setConnected(activeAccount, refreshedWallet, { persist: false });
         } catch {
-            setState({ status: 'disconnected' });
-            await storage?.removeItem(storageKey);
+            if (generation === connectGeneration) {
+                setState({ status: 'disconnected' });
+                await storage?.removeItem(storageKey);
+            }
         }
     }
 
