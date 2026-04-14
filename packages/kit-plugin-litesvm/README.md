@@ -127,7 +127,7 @@ This plugin provides a default transaction planner that creates transaction mess
 
 ### Installation
 
-This plugin requires a payer to be set on the client or passed as an option.
+The client must have a `payer` set before applying this plugin.
 
 ```ts
 import { createClient } from '@solana/kit';
@@ -147,7 +147,6 @@ const client = await createClient()
 
 ### Options
 
-- `payer`: Transaction signer for fees (defaults to client's payer if any).
 - `priorityFees`: Priority fees in micro lamports per compute unit.
 
 ### Features

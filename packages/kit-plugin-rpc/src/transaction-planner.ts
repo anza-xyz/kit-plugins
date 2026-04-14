@@ -8,7 +8,6 @@ import {
     pipe,
     setTransactionMessageComputeUnitPrice,
     setTransactionMessageFeePayerSigner,
-    TransactionSigner,
 } from '@solana/kit';
 
 /**
@@ -39,31 +38,18 @@ import {
 export function rpcTransactionPlanner(
     config: {
         /**
-         * The transaction signer who will pay for the transaction fees.
-         * Defaults to the client's payer or throws if not present.
-         */
-        payer?: TransactionSigner;
-        /**
          * The priority fees to be set on the transaction in micro lamports per compute unit.
          * Defaults to using no priority fees.
          */
         priorityFees?: MicroLamports;
     } = {},
 ) {
-    return <T extends Partial<ClientWithPayer>>(client: T) => {
-        const payer = config.payer ?? client.payer;
-        if (!payer) {
-            throw new Error(
-                'A payer is required to create the RPC transaction planner. ' +
-                    'Please provide one in the config of this plugin or on the client under `payer`.',
-            );
-        }
-
+    return <T extends ClientWithPayer>(client: T) => {
         const transactionPlanner = createTransactionPlanner({
             createTransactionMessage: () => {
                 return pipe(
                     createTransactionMessage({ version: 0 }),
-                    tx => setTransactionMessageFeePayerSigner(payer, tx),
+                    tx => setTransactionMessageFeePayerSigner(client.payer, tx),
                     tx => fillTransactionMessageProvisoryComputeUnitLimit(tx),
                     tx => (config.priorityFees ? setTransactionMessageComputeUnitPrice(config.priorityFees, tx) : tx),
                 );

@@ -35,24 +35,8 @@ describe('rpcTransactionPlanner', () => {
         expect(transactionPlan.message.feePayer).toBe(payer);
     });
 
-    it('requires a payer on the client by default', () => {
-        expect(() => createClient().use(rpcTransactionPlanner())).toThrow();
-    });
-
-    it('also accepts a payer directly', () => {
-        const payer = {} as TransactionSigner;
-        expect(() => createClient().use(rpcTransactionPlanner({ payer }))).not.toThrow();
-    });
-
-    it('uses the provided payer over the one set on the client', async () => {
-        const [clientPayer, explicitPayer] = await Promise.all([generateKeyPairSigner(), generateKeyPairSigner()]);
-        const client = createClient()
-            .use(() => ({ payer: clientPayer }))
-            .use(rpcTransactionPlanner({ payer: explicitPayer }));
-
-        const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
-        const transactionPlan = (await client.transactionPlanner(instructionPlan)) as SingleTransactionPlan;
-        expect(transactionPlan.kind).toBe('single');
-        expect(transactionPlan.message.feePayer).toBe(explicitPayer);
+    it('requires a payer on the client', () => {
+        // @ts-expect-error TypeScript fails but we don't throw an error at runtime.
+        expect(() => createClient().use(rpcTransactionPlanner())).not.toThrow();
     });
 });
