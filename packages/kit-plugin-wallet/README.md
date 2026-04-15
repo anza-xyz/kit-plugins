@@ -7,12 +7,16 @@
 [npm-image]: https://img.shields.io/npm/v/@solana/kit-plugin-wallet.svg?style=flat&label=%40solana%2Fkit-plugin-wallet
 [npm-url]: https://www.npmjs.com/package/@solana/kit-plugin-wallet
 
-This package provides a plugin that adds browser wallet support to your Kit clients using [wallet-standard](https://github.com/wallet-standard/wallet-standard). It handles wallet discovery, connection lifecycle, account selection, and signer creation.
+This package provides plugins that add browser wallet support to your Kit clients using [wallet-standard](https://github.com/wallet-standard/wallet-standard). They handle wallet discovery, connection lifecycle, account selection, and signer creation.
 
-Two plugin functions are exported:
+Four plugin functions are exported — each adds a `client.wallet` namespace, but they differ in how the connected wallet's signer is exposed on the client:
 
-- **`wallet()`** — adds a `client.wallet` namespace with state and actions, without touching `client.payer`.
-- **`walletAsPayer()`** — same as `wallet()`, but also syncs the connected wallet's signer to `client.payer` via a dynamic getter.
+| Plugin                | `client.payer` | `client.identity` | Use case                                                      |
+| --------------------- | -------------- | ----------------- | ------------------------------------------------------------- |
+| `walletSigner`        | wallet signer  | wallet signer     | Most dApps — wallet pays fees and signs as the user identity. |
+| `walletPayer`         | wallet signer  | —                 | Wallet pays fees; identity is managed separately.             |
+| `walletIdentity`      | —              | wallet signer     | Backend relayer pays fees; wallet provides user identity.     |
+| `walletWithoutSigner` | —              | —                 | Wallet state only; payer and identity are managed separately. |
 
 ## Installation
 
@@ -23,13 +27,15 @@ pnpm install @solana/kit-plugin-wallet
 ## Quick start
 
 ```ts
-import { createEmptyClient } from '@solana/kit';
-import { rpc } from '@solana/kit-plugin-rpc';
-import { walletAsPayer } from '@solana/kit-plugin-wallet';
+import { createClient } from '@solana/kit';
+import { solanaRpc } from '@solana/kit-plugin-rpc';
+import { walletSigner } from '@solana/kit-plugin-wallet';
+import { planAndSendTransactions } from '@solana/kit-plugin-instruction-plan';
 
-const client = createEmptyClient()
-    .use(rpc('https://api.mainnet-beta.solana.com'))
-    .use(walletAsPayer({ chain: 'solana:mainnet' }));
+const client = createClient()
+    .use(walletSigner({ chain: 'solana:mainnet' }))
+    .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
+    .use(planAndSendTransactions());
 
 // Read discovered wallets from state
 const { wallets } = client.wallet.getState();
@@ -37,38 +43,70 @@ const { wallets } = client.wallet.getState();
 // Connect a wallet
 await client.wallet.connect(wallets[0]);
 
-// client.payer is now the connected wallet's signer
+// client.payer and client.identity are now the connected wallet's signer
+await client.sendTransaction([myInstruction]);
 ```
 
-## `wallet` plugin
+## `walletSigner` plugin
 
-Adds `client.wallet` without touching `client.payer`. Use this alongside the `payer()` plugin for backend signers, or when the wallet's signer is used explicitly in instructions.
+Syncs the connected wallet's signer to both `client.payer` and `client.identity`. This is the most common choice for dApps where the user's wallet pays fees and signs as the transaction identity.
 
 ```ts
-import { wallet } from '@solana/kit-plugin-wallet';
+import { walletSigner } from '@solana/kit-plugin-wallet';
 
-const client = createEmptyClient()
-    .use(rpc('https://api.mainnet-beta.solana.com'))
+const client = createClient()
+    .use(walletSigner({ chain: 'solana:mainnet' }))
+    .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
+    .use(planAndSendTransactions());
+```
+
+## `walletPayer` plugin
+
+Syncs the connected wallet's signer to `client.payer` only. Use this when you need the wallet as the fee payer but don't need `client.identity`. For most dApps, prefer `walletSigner` which sets both.
+
+```ts
+import { walletPayer } from '@solana/kit-plugin-wallet';
+
+const client = createClient()
+    .use(walletPayer({ chain: 'solana:mainnet' }))
+    .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
+    .use(planAndSendTransactions());
+```
+
+## `walletIdentity` plugin
+
+Syncs the connected wallet's signer to `client.identity` only. Use this when a separate payer (e.g. a backend relayer) pays transaction fees, but the user's wallet is needed as the identity signer.
+
+```ts
+import { payer } from '@solana/kit-plugin-signer';
+import { walletIdentity } from '@solana/kit-plugin-wallet';
+
+const client = createClient()
+    .use(payer(relayerKeypair))
+    .use(walletIdentity({ chain: 'solana:mainnet' }))
+    .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
+    .use(planAndSendTransactions());
+
+// client.payer is always relayerKeypair
+// client.identity is the connected wallet's signer
+```
+
+## `walletWithoutSigner` plugin
+
+Adds `client.wallet` without setting `client.payer` or `client.identity`. Use this alongside separate `payer()` and/or `identity()` plugins, or when the wallet's signer is used explicitly in instructions.
+
+```ts
+import { payer } from '@solana/kit-plugin-signer';
+import { walletWithoutSigner } from '@solana/kit-plugin-wallet';
+
+const client = createClient()
     .use(payer(backendKeypair))
-    .use(wallet({ chain: 'solana:mainnet' }));
+    .use(walletWithoutSigner({ chain: 'solana:mainnet' }))
+    .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
+    .use(planAndSendTransactions());
 
 // client.payer is always backendKeypair
 // client.wallet.getState().connected?.signer for manual use
-```
-
-## `walletAsPayer` plugin
-
-Adds `client.wallet` and overrides `client.payer` with a dynamic getter. When a signing-capable wallet is connected, `client.payer` returns the wallet signer. When disconnected or read-only, `client.payer` is `undefined`.
-
-```ts
-import { walletAsPayer } from '@solana/kit-plugin-wallet';
-
-const client = createEmptyClient()
-    .use(rpc('https://api.mainnet-beta.solana.com'))
-    .use(walletAsPayer({ chain: 'solana:mainnet' }));
-
-await client.wallet.connect(selectedWallet);
-// client.payer === client.wallet.getState().connected?.signer
 ```
 
 ## State and actions
@@ -113,13 +151,9 @@ All wallet state is accessed via `client.wallet.getState()`, which returns a ref
     const signature = await client.wallet.signMessage(new TextEncoder().encode('Hello'));
     ```
 
-- **`signIn(input?)`** / **`signIn(wallet, input?)`** — Sign In With Solana (SIWS). The two-argument form connects the wallet implicitly.
+- **`signIn(wallet, input)`** — Sign In With Solana (SIWS-as-connect). Connects the wallet, calls `solana:signIn`, and sets up full connection state. Pass `{}` for `input` if no sign-in customization is needed. To sign in with the already-connected wallet, pass `getState().connected.wallet`.
 
     ```ts
-    // Sign in with the already-connected wallet
-    const output = await client.wallet.signIn({ domain: window.location.host });
-
-    // Sign in and connect in one step
     const output = await client.wallet.signIn(selectedWallet, { domain: window.location.host });
     ```
 
@@ -183,7 +217,7 @@ export const walletState = readable(client.wallet.getState(), set => {
 ## Configuration
 
 ```ts
-wallet({
+walletSigner({
     chain: 'solana:mainnet', // required
     storage: sessionStorage, // default: localStorage (null to disable)
     storageKey: 'my-app:wallet', // default: 'kit-wallet'
@@ -198,14 +232,15 @@ By default the plugin uses `localStorage` to remember the last connected wallet 
 
 ## SSR / server-side rendering
 
-Both `wallet` and `walletAsPayer` are safe to include in a shared client that runs on both server and browser. On the server, `status` stays `'pending'` permanently, all actions throw a `SolanaError` with code `SOLANA_ERROR__WALLET__NOT_CONNECTED`, and no registry listeners or storage reads are made. In the browser the plugin initializes normally.
+All four wallet plugins are safe to include in a shared client that runs on both server and browser. On the server, `status` stays `'pending'` permanently, all actions throw, and no registry listeners or storage reads are made. In the browser the plugin initializes normally.
 
 ```ts
-const client = createEmptyClient()
-    .use(rpc('https://api.mainnet-beta.solana.com'))
-    .use(walletAsPayer({ chain: 'solana:mainnet' }));
+const client = createClient()
+    .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
+    .use(walletSigner({ chain: 'solana:mainnet' }))
+    .use(planAndSendTransactions());
 
-// Server: status === 'pending', client.payer === undefined
+// Server: status === 'pending', client.payer throws
 // Browser: auto-connects, client.payer becomes the wallet signer
 ```
 
@@ -215,7 +250,16 @@ The plugin implements `[Symbol.dispose]`, so it integrates with the `using` decl
 
 ```ts
 {
-    using client = createEmptyClient().use(wallet({ chain: 'solana:mainnet' }));
+    using client = createClient().use(walletSigner({ chain: 'solana:mainnet' }));
     // registry listeners and storage subscriptions are cleaned up on scope exit
 }
+```
+
+Or call `[Symbol.dispose]()` explicitly when you're done with the client:
+
+```ts
+const client = createClient().use(walletSigner({ chain: 'solana:mainnet' }));
+
+// ... later, when the client is no longer needed
+client[Symbol.dispose]();
 ```
