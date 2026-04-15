@@ -15,7 +15,7 @@ import type { ClientWithWallet, ClientWithWalletAsPayer, WalletPluginConfig } fr
  *
  * **SSR-safe.** Can be included in a shared client chain that runs on both
  * server and browser. On the server, status stays `'pending'`, actions throw
- * {@link WalletNotConnectedError}, and no registry listeners or storage reads
+ * `SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED)`, and no registry listeners or storage reads
  * are made.
  *
  * ```ts
