@@ -86,7 +86,8 @@ export type WalletStorage = {
 };
 
 /**
- * Configuration for the {@link wallet} and {@link walletAsPayer} plugins.
+ * Configuration for the wallet plugins ({@link walletSigner},
+ * {@link walletPayer}, {@link walletIdentity}, {@link walletWithoutSigner}).
  */
 export type WalletPluginConfig = {
     /**
@@ -232,13 +233,11 @@ export type WalletNamespace = {
 };
 
 /**
- * Properties added to the client by the {@link wallet} plugin.
+ * Properties added to the client by the wallet plugins.
  *
  * All wallet state and actions are namespaced under `client.wallet`.
- * `client.payer` is not affected — use the {@link walletAsPayer} plugin to
- * set the payer dynamically from the connected wallet.
  *
- * @see {@link wallet}
+ * @see {@link walletSigner}
  * @see {@link WalletNamespace}
  */
 // TODO: would be moved to kit plugin-interfaces
