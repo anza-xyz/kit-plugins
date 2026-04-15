@@ -394,10 +394,6 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         if (!refreshed.accounts.some(a => a.address === account.address)) {
             throw new Error(`Account ${account.address} is not available in wallet "${state.connectedWallet.name}"`);
         }
-        const refreshed = refreshUiWallet(state.connectedWallet);
-        if (!refreshed.accounts.some(a => a.address === account.address)) {
-            throw new Error(`Account ${account.address} is not available in wallet "${state.connectedWallet.name}"`);
-        }
         userHasSelected = true;
         const signer = tryCreateSigner(account);
         updateState({ account, signer });
