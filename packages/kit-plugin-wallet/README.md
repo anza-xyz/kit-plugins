@@ -198,7 +198,7 @@ By default the plugin uses `localStorage` to remember the last connected wallet 
 
 ## SSR / server-side rendering
 
-Both `wallet` and `walletAsPayer` are safe to include in a shared client that runs on both server and browser. On the server, `status` stays `'pending'` permanently, all actions throw `WalletNotConnectedError`, and no registry listeners or storage reads are made. In the browser the plugin initializes normally.
+Both `wallet` and `walletAsPayer` are safe to include in a shared client that runs on both server and browser. On the server, `status` stays `'pending'` permanently, all actions throw a `SolanaError` with code `SOLANA_ERROR__WALLET__NOT_CONNECTED`, and no registry listeners or storage reads are made. In the browser the plugin initializes normally.
 
 ```ts
 const client = createEmptyClient()
