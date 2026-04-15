@@ -1,7 +1,7 @@
-import { extendClient, withCleanup } from '@solana/kit';
+import { type ClientWithPayer, extendClient, withCleanup } from '@solana/kit';
 
 import { createWalletStore } from './store';
-import type { ClientWithWallet, ClientWithWalletAsPayer, WalletPluginConfig } from './types';
+import type { ClientWithWallet, WalletPluginConfig } from './types';
 
 /**
  * A framework-agnostic Kit plugin that manages wallet discovery, connection
@@ -108,10 +108,10 @@ export function wallet(config: WalletPluginConfig) {
  *
  * @see {@link wallet}
  * @see {@link WalletPluginConfig}
- * @see {@link ClientWithWalletAsPayer}
+ * @see {@link ClientWithWallet & ClientWithPayer}
  */
 export function walletAsPayer(config: WalletPluginConfig) {
-    return <T extends object>(client: T): ClientWithWalletAsPayer & Disposable & Omit<T, 'payer' | 'wallet'> => {
+    return <T extends object>(client: T): ClientWithWallet & ClientWithPayer & Disposable & Omit<T, 'payer' | 'wallet'> => {
         const store = createWalletStore(config);
 
         // Build an additions object with a dynamic payer getter. The getter
@@ -132,6 +132,6 @@ export function walletAsPayer(config: WalletPluginConfig) {
 
         return withCleanup(extendClient(client, additions), () =>
             store[Symbol.dispose](),
-        ) as unknown as ClientWithWalletAsPayer & Disposable & Omit<T, 'payer' | 'wallet'>;
+        ) as unknown as ClientWithWallet & ClientWithPayer & Disposable & Omit<T, 'payer' | 'wallet'>;
     };
 }
