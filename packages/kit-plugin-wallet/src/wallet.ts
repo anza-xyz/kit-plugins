@@ -29,9 +29,7 @@ function defineSignerGetter(
 }
 
 function createPlugin<TAdditions extends ClientWithWallet>(config: WalletPluginConfig, signerProperties: string[]) {
-    return <T extends object & { wallet?: never }>(
-        client: T,
-    ): Disposable & Omit<T, 'identity' | 'payer' | 'wallet'> & TAdditions => {
+    return <T extends object & { wallet?: never }>(client: T): Disposable & Omit<T, keyof TAdditions> & TAdditions => {
         if ('wallet' in client) {
             throw new Error(
                 'Only one wallet plugin can be used per client. ' +
@@ -47,7 +45,7 @@ function createPlugin<TAdditions extends ClientWithWallet>(config: WalletPluginC
         }
 
         return withCleanup(extendClient(client, additions), () => store[Symbol.dispose]()) as unknown as Disposable &
-            Omit<T, 'identity' | 'payer' | 'wallet'> &
+            Omit<T, keyof TAdditions> &
             TAdditions;
     };
 }
