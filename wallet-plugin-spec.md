@@ -32,21 +32,21 @@ The bridge function (`createSignerFromWalletAccount`) is consumed via `@solana/w
 
 ## Summary
 
-A framework-agnostic Kit plugin that manages wallet discovery, connection lifecycle, and signer creation using wallet-standard. When a wallet is connected, the plugin optionally syncs its signer to the client's `payer` slot via a dynamic getter, throwing when no signing wallet is connected. The plugin exposes subscribable wallet state for framework adapters (React, Vue, Svelte, etc.) to consume without coupling to any specific UI framework.
+A framework-agnostic Kit plugin that manages wallet discovery, connection lifecycle, and signer creation using wallet-standard. When a wallet is connected, the plugin optionally syncs its signer to the client's `payer` and/or `identity` slots via dynamic getters, throwing when no signing wallet is connected. The plugin exposes subscribable wallet state for framework adapters (React, Vue, Svelte, etc.) to consume without coupling to any specific UI framework.
 
-**SSR-safe.** Both `wallet` and `walletAsPayer` can be included in the same client chain on both server and browser. On the server (`typeof window === 'undefined'`), the plugin gracefully degrades — status stays `'pending'`, wallet list is empty, payer is `undefined` (when using `walletAsPayer`), storage is skipped, no registry listeners are created. On the browser it initializes fully. This means a single client chain works everywhere:
+**SSR-safe.** All four plugin functions (`walletSigner`, `walletIdentity`, `walletPayer`, `walletWithoutSigner`) can be included in a shared client chain on both server and browser. On the server (`__BROWSER__ === false`), the plugin gracefully degrades — status stays `'pending'`, wallet list is empty, signer getters throw, storage is skipped, no registry listeners are created. On the browser it initializes fully. This means a single client chain works everywhere:
 
 ```typescript
-import { walletAsPayer } from '@solana/kit-plugin-wallet';
+import { walletSigner } from '@solana/kit-plugin-wallet';
 
-const client = createEmptyClient()
+const client = createClient()
   .use(rpc('https://api.mainnet-beta.solana.com'))
-  .use(walletAsPayer({ chain: 'solana:mainnet' }))
+  .use(walletSigner({ chain: 'solana:mainnet' }))
   .use(systemProgram())
   .use(planAndSendTransactions());
 
-// Server: status === 'pending', client.payer throws
-// Browser: auto-connect fires, client.payer becomes wallet signer
+// Server: status === 'pending', client.payer / client.identity throw
+// Browser: auto-connect fires, client.payer / client.identity become wallet signer
 ```
 
 ## Motivation
@@ -91,51 +91,69 @@ This plugin fills that gap. It sits between wallet-standard's raw discovery API 
 
 This plugin extracts the wallet management logic currently embedded in `@solana/react`'s `SelectedWalletAccountContextProvider` (persistence, auto-restore, account selection, signer creation) into a framework-agnostic layer. Once this plugin ships, `@solana/react` can be rewritten as a thin adapter over `client.wallet.subscribe` / `client.wallet.getState` — a handful of hooks rather than a full wallet management implementation. The same approach applies to Vue, Svelte, and Solid adapters, all consuming the same plugin.
 
-### Relationship to `payer`
+### Relationship to `payer` and `identity`
 
-The package exports two plugin functions that differ in how they interact with `client.payer`:
+The package exports four plugin functions that differ in which signer properties they set on the client:
 
-**`wallet()`** — adds the `wallet` namespace but does not touch `client.payer`. Use alongside the `payer()` plugin for backend signers, or when the wallet's signer is used explicitly in instructions rather than as the default payer.
+**`walletSigner()`** — adds `client.wallet`, `client.payer`, and `client.identity`. The most common entrypoint for dApps.
 
-**`walletAsPayer()`** — adds the `wallet` namespace and overrides `client.payer` with a dynamic getter. When connected with a signing-capable account, `client.payer` returns the wallet signer. When disconnected, throws `SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED`. When connected but read-only, throws `SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE`.
+**`walletIdentity()`** — adds `client.wallet` and `client.identity`. Use when `client.payer` is controlled by a separate `payer()` plugin (e.g. a backend relayer pays fees, but the user's wallet is the identity).
+
+**`walletPayer()`** — adds `client.wallet` and `client.payer`. Use when you need the wallet as the fee payer but don't need `client.identity`.
+
+**`walletWithoutSigner()`** — adds `client.wallet` only. Use alongside separate `payer()` and/or `identity()` plugins, or when the wallet's signer is used explicitly in instructions.
+
+All signer getters (`payer`, `identity`) are dynamic — they return the wallet signer when connected, throw `SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED` when disconnected, or throw `SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE` when the wallet is read-only.
 
 ```typescript
-import { walletAsPayer } from '@solana/kit-plugin-wallet';
+import { walletSigner } from '@solana/kit-plugin-wallet';
 import { planAndSendTransactions } from '@solana/kit-plugin-instruction-plan';
 
-const client = createEmptyClient()
+const client = createClient()
   .use(rpc('https://api.mainnet-beta.solana.com'))
-  .use(walletAsPayer({ chain: 'solana:mainnet' }))
+  .use(walletSigner({ chain: 'solana:mainnet' }))
   .use(planAndSendTransactions());
 
-// No wallet connected -> client.payer throws SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED
-// Wallet connected    -> client.payer returns wallet signer
-// Wallet disconnects  -> client.payer throws SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED
+// No wallet connected -> client.payer / client.identity throw
+// Wallet connected    -> client.payer / client.identity return wallet signer
+// Wallet disconnects  -> client.payer / client.identity throw
 ```
 
-`walletAsPayer` uses `Object.defineProperty` for the dynamic `payer` getter. `addUse` preserves this getter descriptor through subsequent `.use()` calls, and downstream plugins that use `extendClient` also preserve it.
+The dynamic getters use `Object.defineProperty`. `addUse` preserves getter descriptors through subsequent `.use()` calls, and downstream plugins that use `extendClient` also preserve them.
 
-Downstream plugins (e.g. `planAndSendTransactions()`) depend only on `client.payer` being a `TransactionSigner`. They do not know or care whether it was set by `payer()` or `walletAsPayer()`.
+Downstream plugins (e.g. `planAndSendTransactions()`) depend only on `client.payer` being a `TransactionSigner`. They do not know or care whether it was set by `payer()` or `walletSigner()`.
 
 ## API Surface
 
 ### Plugin creation
 
 ```typescript
-import { wallet, walletAsPayer } from '@solana/kit-plugin-wallet';
+import { walletSigner, walletIdentity, walletPayer, walletWithoutSigner } from '@solana/kit-plugin-wallet';
 
-// Wallet as payer — most dApps
-const client = createEmptyClient()
+// Wallet as payer and identity — most dApps
+const client = createClient()
   .use(rpc('https://api.mainnet-beta.solana.com'))
-  .use(walletAsPayer({ chain: 'solana:mainnet' }))
+  .use(walletSigner({ chain: 'solana:mainnet' }))
   .use(planAndSendTransactions());
-// client.payer is TransactionSigner (throws if not connected)
 
-// Wallet alongside a static payer
-const client = createEmptyClient()
+// Wallet as identity only — relayer pays fees
+const client = createClient()
+  .use(rpc('https://api.mainnet-beta.solana.com'))
+  .use(payer(relayerKeypair))
+  .use(walletIdentity({ chain: 'solana:mainnet' }))
+  .use(planAndSendTransactions());
+
+// Wallet as payer only
+const client = createClient()
+  .use(rpc('https://api.mainnet-beta.solana.com'))
+  .use(walletPayer({ chain: 'solana:mainnet' }))
+  .use(planAndSendTransactions());
+
+// Wallet without signer — manual signer use
+const client = createClient()
   .use(rpc('https://api.mainnet-beta.solana.com'))
   .use(payer(backendKeypair))
-  .use(wallet({ chain: 'solana:mainnet' }))
+  .use(walletWithoutSigner({ chain: 'solana:mainnet' }))
   .use(planAndSendTransactions());
 // client.payer is TransactionSigner (from payer plugin, untouched)
 // client.wallet.getState().connected?.signer for manual use
@@ -216,11 +234,17 @@ type ClientWithWallet = {
  * or SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE when read-only.
  */
 
-export function wallet(config: WalletPluginConfig):
-    <T extends object>(client: T) => T & ClientWithWallet;
+export function walletSigner(config: WalletPluginConfig):
+    <T extends object>(client: T) => T & ClientWithWallet & ClientWithPayer & ClientWithIdentity;
 
-export function walletAsPayer(config: WalletPluginConfig):
+export function walletIdentity(config: WalletPluginConfig):
+    <T extends object>(client: T) => T & ClientWithWallet & ClientWithIdentity;
+
+export function walletPayer(config: WalletPluginConfig):
     <T extends object>(client: T) => T & ClientWithWallet & ClientWithPayer;
+
+export function walletWithoutSigner(config: WalletPluginConfig):
+    <T extends object>(client: T) => T & ClientWithWallet;
 
 type WalletStatus =
   | 'pending'        // not yet initialized (SSR, or browser before first storage/registry check)
@@ -317,40 +341,40 @@ import { getWalletFeature } from '@wallet-standard/ui-features';
 import type { UiWallet, UiWalletAccount } from '@wallet-standard/ui';
 import type { TransactionSigner, MessageSigner, SolanaChain } from '@solana/kit';
 
-export function wallet(config: WalletPluginConfig) {
-  return <T extends object>(client: T) => {
-    const store = createWalletStore(config);
+// Internal helper — defines a throwing signer getter on the additions object.
+function defineSignerGetter(additions, property, store) {
+  Object.defineProperty(additions, property, {
+    get() {
+      const state = store.getState();
+      if (!state.connected) {
+        throw new SolanaError(SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED, { status: state.status });
+      }
+      if (!state.connected.signer) {
+        throw new SolanaError(SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE);
+      }
+      return state.connected.signer;
+    },
+    enumerable: true,
+    configurable: true,
+  });
+}
 
-    return extendClient(client, {
-      wallet: store,
-      ...withCleanup(client, () => store.destroy()),
-    });
+// Internal helper — creates a wallet plugin with the given signer properties.
+function createPlugin(config, signerProperties) {
+  return (client) => {
+    const store = createWalletStore(config);
+    const additions = { wallet: store };
+    for (const prop of signerProperties) {
+      defineSignerGetter(additions, prop, store);
+    }
+    return withCleanup(extendClient(client, additions), () => store.destroy());
   };
 }
 
-export function walletAsPayer(config: WalletPluginConfig) {
-  return <T extends object>(client: T) => {
-    const store = createWalletStore(config);
-
-    // Build an additions object with a dynamic payer getter.
-    // The getter must be part of the additions passed to extendClient
-    // (not defined after the fact) because extendClient freezes the result.
-    const additions = {
-      wallet: store,
-      ...withCleanup(client, () => store.destroy()),
-    };
-
-    Object.defineProperty(additions, 'payer', {
-      get() {
-        return store.getState().connected?.signer ?? undefined;
-      },
-      enumerable: true,
-      configurable: true,
-    });
-
-    return extendClient(client, additions);
-  };
-}
+export function walletSigner(config) { return createPlugin(config, ['payer', 'identity']); }
+export function walletIdentity(config) { return createPlugin(config, ['identity']); }
+export function walletPayer(config) { return createPlugin(config, ['payer']); }
+export function walletWithoutSigner(config) { return createPlugin(config, []); }
 ```
 
 ### Internal store
@@ -981,38 +1005,19 @@ The bridge function (`createSignerFromWalletAccount`) inspects the wallet's feat
 
 All variants satisfy `TransactionSigner`, which is what `client.payer` expects. Kit's transaction execution automatically uses the appropriate signing path (e.g. `TransactionSendingSigner` lets the wallet submit the transaction itself). The `signMessage` method on the client uses the wallet's `solana:signMessage` feature directly rather than going through the cached signer, so message signing works even for wallets that don't support transaction signing.
 
-## Payer Integration Detail
+## Signer Getter Detail
 
-### How the getter works
+### How the getters work
 
-`walletAsPayer` defines a dynamic getter on the additions object passed to `extendClient`. The getter returns the current wallet signer, or throws when disconnected or read-only. It must be defined on the additions object (not on the result) because `extendClient` freezes the returned client:
+The `walletSigner`, `walletPayer`, and `walletIdentity` plugins define dynamic getters for `payer` and/or `identity` on the additions object passed to `extendClient`. Each getter returns the current wallet signer when connected, or throws when disconnected or read-only. Getters must be defined on the additions object (not on the result) because `extendClient` freezes the returned client. The `defineSignerGetter` helper is shared by all plugin functions.
 
-```typescript
-Object.defineProperty(additions, 'payer', {
-  get() {
-    const state = store.getState();
-    if (!state.connected) {
-      throw new SolanaError(SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED, { status: state.status });
-    }
-    if (!state.connected.signer) {
-      throw new SolanaError(SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE);
-    }
-    return state.connected.signer;
-  },
-  enumerable: true,
-  configurable: true,
-});
-
-return extendClient(client, additions);
-```
-
-This getter is preserved through subsequent `.use()` calls because:
+These getters are preserved through subsequent `.use()` calls because:
 
 1. `addUse` (updated in the plugin lifecycle RFC) uses `Object.getOwnPropertyDescriptors` instead of spread, preserving the getter.
 2. Subsequent plugins using `extendClient` also preserve it.
 3. The final frozen client returned by `addUse` retains the getter -- `Object.freeze` does not strip getters.
 
-Note: downstream plugins should use `extendClient` rather than spread to ensure the payer getter is preserved.
+Note: downstream plugins should use `extendClient` rather than spread to ensure signer getters are preserved.
 
 ### Interaction with planAndSendTransactions plugin
 
@@ -1224,7 +1229,7 @@ Wallet-originated errors (e.g. user rejecting a connection prompt) are propagate
 
 **Single wallet connection.** One active wallet at a time. dApps needing multiple can access `getState().wallets` and manage additional connections via wallet-standard APIs.
 
-**SSR-safe.** Both `wallet` and `walletAsPayer` gracefully degrade on the server — status stays `'pending'`, wallet list is empty, `client.payer` throws `SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED` (when using `walletAsPayer`), storage is skipped, all actions throw `SOLANA_ERROR__WALLET__NOT_CONNECTED`. The same client chain works on both server and browser without conditional `.use()` calls.
+**SSR-safe.** All four plugin functions gracefully degrade on the server — status stays `'pending'`, wallet list is empty, signer getters throw `SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED`, storage is skipped, all actions throw `SOLANA_ERROR__WALLET__NOT_CONNECTED`. The same client chain works on both server and browser without conditional `.use()` calls.
 
 **`pending` status.** Initial status is `'pending'`, not `'disconnected'`. This lets UI distinguish "we haven't checked yet" (render nothing / skeleton) from "we checked and there's no wallet" (render connect button). On the server, status stays `'pending'` permanently. In the browser, it transitions to `'disconnected'` or `'reconnecting'` once the storage read completes.
 
@@ -1232,7 +1237,7 @@ Wallet-originated errors (e.g. user rejecting a connection prompt) are propagate
 
 **Single subscribe listener.** Fires on any state change. Frameworks needing field-level selectivity use their own selector patterns (e.g. `useSyncExternalStoreWithSelector`).
 
-**Two plugins: `wallet` and `walletAsPayer`.** The payer decision is expressed at the type level, not via a config flag. `wallet()` adds wallet state and actions without touching `client.payer`. `walletAsPayer()` additionally overrides `client.payer` with a dynamic getter. The choice is in which function you import — the types tell you exactly what you get.
+**Four plugin entrypoints.** The signer property decision is expressed at the type level, not via a config flag. `walletSigner()` sets both `payer` and `identity`, `walletIdentity()` sets only `identity`, `walletPayer()` sets only `payer`, and `walletWithoutSigner()` sets neither. The choice is in which function you import — the types tell you exactly what you get.
 
 **Web Storage API for persistence.** Duck-typed to match the `getItem`/`setItem`/`removeItem` shape used by wagmi and Zustand. Supports both sync and async backends — `localStorage` can be passed directly, and async backends (IndexedDB, encrypted storage) return Promises.
 
