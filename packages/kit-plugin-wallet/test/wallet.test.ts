@@ -1,12 +1,12 @@
 import { createClient, extendClient } from '@solana/kit';
 import { describe, expect, it, vi } from 'vitest';
 
-import { wallet, walletAsPayer } from '../src';
+import { walletPayer, walletSigner, walletWithoutSigner } from '../src';
 import { createMockAccount, createMockUiWallet, mockSigner, registerWallet } from './_setup';
 
-describe.skipIf(!__BROWSER__)('wallet plugin (browser)', () => {
+describe.skipIf(!__BROWSER__)('walletWithoutSigner plugin (browser)', () => {
     it('adds wallet namespace to client', () => {
-        const client = createClient().use(wallet({ chain: 'solana:mainnet', storage: null }));
+        const client = createClient().use(walletWithoutSigner({ chain: 'solana:mainnet', storage: null }));
         expect(client.wallet).toBeDefined();
         expect(client.wallet.getState().status).toBe('disconnected');
     });
@@ -14,7 +14,7 @@ describe.skipIf(!__BROWSER__)('wallet plugin (browser)', () => {
     it('preserves existing client properties', () => {
         const client = createClient()
             .use(client => extendClient(client, { myField: 'hello' }))
-            .use(wallet({ chain: 'solana:mainnet', storage: null }));
+            .use(walletWithoutSigner({ chain: 'solana:mainnet', storage: null }));
         expect(client.myField).toBe('hello');
     });
 
@@ -23,7 +23,7 @@ describe.skipIf(!__BROWSER__)('wallet plugin (browser)', () => {
         const mockWallet = createMockUiWallet({ accounts: [account], name: 'TestWallet' });
         registerWallet(mockWallet);
 
-        const client = createClient().use(wallet({ chain: 'solana:mainnet', storage: null }));
+        const client = createClient().use(walletWithoutSigner({ chain: 'solana:mainnet', storage: null }));
         await client.wallet.connect(mockWallet);
         expect(client.wallet.getState().status).toBe('connected');
 
@@ -36,10 +36,10 @@ describe.skipIf(!__BROWSER__)('wallet plugin (browser)', () => {
     });
 });
 
-describe.skipIf(!__BROWSER__)('walletAsPayer plugin (browser)', () => {
-    it('payer is undefined when not connected', () => {
-        const client = createClient().use(walletAsPayer({ chain: 'solana:mainnet', storage: null }));
-        expect(client.payer).toBeUndefined();
+describe.skipIf(!__BROWSER__)('walletPayer plugin (browser)', () => {
+    it('payer throws when not connected', () => {
+        const client = createClient().use(walletPayer({ chain: 'solana:mainnet', storage: null }));
+        expect(() => client.payer).toThrow('No signing wallet connected');
     });
 
     it('payer returns the signer when connected', async () => {
@@ -50,13 +50,13 @@ describe.skipIf(!__BROWSER__)('walletAsPayer plugin (browser)', () => {
         });
         registerWallet(mockWallet);
 
-        const client = createClient().use(walletAsPayer({ chain: 'solana:mainnet', storage: null }));
+        const client = createClient().use(walletPayer({ chain: 'solana:mainnet', storage: null }));
         await client.wallet.connect(mockWallet);
 
         expect(client.payer).toBe(mockSigner);
     });
 
-    it('payer becomes undefined after disconnect', async () => {
+    it('payer throws after disconnect', async () => {
         const account = createMockAccount();
         const mockWallet = createMockUiWallet({
             accounts: [account],
@@ -65,18 +65,18 @@ describe.skipIf(!__BROWSER__)('walletAsPayer plugin (browser)', () => {
         });
         registerWallet(mockWallet);
 
-        const client = createClient().use(walletAsPayer({ chain: 'solana:mainnet', storage: null }));
+        const client = createClient().use(walletPayer({ chain: 'solana:mainnet', storage: null }));
         await client.wallet.connect(mockWallet);
         expect(client.payer).toBe(mockSigner);
 
         await client.wallet.disconnect();
-        expect(client.payer).toBeUndefined();
+        expect(() => client.payer).toThrow('No signing wallet connected');
     });
 
     it('preserves existing client properties', () => {
         const client = createClient()
             .use(client => extendClient(client, { myField: 'hello' }))
-            .use(walletAsPayer({ chain: 'solana:mainnet', storage: null }));
+            .use(walletPayer({ chain: 'solana:mainnet', storage: null }));
         expect(client.myField).toBe('hello');
     });
 
@@ -85,9 +85,43 @@ describe.skipIf(!__BROWSER__)('walletAsPayer plugin (browser)', () => {
         const mockWallet = createMockUiWallet({ accounts: [account], name: 'TestWallet' });
         registerWallet(mockWallet);
 
-        const client = createClient().use(walletAsPayer({ chain: 'solana:mainnet', storage: null }));
+        const client = createClient().use(walletPayer({ chain: 'solana:mainnet', storage: null }));
         await client.wallet.connect(mockWallet);
 
         expect(() => client[Symbol.dispose]()).not.toThrow();
+    });
+});
+
+describe.skipIf(!__BROWSER__)('walletSigner plugin (browser)', () => {
+    it('sets both payer and identity', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        const client = createClient().use(walletSigner({ chain: 'solana:mainnet', storage: null }));
+        await client.wallet.connect(mockWallet);
+
+        expect(client.payer).toBe(mockSigner);
+        expect(client.identity).toBe(mockSigner);
+    });
+
+    it('both payer and identity throw when not connected', () => {
+        const client = createClient().use(walletSigner({ chain: 'solana:mainnet', storage: null }));
+        expect(() => client.payer).toThrow('No signing wallet connected');
+        expect(() => client.identity).toThrow('No signing wallet connected');
+    });
+});
+
+describe.skipIf(!__BROWSER__)('wallet plugin duplicate guard', () => {
+    it('throws when using two wallet plugins on the same client', () => {
+        expect(() =>
+            createClient()
+                .use(walletWithoutSigner({ chain: 'solana:mainnet', storage: null }))
+                // @ts-expect-error — intentionally testing runtime guard for duplicate wallet plugins
+                .use(walletPayer({ chain: 'solana:mainnet', storage: null })),
+        ).toThrow('Only one wallet plugin can be used per client');
     });
 });
