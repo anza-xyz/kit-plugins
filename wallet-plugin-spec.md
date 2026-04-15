@@ -32,7 +32,7 @@ The bridge function (`createSignerFromWalletAccount`) is consumed via `@solana/w
 
 ## Summary
 
-A framework-agnostic Kit plugin that manages wallet discovery, connection lifecycle, and signer creation using wallet-standard. When a wallet is connected, the plugin optionally syncs its signer to the client's `payer` slot via a dynamic getter, falling back to any previously configured payer when no wallet is connected. The plugin exposes subscribable wallet state for framework adapters (React, Vue, Svelte, etc.) to consume without coupling to any specific UI framework.
+A framework-agnostic Kit plugin that manages wallet discovery, connection lifecycle, and signer creation using wallet-standard. When a wallet is connected, the plugin optionally syncs its signer to the client's `payer` slot via a dynamic getter, throwing when no signing wallet is connected. The plugin exposes subscribable wallet state for framework adapters (React, Vue, Svelte, etc.) to consume without coupling to any specific UI framework.
 
 **SSR-safe.** Both `wallet` and `walletAsPayer` can be included in the same client chain on both server and browser. On the server (`typeof window === 'undefined'`), the plugin gracefully degrades — status stays `'pending'`, wallet list is empty, payer is `undefined` (when using `walletAsPayer`), storage is skipped, no registry listeners are created. On the browser it initializes fully. This means a single client chain works everywhere:
 
@@ -45,7 +45,7 @@ const client = createEmptyClient()
   .use(systemProgram())
   .use(planAndSendTransactions());
 
-// Server: status === 'pending', client.payer === undefined
+// Server: status === 'pending', client.payer throws
 // Browser: auto-connect fires, client.payer becomes wallet signer
 ```
 
@@ -97,7 +97,7 @@ The package exports two plugin functions that differ in how they interact with `
 
 **`wallet()`** — adds the `wallet` namespace but does not touch `client.payer`. Use alongside the `payer()` plugin for backend signers, or when the wallet's signer is used explicitly in instructions rather than as the default payer.
 
-**`walletAsPayer()`** — adds the `wallet` namespace and overrides `client.payer` with a dynamic getter. When connected with a signing-capable account, `client.payer` returns the wallet signer. When disconnected or read-only, `client.payer` is `undefined`.
+**`walletAsPayer()`** — adds the `wallet` namespace and overrides `client.payer` with a dynamic getter. When connected with a signing-capable account, `client.payer` returns the wallet signer. When disconnected, throws `SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED`. When connected but read-only, throws `SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE`.
 
 ```typescript
 import { walletAsPayer } from '@solana/kit-plugin-wallet';
@@ -108,9 +108,9 @@ const client = createEmptyClient()
   .use(walletAsPayer({ chain: 'solana:mainnet' }))
   .use(planAndSendTransactions());
 
-// No wallet connected -> client.payer is undefined
+// No wallet connected -> client.payer throws SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED
 // Wallet connected    -> client.payer returns wallet signer
-// Wallet disconnects  -> client.payer is undefined
+// Wallet disconnects  -> client.payer throws SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED
 ```
 
 `walletAsPayer` uses `Object.defineProperty` for the dynamic `payer` getter. `addUse` preserves this getter descriptor through subsequent `.use()` calls, and downstream plugins that use `extendClient` also preserve it.
@@ -129,7 +129,7 @@ const client = createEmptyClient()
   .use(rpc('https://api.mainnet-beta.solana.com'))
   .use(walletAsPayer({ chain: 'solana:mainnet' }))
   .use(planAndSendTransactions());
-// client.payer is TransactionSigner | undefined
+// client.payer is TransactionSigner (throws if not connected)
 
 // Wallet alongside a static payer
 const client = createEmptyClient()
@@ -210,19 +210,17 @@ type ClientWithWallet = {
 };
 
 /**
- * Extends ClientWithWallet with a dynamic payer getter.
- * client.payer returns the wallet signer when connected,
- * or undefined when disconnected / read-only.
+ * walletAsPayer returns ClientWithWallet & ClientWithPayer.
+ * The payer getter is dynamic — returns the wallet signer when connected,
+ * throws SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED when disconnected,
+ * or SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE when read-only.
  */
-type ClientWithWalletAsPayer = ClientWithWallet & {
-  readonly payer: TransactionSigner | undefined;
-};
 
 export function wallet(config: WalletPluginConfig):
     <T extends object>(client: T) => T & ClientWithWallet;
 
 export function walletAsPayer(config: WalletPluginConfig):
-    <T extends object>(client: T) => T & ClientWithWalletAsPayer;
+    <T extends object>(client: T) => T & ClientWithWallet & ClientWithPayer;
 
 type WalletStatus =
   | 'pending'        // not yet initialized (SSR, or browser before first storage/registry check)
@@ -307,6 +305,8 @@ import { createSignerFromWalletAccount } from '@solana/wallet-account-signer';
 import {
   SolanaError,
   SOLANA_ERROR__WALLET__NOT_CONNECTED,
+  SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED,
+  SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE,
 } from '@solana/errors';
 import { getWallets } from '@wallet-standard/app';
 import {
@@ -956,7 +956,7 @@ function createWalletStore(config: WalletPluginConfig) {
 
 The signer is created via `tryCreateSigner()` (wrapping `createSignerFromWalletAccount()`) when an account becomes active, and stored in `state.signer`. It is not recreated on every `client.payer` access -- the getter simply reads `state.signer`.
 
-If `createSignerFromWalletAccount` throws (e.g. the wallet doesn't support any signing features), `tryCreateSigner` catches the error and returns `null`. The wallet is still connected — the account is set, events work, persistence works — but `getState().connected.signer` is `null`. When using `walletAsPayer`, `client.payer` is `undefined` (no signer available).
+If `createSignerFromWalletAccount` throws (e.g. the wallet doesn't support any signing features), `tryCreateSigner` catches the error and returns `null`. The wallet is still connected — the account is set, events work, persistence works — but `getState().connected.signer` is `null`. When using `walletAsPayer`, `client.payer` throws `SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE`.
 
 This ensures referential stability, which matters for React's dependency arrays and avoids redundant codec/wrapper creation.
 
@@ -985,12 +985,19 @@ All variants satisfy `TransactionSigner`, which is what `client.payer` expects. 
 
 ### How the getter works
 
-`walletAsPayer` defines a dynamic getter on the additions object passed to `extendClient`. The getter returns the current wallet signer, or `undefined` when disconnected or read-only. It must be defined on the additions object (not on the result) because `extendClient` freezes the returned client:
+`walletAsPayer` defines a dynamic getter on the additions object passed to `extendClient`. The getter returns the current wallet signer, or throws when disconnected or read-only. It must be defined on the additions object (not on the result) because `extendClient` freezes the returned client:
 
 ```typescript
 Object.defineProperty(additions, 'payer', {
   get() {
-    return store.getState().connected?.signer ?? undefined;
+    const state = store.getState();
+    if (!state.connected) {
+      throw new SolanaError(SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED, { status: state.status });
+    }
+    if (!state.connected.signer) {
+      throw new SolanaError(SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE);
+    }
+    return state.connected.signer;
   },
   enumerable: true,
   configurable: true,
@@ -1013,7 +1020,7 @@ The `planAndSendTransactions` plugin accesses `client.payer` at transaction time
 
 - User connects wallet → next transaction uses the wallet signer
 - User switches accounts → next transaction uses the new account's signer
-- User disconnects → `client.payer` is `undefined`, transaction fails explicitly
+- User disconnects → `client.payer` throws `SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED`
 
 No client reconstruction is needed. The client is a long-lived object.
 
@@ -1168,13 +1175,23 @@ type WalletPluginConfig = {
 
 ### Error codes
 
-One new error code added to `@solana/errors`:
+Three error codes from `@solana/errors`:
 
 ```typescript
 SOLANA_ERROR__WALLET__NOT_CONNECTED
 // context: { operation: string }
 // message: "Cannot $operation: no wallet connected"
+
+SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED
+// context: { status: string }
+// message: "No signing wallet connected (status: $status)"
+
+SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE
+// context: {}
+// message: "Connected wallet does not support signing"
 ```
+
+`NOT_CONNECTED` is thrown by wallet actions (signMessage, selectAccount, etc.) when no wallet is connected. `NO_SIGNER_CONNECTED` is thrown by the `payer` getter when no wallet is connected. `SIGNER_NOT_AVAILABLE` is thrown by the `payer` getter when a wallet is connected but is read-only (no signing support).
 
 Feature-not-supported errors are delegated to `getWalletFeature` from `@wallet-standard/ui-features`, which throws a `WalletStandardError` when the requested feature is not present on the wallet. This avoids duplicating error handling that wallet-standard already provides.
 
@@ -1186,7 +1203,7 @@ Wallet-originated errors (e.g. user rejecting a connection prompt) are propagate
 |----------|----------|
 | SSR (server environment) | Status stays `'pending'`, all actions throw `SOLANA_ERROR__WALLET__NOT_CONNECTED` |
 | User rejects connection prompt | `connect()` propagates wallet error, status returns to `disconnected` |
-| Wallet does not support signing | Connection succeeds, `connected.signer` is `null`, payer is `undefined`, sign methods throw |
+| Wallet does not support signing | Connection succeeds, `connected.signer` is `null`, `client.payer` throws `SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE`, sign methods throw |
 | Wallet does not pass filter | Filtered out at discovery time; disconnected if filter fails after feature change |
 | Wallet unregisters while connected | Automatic disconnection, subscribers notified |
 | Silent reconnect fails | Status -> `disconnected`, persisted account cleared |
@@ -1207,7 +1224,7 @@ Wallet-originated errors (e.g. user rejecting a connection prompt) are propagate
 
 **Single wallet connection.** One active wallet at a time. dApps needing multiple can access `getState().wallets` and manage additional connections via wallet-standard APIs.
 
-**SSR-safe.** Both `wallet` and `walletAsPayer` gracefully degrade on the server — status stays `'pending'`, wallet list is empty, payer is `undefined` (when using `walletAsPayer`), storage is skipped, all actions throw `SOLANA_ERROR__WALLET__NOT_CONNECTED`. The same client chain works on both server and browser without conditional `.use()` calls.
+**SSR-safe.** Both `wallet` and `walletAsPayer` gracefully degrade on the server — status stays `'pending'`, wallet list is empty, `client.payer` throws `SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED` (when using `walletAsPayer`), storage is skipped, all actions throw `SOLANA_ERROR__WALLET__NOT_CONNECTED`. The same client chain works on both server and browser without conditional `.use()` calls.
 
 **`pending` status.** Initial status is `'pending'`, not `'disconnected'`. This lets UI distinguish "we haven't checked yet" (render nothing / skeleton) from "we checked and there's no wallet" (render connect button). On the server, status stays `'pending'` permanently. In the browser, it transitions to `'disconnected'` or `'reconnecting'` once the storage read completes.
 
@@ -1233,5 +1250,5 @@ Wallet-originated errors (e.g. user rejecting a connection prompt) are propagate
 
 **`userHasSelected` flag.** Tracks whether the user has made an explicit choice (via `connect`, `selectAccount`, or `signIn`). When true, the auto-restore flow will not override the user's selection, matching the `wasSetterInvokedRef` pattern from `@solana/react`.
 
-**Read-only wallet support.** `tryCreateSigner` wraps `createSignerFromWalletAccount` in a try/catch. If the wallet doesn't support any signing features (e.g. a watch-only wallet), connection still succeeds — the account is set, events fire, persistence works. `connected.signer` in the state is `null`, letting UI distinguish connected-with-signer from connected-without-signer. When using `walletAsPayer`, `client.payer` is `undefined`.
+**Read-only wallet support.** `tryCreateSigner` wraps `createSignerFromWalletAccount` in a try/catch. If the wallet doesn't support any signing features (e.g. a watch-only wallet), connection still succeeds — the account is set, events fire, persistence works. `connected.signer` in the state is `null`, letting UI distinguish connected-with-signer from connected-without-signer. When using `walletAsPayer`, `client.payer` throws `SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE`.
 
