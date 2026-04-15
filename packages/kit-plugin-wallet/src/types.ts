@@ -182,7 +182,7 @@ export type WalletNamespace = {
      * Switch to a different account within the connected wallet. Creates and
      * caches a new signer for the selected account.
      *
-     * @throws {@link WalletNotConnectedError} if no wallet is connected.
+     * @throws `SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED)` if no wallet is connected.
      */
     selectAccount: (account: UiWalletAccount) => void;
 
@@ -211,7 +211,7 @@ export type WalletNamespace = {
      * through the cached signer), so message signing works even for wallets
      * that don't support transaction signing.
      *
-     * @throws {@link WalletNotConnectedError} if no wallet is connected.
+     * @throws `SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED)` if no wallet is connected.
      * @throws `WalletStandardError(WALLET_STANDARD_ERROR__FEATURES__WALLET_ACCOUNT_FEATURE_UNIMPLEMENTED)`
      *   if the wallet does not support `solana:signMessage`.
      */
@@ -262,33 +262,3 @@ export type ClientWithWalletAsPayer = ClientWithWallet & {
     /** The connected wallet signer, or `undefined` when disconnected / read-only. */
     readonly payer: TransactionSigner | undefined;
 };
-
-// -- Error ------------------------------------------------------------------
-
-/**
- * Thrown when a wallet operation is attempted but no wallet is connected
- * (or the connected wallet is read-only and has no signer).
- *
- * @example
- * ```ts
- * try {
- *   await client.wallet.signMessage(message);
- * } catch (e) {
- *   if (e instanceof WalletNotConnectedError) {
- *     console.error('Connect a wallet first');
- *   }
- * }
- * ```
- */
-// TODO: we should probably add this error to Kit - it'd be useful for any similar wallet functionality
-// https://github.com/anza-xyz/kit/pull/1526
-export class WalletNotConnectedError extends Error {
-    /** The name of the operation that was attempted. */
-    readonly operation: string;
-
-    constructor(operation: string) {
-        super(`Cannot ${operation}: no wallet connected`);
-        this.name = 'WalletNotConnectedError';
-        this.operation = operation;
-    }
-}
