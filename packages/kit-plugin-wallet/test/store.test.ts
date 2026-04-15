@@ -1,8 +1,8 @@
+import { SOLANA_ERROR__WALLET__NOT_CONNECTED, SolanaError } from '@solana/kit';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createWalletStore } from '../src/store';
 import type { WalletStorage } from '../src/types';
-import { WalletNotConnectedError } from '../src/types';
 import {
     connectMock,
     createMockAccount,
@@ -28,10 +28,12 @@ describe.skipIf(__BROWSER__)('store (SSR / non-browser)', () => {
         expect(store.getState().connected).toBeNull();
     });
 
-    it('throws WalletNotConnectedError for connect on server', () => {
+    it('throws for connect on server', () => {
         const store = createWalletStore({ chain: 'solana:mainnet' });
         const mockWallet = createMockUiWallet();
-        expect(() => store.connect(mockWallet)).toThrow(WalletNotConnectedError);
+        expect(() => store.connect(mockWallet)).toThrow(
+            new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'connect' }),
+        );
     });
 
     it('disconnect is a no-op on server', async () => {
@@ -39,15 +41,19 @@ describe.skipIf(__BROWSER__)('store (SSR / non-browser)', () => {
         await expect(store.disconnect()).resolves.toBeUndefined();
     });
 
-    it('throws WalletNotConnectedError for signMessage on server', () => {
+    it('throws for signMessage on server', () => {
         const store = createWalletStore({ chain: 'solana:mainnet' });
-        expect(() => store.signMessage(new Uint8Array())).toThrow(WalletNotConnectedError);
+        expect(() => store.signMessage(new Uint8Array())).toThrow(
+            new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signMessage' }),
+        );
     });
 
-    it('throws WalletNotConnectedError for signIn on server', () => {
+    it('throws for signIn on server', () => {
         const store = createWalletStore({ chain: 'solana:mainnet' });
         const mockWallet = createMockUiWallet();
-        expect(() => store.signIn(mockWallet, {})).toThrow(WalletNotConnectedError);
+        expect(() => store.signIn(mockWallet, {})).toThrow(
+            new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signIn' }),
+        );
     });
 
     it('subscribe returns unsubscribe function on server', () => {
@@ -283,7 +289,9 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
     it('selectAccount throws when not connected', () => {
         const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
         const account = createMockAccount();
-        expect(() => store.selectAccount(account)).toThrow(WalletNotConnectedError);
+        expect(() => store.selectAccount(account)).toThrow(
+            new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'selectAccount' }),
+        );
     });
 
     it('does not notify listeners when nothing changed', async () => {
@@ -339,7 +347,9 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
 
     it('signMessage throws when not connected', async () => {
         const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
-        await expect(store.signMessage(new Uint8Array([1, 2, 3]))).rejects.toThrow(WalletNotConnectedError);
+        await expect(store.signMessage(new Uint8Array([1, 2, 3]))).rejects.toThrow(
+            new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signMessage' }),
+        );
     });
 
     it('signMessage calls wallet feature directly when connected', async () => {

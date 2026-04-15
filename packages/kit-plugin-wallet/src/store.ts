@@ -1,4 +1,4 @@
-import type { SignatureBytes } from '@solana/kit';
+import { type SignatureBytes, SOLANA_ERROR__WALLET__NOT_CONNECTED, SolanaError } from '@solana/kit';
 import { createSignerFromWalletAccount } from '@solana/wallet-account-signer';
 import {
     SolanaSignIn,
@@ -32,7 +32,6 @@ import type {
     WalletStatus,
     WalletStorage,
 } from './types';
-import { WalletNotConnectedError } from './types';
 
 // -- Internal types ---------------------------------------------------------
 
@@ -63,18 +62,18 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         });
         return {
             connect: () => {
-                throw new WalletNotConnectedError('connect');
+                throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'connect' });
             },
             disconnect: () => Promise.resolve(),
             getState: () => ssrSnapshot,
             selectAccount: () => {
-                throw new WalletNotConnectedError('selectAccount');
+                throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'selectAccount' });
             },
             signIn: () => {
-                throw new WalletNotConnectedError('signIn');
+                throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signIn' });
             },
             signMessage: () => {
-                throw new WalletNotConnectedError('signMessage');
+                throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signMessage' });
             },
             subscribe: () => () => {},
             [Symbol.dispose]: () => {},
@@ -378,7 +377,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
 
     function selectAccount(account: UiWalletAccount): void {
         if (!state.connectedWallet) {
-            throw new WalletNotConnectedError('selectAccount');
+            throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'selectAccount' });
         }
         const refreshed = refreshUiWallet(state.connectedWallet);
         if (!refreshed.accounts.some(a => a.address === account.address)) {
@@ -395,7 +394,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
     async function signMessage(message: Uint8Array): Promise<SignatureBytes> {
         const { connectedWallet, account } = state;
         if (!connectedWallet || !account) {
-            throw new WalletNotConnectedError('signMessage');
+            throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signMessage' });
         }
         // Use the wallet feature directly rather than going through the cached
         // signer. This decouples message signing from transaction signing —
