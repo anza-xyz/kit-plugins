@@ -246,19 +246,3 @@ export type ClientWithWallet = {
     /** The wallet namespace — state, actions, and framework integration. */
     readonly wallet: WalletNamespace;
 };
-
-/**
- * Properties added to the client by the {@link walletAsPayer} plugin.
- *
- * Extends {@link ClientWithWallet} with a dynamic `payer` getter. When a
- * signing-capable wallet is connected, `client.payer` returns the wallet
- * signer. When disconnected or when the wallet is read-only, `client.payer`
- * is `undefined`.
- *
- * @see {@link walletAsPayer}
- * @see {@link ClientWithWallet}
- */
-export type ClientWithWalletAsPayer = ClientWithWallet & {
-    /** The connected wallet signer, or `undefined` when disconnected / read-only. */
-    readonly payer: TransactionSigner | undefined;
-};
