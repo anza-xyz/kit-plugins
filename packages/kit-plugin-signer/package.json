@@ -1,6 +1,6 @@
 {
     "name": "@solana/kit-plugin-signer",
-    "version": "0.9.0",
+    "version": "0.10.0",
     "description": "Signer helpers for Kit clients",
     "exports": {
         "types": "./dist/types/index.d.ts",
