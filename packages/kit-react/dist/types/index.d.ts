@@ -1,5 +1,7 @@
 export { ChainContext, ClientContext, KitClientProvider, useChain, useClient } from './client-context';
 export type { ChainIdentifier, KitClientProviderProps } from './client-context';
+export { useClientCapability } from './client-capability';
+export type { UseClientCapabilityOptions } from './client-capability';
 export { PluginProvider } from './providers/plugin-provider';
 export type { PluginProviderProps } from './providers/plugin-provider';
 export { IdentityProvider, PayerProvider } from './providers/payer-provider';
@@ -8,11 +10,7 @@ export { RpcProvider } from './providers/rpc-provider';
 export type { RpcProviderProps } from './providers/rpc-provider';
 export { LiteSvmProvider } from './providers/litesvm-provider';
 export type { LiteSvmProviderProps } from './providers/litesvm-provider';
-export { WalletProvider } from './providers/wallet-provider';
-export type { WalletProviderProps, WalletRole } from './providers/wallet-provider';
-export { useConnectedWallet, useWallets, useWalletState, useWalletStatus } from './hooks/wallet-state';
-export type { ConnectedWallet } from './hooks/wallet-state';
-export { useConnectWallet, useDisconnectWallet, useSelectAccount, useSignIn, useSignMessage, } from './hooks/wallet-actions';
+export { useIdentity, usePayer } from './hooks/signers';
 export { useBalance } from './hooks/use-balance';
 export { useAccount } from './hooks/use-account';
 export { useTransactionConfirmation } from './hooks/use-transaction-confirmation';
@@ -26,4 +24,6 @@ export { useAction } from './hooks/use-action';
 export type { ActionState, ActionStatus } from './hooks/use-action';
 export { useSendTransaction, useSendTransactions } from './hooks/use-send-transaction';
 export type { UseSendTransactionState, UseSendTransactionsState } from './hooks/use-send-transaction';
+export { usePlanTransaction, usePlanTransactions } from './hooks/use-plan-transaction';
+export type { UsePlanTransactionState, UsePlanTransactionsState } from './hooks/use-plan-transaction';
 //# sourceMappingURL=index.d.ts.map

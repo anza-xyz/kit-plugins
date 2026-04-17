@@ -27,7 +27,9 @@ export type UseTransactionConfirmationOptions = {
  * polling.
  *
  * Pass `null` for the signature to disable (e.g. before the transaction has
- * been sent).
+ * been sent). A disabled query reports `{ data: undefined, error: undefined,
+ * isLoading: false }` — matching react-query / SWR semantics when the key is
+ * `null`.
  *
  * @param signature - The transaction signature to watch, or `null`.
  * @param options - Optional confirmation level.

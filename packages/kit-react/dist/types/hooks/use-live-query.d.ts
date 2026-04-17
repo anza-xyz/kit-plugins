@@ -25,22 +25,25 @@ export type UseLiveQueryConfig<TRpcValue, TSubscriptionValue, TItem> = {
  * Solana-specific mapping logic. Reach for `useLiveQuery` for custom program
  * accounts or other RPC/subscription pairs the named hooks don't cover.
  *
- * The `config` argument is read only when `deps` change — pass values such as
- * `client`, addresses, and decoders in `deps` to control when the store is
- * rebuilt.
+ * `factory` is called when `deps` change (or on mount) to build a fresh
+ * {@link UseLiveQueryConfig}. Using a function (rather than a plain config
+ * object) lets ESLint's `react-hooks/exhaustive-deps` rule trace which values
+ * the config closes over and warn when any are missing from `deps`. Add
+ * `'useLiveQuery'` to your project's `react-hooks/exhaustive-deps`
+ * `additionalHooks` setting to opt in.
  *
  * @example
  * ```tsx
  * const { data: gameState } = useLiveQuery(
- *     {
+ *     () => ({
  *         rpcRequest: client.rpc.getAccountInfo(gameAddress, { encoding: 'base64' }),
  *         rpcSubscriptionRequest: client.rpcSubscriptions.accountNotifications(gameAddress, { encoding: 'base64' }),
  *         rpcValueMapper: (v) => (v ? parseGameState(parseBase64RpcAccount(gameAddress, v)) : null),
  *         rpcSubscriptionValueMapper: (v) => (v ? parseGameState(parseBase64RpcAccount(gameAddress, v)) : null),
- *     },
+ *     }),
  *     [client, gameAddress],
  * );
  * ```
  */
-export declare function useLiveQuery<TRpcValue, TSubscriptionValue, TItem>(config: UseLiveQueryConfig<TRpcValue, TSubscriptionValue, TItem>, deps: DependencyList): LiveQueryResult<TItem>;
+export declare function useLiveQuery<TRpcValue, TSubscriptionValue, TItem>(factory: () => UseLiveQueryConfig<TRpcValue, TSubscriptionValue, TItem>, deps: DependencyList): LiveQueryResult<TItem>;
 //# sourceMappingURL=use-live-query.d.ts.map

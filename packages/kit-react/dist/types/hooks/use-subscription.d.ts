@@ -19,6 +19,11 @@ export type UseSubscriptionResult<T> = {
  * The `factory` is invoked when `deps` change (or on mount) with a fresh
  * {@link AbortSignal} that is triggered on dep change and unmount.
  *
+ * Return `null` from the factory to disable the subscription — matching the
+ * {@link useBalance} / {@link useAccount} / {@link useTransactionConfirmation}
+ * `null`-gate convention. A disabled subscription leaves `data` and `error`
+ * as `undefined` without subscribing or firing any RPC traffic.
+ *
  * @example
  * ```tsx
  * const { data: slot } = useSubscription(
@@ -27,13 +32,13 @@ export type UseSubscriptionResult<T> = {
  * );
  * ```
  *
- * @example
+ * @example Gated on a feature flag
  * ```tsx
  * const { data: logs } = useSubscription(
- *     () => client.rpcSubscriptions.logsNotifications(programId),
- *     [client, programId],
+ *     () => (enabled ? client.rpcSubscriptions.logsNotifications(programId) : null),
+ *     [client, programId, enabled],
  * );
  * ```
  */
-export declare function useSubscription<T>(factory: (signal: AbortSignal) => PendingRpcSubscriptionsRequest<T>, deps: DependencyList): UseSubscriptionResult<T>;
+export declare function useSubscription<T>(factory: (signal: AbortSignal) => PendingRpcSubscriptionsRequest<T> | null, deps: DependencyList): UseSubscriptionResult<T>;
 //# sourceMappingURL=use-subscription.d.ts.map

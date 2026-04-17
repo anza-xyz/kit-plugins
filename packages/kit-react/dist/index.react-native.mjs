@@ -1,18 +1,31 @@
 import { createClient, createReactiveStoreWithInitialValueAndSlotTracking, parseBase64RpcAccount, decodeAccount } from '@solana/kit';
-import { createContext, useContext, useMemo, useSyncExternalStore, useCallback, useState, useEffect, useRef } from 'react';
+import { createContext, useContext, useMemo, useEffect, useRef, useSyncExternalStore, useState, useCallback } from 'react';
 import { jsx } from 'react/jsx-runtime';
 import { payer, identity } from '@solana/kit-plugin-signer';
 import { solanaRpc } from '@solana/kit-plugin-rpc';
 import { litesvm } from '@solana/kit-plugin-litesvm';
-import { walletSigner, walletPayer, walletWithoutSigner, walletIdentity } from '@solana/kit-plugin-wallet';
+import { getAbortablePromise } from '@solana/promises';
 
 // src/client-context.tsx
+
+// src/internal/dispose.ts
+var DISPOSED = /* @__PURE__ */ new WeakSet();
+function disposeClient(client) {
+  if (DISPOSED.has(client)) return;
+  DISPOSED.add(client);
+  if (typeof client[Symbol.dispose] === "function") {
+    client[Symbol.dispose]();
+  }
+}
 
 // src/internal/errors.ts
 function throwMissingProvider(hookName, providerName) {
   throw new Error(
     `${hookName}() must be used within <${providerName}>. Wrap your component tree in <${providerName}> (or an ancestor provider that includes it).`
   );
+}
+function throwMissingCapability(hookName, capability, providerHint) {
+  throw new Error(`${hookName}() requires ${capability}. ${providerHint}`);
 }
 var ClientContext = createContext(null);
 ClientContext.displayName = "ClientContext";
@@ -32,10 +45,38 @@ function useChain() {
   }
   return chain;
 }
-function KitClientProvider({ chain, children }) {
-  const client = useMemo(() => createClient(), []);
+function KitClientProvider({ chain, children, client: providedClient }) {
+  const owned = useMemo(() => providedClient ? null : createClient(), [providedClient]);
+  const client = providedClient ?? owned;
+  useEffect(() => {
+    if (owned === null) return;
+    return () => disposeClient(owned);
+  }, [owned]);
   return /* @__PURE__ */ jsx(ChainContext.Provider, { value: chain, children: /* @__PURE__ */ jsx(ClientContext.Provider, { value: client, children }) });
 }
+
+// src/client-capability.ts
+function useClientCapability({
+  capability,
+  hookName,
+  providerHint
+}) {
+  const client = useClient();
+  const keys = typeof capability === "string" ? [capability] : capability;
+  for (const key of keys) {
+    if (!(key in client)) {
+      throwMissingCapability(hookName, formatCapabilityLabel(keys), providerHint);
+    }
+  }
+  return client;
+}
+function formatCapabilityLabel(keys) {
+  const labels = keys.map((k) => `\`client.${k}\``);
+  if (labels.length === 1) return labels[0];
+  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+  return `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`;
+}
+var CHURN_WARNING_THRESHOLD = 2;
 function PluginProvider({ children, plugin, plugins }) {
   const parent = useClient();
   const list = plugin ? [plugin] : plugins;
@@ -45,7 +86,34 @@ function PluginProvider({ children, plugin, plugins }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [parent, ...list]
   );
+  const previousListRef = useRef(null);
+  const churnCountRef = useRef(0);
+  const warnedRef = useRef(false);
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") return;
+    const previous = previousListRef.current;
+    previousListRef.current = list;
+    if (previous === null) return;
+    if (sameIdentities(previous, list)) {
+      churnCountRef.current = 0;
+      return;
+    }
+    churnCountRef.current++;
+    if (churnCountRef.current >= CHURN_WARNING_THRESHOLD && !warnedRef.current) {
+      warnedRef.current = true;
+      console.warn(
+        "<PluginProvider>: plugin identity is changing across renders. Wrap the plugin prop in `useMemo` or hoist it to module scope \u2014 otherwise a fresh client is rebuilt on every render, dropping subscriptions and cached state."
+      );
+    }
+  });
   return /* @__PURE__ */ jsx(ClientContext.Provider, { value: extended, children });
+}
+function sameIdentities(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
 }
 function PayerProvider({ children, signer }) {
   const plugin = useMemo(() => payer(signer), [signer]);
@@ -55,24 +123,44 @@ function IdentityProvider({ children, signer }) {
   const plugin = useMemo(() => identity(signer), [signer]);
   return /* @__PURE__ */ jsx(PluginProvider, { plugin, children });
 }
-function RpcProvider({ children, maxConcurrency, priorityFees, skipPreflight, url, wsUrl }) {
+function RpcProvider({ children, ...config }) {
   const parent = useClient();
   if (!("payer" in parent)) {
     throw new Error(
-      "RpcProvider requires a payer. Wrap it in a WalletProvider (with role 'signer' or 'payer') or a PayerProvider."
+      "RpcProvider requires a payer. Wrap it in a WalletProvider (with role 'signer' or 'payer') or a PayerProvider. For read-only apps that only need RPC reads, skip RpcProvider and use PluginProvider with solanaRpcConnection + solanaRpcSubscriptionsConnection instead."
     );
   }
+  const {
+    maxConcurrency,
+    priorityFees,
+    rpcConfig,
+    rpcSubscriptionsConfig,
+    rpcSubscriptionsUrl,
+    rpcUrl,
+    skipPreflight
+  } = config;
   const client = useMemo(
     () => parent.use(
       solanaRpc({
         maxConcurrency,
         priorityFees,
-        rpcSubscriptionsUrl: wsUrl,
-        rpcUrl: url,
+        rpcConfig,
+        rpcSubscriptionsConfig,
+        rpcSubscriptionsUrl,
+        rpcUrl,
         skipPreflight
       })
     ),
-    [parent, url, wsUrl, maxConcurrency, priorityFees, skipPreflight]
+    [
+      parent,
+      rpcUrl,
+      rpcSubscriptionsUrl,
+      maxConcurrency,
+      priorityFees,
+      skipPreflight,
+      rpcConfig,
+      rpcSubscriptionsConfig
+    ]
   );
   return /* @__PURE__ */ jsx(ClientContext.Provider, { value: client, children });
 }
@@ -86,110 +174,68 @@ function LiteSvmProvider({ children }) {
   const client = useMemo(() => parent.use(litesvm()), [parent]);
   return /* @__PURE__ */ jsx(ClientContext.Provider, { value: client, children });
 }
-function WalletProvider({
-  autoConnect,
-  children,
-  filter,
-  role = "signer",
-  storage,
-  storageKey
-}) {
-  const chain = useChain();
-  const plugin = useMemo(() => {
-    const config = { autoConnect, chain, filter, storage, storageKey };
-    switch (role) {
-      case "identity":
-        return walletIdentity(config);
-      case "none":
-        return walletWithoutSigner(config);
-      case "payer":
-        return walletPayer(config);
-      case "signer":
-        return walletSigner(config);
-    }
-  }, [role, chain, autoConnect, storage, storageKey, filter]);
-  return /* @__PURE__ */ jsx(PluginProvider, { plugin, children });
-}
-
-// src/internal/wallet-client.ts
-function useWalletClient(hookName) {
-  const client = useClient();
-  if (!("wallet" in client)) {
-    throwMissingProvider(hookName, "WalletProvider");
+var NOOP_SUBSCRIBE = () => () => {
+};
+function readOptional(read) {
+  try {
+    return read() ?? null;
+  } catch {
+    return null;
   }
-  return client;
 }
-
-// src/hooks/wallet-state.ts
-function useWallets() {
-  const client = useWalletClient("useWallets");
-  return useSyncExternalStore(
-    client.wallet.subscribe,
-    () => client.wallet.getState().wallets,
-    () => client.wallet.getState().wallets
-  );
+function usePayer() {
+  const client = useClient();
+  const getSnapshot = () => readOptional(() => client.payer);
+  const payer2 = useSyncExternalStore(client.subscribeToPayer ?? NOOP_SUBSCRIBE, getSnapshot, getSnapshot);
+  if (!("payer" in client)) {
+    throwMissingCapability(
+      "usePayer",
+      "`client.payer`",
+      'Usually supplied by <WalletProvider> (with role "signer" or "payer") or <PayerProvider> \u2014 or any provider that installs a payer plugin.'
+    );
+  }
+  return payer2;
 }
-function useWalletStatus() {
-  const client = useWalletClient("useWalletStatus");
-  return useSyncExternalStore(
-    client.wallet.subscribe,
-    () => client.wallet.getState().status,
-    () => client.wallet.getState().status
-  );
-}
-function useConnectedWallet() {
-  const client = useWalletClient("useConnectedWallet");
-  return useSyncExternalStore(
-    client.wallet.subscribe,
-    () => client.wallet.getState().connected,
-    () => client.wallet.getState().connected
-  );
-}
-function useWalletState() {
-  const client = useWalletClient("useWalletState");
-  return useSyncExternalStore(client.wallet.subscribe, client.wallet.getState, client.wallet.getState);
-}
-function useConnectWallet() {
-  const client = useWalletClient("useConnectWallet");
-  return useCallback((wallet) => client.wallet.connect(wallet), [client]);
-}
-function useDisconnectWallet() {
-  const client = useWalletClient("useDisconnectWallet");
-  return useCallback(() => client.wallet.disconnect(), [client]);
-}
-function useSelectAccount() {
-  const client = useWalletClient("useSelectAccount");
-  return useCallback((account) => client.wallet.selectAccount(account), [client]);
-}
-function useSignMessage() {
-  const client = useWalletClient("useSignMessage");
-  return useCallback((message) => client.wallet.signMessage(message), [client]);
-}
-function useSignIn() {
-  const client = useWalletClient("useSignIn");
-  return useCallback(
-    (wallet, input = {}) => client.wallet.signIn(wallet, input),
-    [client]
-  );
+function useIdentity() {
+  const client = useClient();
+  const getSnapshot = () => readOptional(() => client.identity);
+  const identity2 = useSyncExternalStore(client.subscribeToIdentity ?? NOOP_SUBSCRIBE, getSnapshot, getSnapshot);
+  if (!("identity" in client)) {
+    throwMissingCapability(
+      "useIdentity",
+      "`client.identity`",
+      'Usually supplied by <WalletProvider> (with role "signer" or "identity") or <IdentityProvider> \u2014 or any provider that installs an identity plugin.'
+    );
+  }
+  return identity2;
 }
 var NULL_SUBSCRIBE = () => () => {
 };
 var NULL_GET = () => void 0;
-function nullLiveStore() {
+var DISABLED = /* @__PURE__ */ Symbol("DisabledLiveStore");
+function disabledLiveStore() {
   return {
+    [DISABLED]: true,
     getError: NULL_GET,
     getState: NULL_GET,
     subscribe: NULL_SUBSCRIBE
   };
 }
+function isDisabledLiveStore(store) {
+  return store[DISABLED] === true;
+}
 function useLiveStore(factory, deps) {
   const controllerRef = useRef(null);
-  const store = useMemo(() => {
-    controllerRef.current?.abort();
-    const controller = new AbortController();
-    controllerRef.current = controller;
-    return factory(controller.signal);
-  }, deps);
+  const store = useMemo(
+    () => {
+      controllerRef.current?.abort();
+      const controller = new AbortController();
+      controllerRef.current = controller;
+      return factory(controller.signal);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- library passthrough: `factory` is caller-controlled; deps list is the contract.
+    deps
+  );
   useEffect(
     () => () => {
       controllerRef.current?.abort();
@@ -205,23 +251,24 @@ function useLiveQueryResult(store) {
   const getError = () => store.getError();
   const state = useSyncExternalStore(subscribe, getState, getState);
   const error = useSyncExternalStore(subscribe, getError, getError);
+  const disabled = isDisabledLiveStore(store);
   return useMemo(
     () => ({
       data: state?.value,
       error,
-      isLoading: state === void 0 && error === void 0
+      isLoading: !disabled && state === void 0 && error === void 0
     }),
-    [state, error]
+    [state, error, disabled]
   );
 }
 
 // src/internal/rpc-client.ts
 function useRpcClient(hookName) {
-  const client = useClient();
-  if (!("rpc" in client) || !("rpcSubscriptions" in client)) {
-    throwMissingProvider(hookName, "RpcProvider");
-  }
-  return client;
+  return useClientCapability({
+    capability: ["rpc", "rpcSubscriptions"],
+    hookName,
+    providerHint: "Usually supplied by <RpcProvider> (remote RPC) or <LiteSvmProvider> (local/test) \u2014 or any provider that installs the RPC + subscriptions plugins."
+  });
 }
 
 // src/hooks/use-balance.ts
@@ -230,7 +277,7 @@ function useBalance(address) {
   const store = useLiveStore(
     (signal) => {
       if (address == null) {
-        return nullLiveStore();
+        return disabledLiveStore();
       }
       return createReactiveStoreWithInitialValueAndSlotTracking({
         abortSignal: signal,
@@ -249,7 +296,7 @@ function useAccount(address, decoder) {
   const store = useLiveStore(
     (signal) => {
       if (address == null) {
-        return nullLiveStore();
+        return disabledLiveStore();
       }
       return createReactiveStoreWithInitialValueAndSlotTracking({
         abortSignal: signal,
@@ -277,7 +324,7 @@ function useTransactionConfirmation(signature, options) {
   const store = useLiveStore(
     (signal) => {
       if (signature == null) {
-        return nullLiveStore();
+        return disabledLiveStore();
       }
       return createReactiveStoreWithInitialValueAndSlotTracking({
         abortSignal: signal,
@@ -302,9 +349,10 @@ function useTransactionConfirmation(signature, options) {
   );
   return useLiveQueryResult(store);
 }
-function useLiveQuery(config, deps) {
+function useLiveQuery(factory, deps) {
   const store = useLiveStore(
-    (signal) => createReactiveStoreWithInitialValueAndSlotTracking({ ...config, abortSignal: signal }),
+    (signal) => createReactiveStoreWithInitialValueAndSlotTracking({ ...factory(), abortSignal: signal }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- library passthrough: `factory` is caller-controlled; deps list is the contract.
     deps
   );
   return useLiveQueryResult(store);
@@ -316,9 +364,12 @@ function useSubscription(factory, deps) {
     const controller = new AbortController();
     setData(void 0);
     setError(void 0);
+    const request = factory(controller.signal);
+    if (request === null) {
+      return () => controller.abort();
+    }
     void (async () => {
       try {
-        const request = factory(controller.signal);
         const iterable = await request.subscribe({ abortSignal: controller.signal });
         for await (const notification of iterable) {
           if (controller.signal.aborted) return;
@@ -338,25 +389,29 @@ function useAction(fn) {
   const [state, setState] = useState(IDLE);
   const fnRef = useRef(fn);
   fnRef.current = fn;
-  const requestIdRef = useRef(0);
+  const currentControllerRef = useRef(null);
   const send = useCallback(async (...args) => {
-    const requestId = ++requestIdRef.current;
-    setState({ data: void 0, error: void 0, status: "sending" });
+    currentControllerRef.current?.abort();
+    const controller = new AbortController();
+    currentControllerRef.current = controller;
+    setState({ data: void 0, error: void 0, status: "running" });
     try {
-      const data = await fnRef.current(...args);
-      if (requestId === requestIdRef.current) {
+      const data = await getAbortablePromise(fnRef.current(controller.signal, ...args), controller.signal);
+      if (!controller.signal.aborted) {
         setState({ data, error: void 0, status: "success" });
       }
       return data;
     } catch (error) {
-      if (requestId === requestIdRef.current) {
-        setState({ data: void 0, error, status: "error" });
+      if (controller.signal.aborted) {
+        throw error;
       }
+      setState({ data: void 0, error, status: "error" });
       throw error;
     }
   }, []);
   const reset = useCallback(() => {
-    requestIdRef.current++;
+    currentControllerRef.current?.abort();
+    currentControllerRef.current = null;
     setState(IDLE);
   }, []);
   return useMemo(
@@ -366,26 +421,71 @@ function useAction(fn) {
 }
 
 // src/internal/sending-client.ts
-function useSendingClient(hookName) {
-  const client = useClient();
-  if (!("sendTransaction" in client) || !("sendTransactions" in client)) {
-    throwMissingProvider(hookName, "RpcProvider");
-  }
-  return client;
+var SENDING_HINT = "Usually supplied by <RpcProvider> or <LiteSvmProvider> \u2014 or any provider that installs the transaction-sending plugin.";
+var PLANNING_HINT = "Usually supplied by <RpcProvider> or <LiteSvmProvider> \u2014 or any provider that installs the transaction-planning plugin.";
+function useClientWithSendTransaction(hookName) {
+  return useClientCapability({
+    capability: "sendTransaction",
+    hookName,
+    providerHint: SENDING_HINT
+  });
+}
+function useClientWithSendTransactions(hookName) {
+  return useClientCapability({
+    capability: "sendTransactions",
+    hookName,
+    providerHint: SENDING_HINT
+  });
+}
+function useClientWithPlanTransaction(hookName) {
+  return useClientCapability({
+    capability: "planTransaction",
+    hookName,
+    providerHint: PLANNING_HINT
+  });
+}
+function useClientWithPlanTransactions(hookName) {
+  return useClientCapability({
+    capability: "planTransactions",
+    hookName,
+    providerHint: PLANNING_HINT
+  });
 }
 
 // src/hooks/use-send-transaction.ts
 function useSendTransaction() {
-  const client = useSendingClient("useSendTransaction");
-  const fn = useCallback((input, config) => client.sendTransaction(input, config), [client]);
+  const client = useClientWithSendTransaction("useSendTransaction");
+  const fn = useCallback(
+    (signal, input, config) => client.sendTransaction(input, { ...config, abortSignal: signal }),
+    [client]
+  );
   return useAction(fn);
 }
 function useSendTransactions() {
-  const client = useSendingClient("useSendTransactions");
-  const fn = useCallback((input, config) => client.sendTransactions(input, config), [client]);
+  const client = useClientWithSendTransactions("useSendTransactions");
+  const fn = useCallback(
+    (signal, input, config) => client.sendTransactions(input, { ...config, abortSignal: signal }),
+    [client]
+  );
+  return useAction(fn);
+}
+function usePlanTransaction() {
+  const client = useClientWithPlanTransaction("usePlanTransaction");
+  const fn = useCallback(
+    (signal, input, config) => client.planTransaction(input, { ...config, abortSignal: signal }),
+    [client]
+  );
+  return useAction(fn);
+}
+function usePlanTransactions() {
+  const client = useClientWithPlanTransactions("usePlanTransactions");
+  const fn = useCallback(
+    (signal, input, config) => client.planTransactions(input, { ...config, abortSignal: signal }),
+    [client]
+  );
   return useAction(fn);
 }
 
-export { ChainContext, ClientContext, IdentityProvider, KitClientProvider, LiteSvmProvider, PayerProvider, PluginProvider, RpcProvider, WalletProvider, useAccount, useAction, useBalance, useChain, useClient, useConnectWallet, useConnectedWallet, useDisconnectWallet, useLiveQuery, useSelectAccount, useSendTransaction, useSendTransactions, useSignIn, useSignMessage, useSubscription, useTransactionConfirmation, useWalletState, useWalletStatus, useWallets };
+export { ChainContext, ClientContext, IdentityProvider, KitClientProvider, LiteSvmProvider, PayerProvider, PluginProvider, RpcProvider, useAccount, useAction, useBalance, useChain, useClient, useClientCapability, useIdentity, useLiveQuery, usePayer, usePlanTransaction, usePlanTransactions, useSendTransaction, useSendTransactions, useSubscription, useTransactionConfirmation };
 //# sourceMappingURL=index.react-native.mjs.map
 //# sourceMappingURL=index.react-native.mjs.map

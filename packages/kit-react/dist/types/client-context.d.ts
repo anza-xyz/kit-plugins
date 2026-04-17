@@ -64,19 +64,31 @@ export declare function useClient<TClient extends object = object>(): Client<TCl
 /**
  * Returns the current chain identifier from context.
  *
- * Typically a {@link SolanaChain} such as `"solana:mainnet"`, but the return
- * type widens to {@link ChainIdentifier} to cover the custom-chain escape
- * hatch on {@link KitClientProvider}. Useful for chain-dependent logic such as
- * constructing explorer URLs or passing to `createSignerFromWalletAccount`.
+ * Defaults to returning a {@link SolanaChain} — the narrow literal union that
+ * covers the 99% case and gives callers autocomplete without a cast. Power
+ * users who opted into the {@link ChainIdentifier} escape hatch at the root
+ * can widen the return type via the generic parameter (e.g.
+ * `useChain<IdentifierString>()` for the fully-wide wallet-standard type, or
+ * `useChain<'l2:mainnet' | 'solana:mainnet'>()` for a custom narrow union).
  *
+ * The generic is a type assertion, not inference — same pattern as
+ * {@link useClient}. It is the caller's responsibility to make sure the chain
+ * actually provided to {@link KitClientProvider} matches `T` at runtime.
+ *
+ * @typeParam T - The chain type the caller expects. Defaults to `SolanaChain`.
  * @throws If no ancestor {@link KitClientProvider} is mounted.
  *
  * @example
  * ```tsx
- * const chain = useChain(); // 'solana:mainnet'
+ * const chain = useChain(); // SolanaChain — autocompletes 'solana:mainnet' etc.
+ * ```
+ *
+ * @example Widening for a custom chain
+ * ```tsx
+ * const chain = useChain<IdentifierString>(); // accepts 'l2:mainnet' too
  * ```
  */
-export declare function useChain(): ChainIdentifier;
+export declare function useChain<T extends IdentifierString = SolanaChain>(): T;
 /** Props for {@link KitClientProvider}. */
 export type KitClientProviderProps = {
     /**
@@ -89,15 +101,45 @@ export type KitClientProviderProps = {
     chain: ChainIdentifier;
     /** React children to render inside the provider. */
     children?: ReactNode;
+    /**
+     * Optional pre-built Kit client. Provide this when you need to build the
+     * plugin chain outside React — for SSR hydration, a custom client factory
+     * (e.g. wrapping `createClient()` with instrumentation), a shared client
+     * across multiple provider trees, or tests that inspect the plugin chain.
+     *
+     * When omitted (the common case), `KitClientProvider` creates a fresh
+     * client internally via `createClient()` and disposes it on unmount. When
+     * provided, the caller owns the client's lifecycle — `KitClientProvider`
+     * will not dispose it on unmount, so call `client[Symbol.dispose]()`
+     * yourself when you're done with it.
+     *
+     * **Warning.** If the provided client already has plugins baked in (e.g.
+     * `walletSigner`), do not also mount the matching provider below
+     * (`<WalletProvider>` from `@solana/kit-react-wallet`), or the plugin will
+     * be installed twice — a dev-mode warning flags this in the provider that
+     * double-installs. The
+     * `chain` prop only sets context for `useChain`; it does not reconfigure
+     * plugins already installed on the provided client, so make sure they
+     * were built for the same chain.
+     *
+     * Toggling this prop across renders is supported but tears down
+     * everything downstream: every hook that reads `useClient()` gets a new
+     * client, so open subscriptions, cached stores, and in-flight transactions
+     * all reset. Prefer deciding ownership at mount when you can.
+     */
+    client?: Client<object>;
 };
 /**
  * Root provider for a `@solana/kit-react` tree.
  *
- * Seeds the client context with a fresh Kit client via `createClient()` and
- * publishes the configured chain for {@link useChain}. Every other provider
- * in the library ({@link WalletProvider}, {@link PayerProvider},
- * {@link RpcProvider}, …) composes on top of this one via `.use()`, so every
- * app must mount a `KitClientProvider` at the top of its tree.
+ * Seeds the client context with a Kit client and publishes the configured
+ * chain for {@link useChain}. By default creates a fresh client via
+ * `createClient()`; power users can pass their own via the `client` prop for
+ * SSR, custom factories, or shared clients across trees. Every other provider
+ * in the library ({@link PayerProvider}, {@link RpcProvider},
+ * `<WalletProvider>` from `@solana/kit-react-wallet`, …) composes on top of
+ * this one via `.use()`, so every app must mount a `KitClientProvider` at the
+ * top of its tree.
  *
  * @example Common case
  * ```tsx
@@ -107,6 +149,17 @@ export type KitClientProviderProps = {
  *             <App />
  *         </RpcProvider>
  *     </WalletProvider>
+ * </KitClientProvider>
+ * ```
+ *
+ * @example With a pre-built client (SSR / custom factory)
+ * ```tsx
+ * const client = createClient()
+ *     .use(solanaRpc({ rpcUrl: 'https://...' }))
+ *     .use(telemetryPlugin());
+ *
+ * <KitClientProvider chain="solana:mainnet" client={client}>
+ *     <App />
  * </KitClientProvider>
  * ```
  *
@@ -121,5 +174,5 @@ export type KitClientProviderProps = {
  * </KitClientProvider>
  * ```
  */
-export declare function KitClientProvider({ chain, children }: KitClientProviderProps): import("react/jsx-runtime").JSX.Element;
+export declare function KitClientProvider({ chain, children, client: providedClient }: KitClientProviderProps): import("react/jsx-runtime").JSX.Element;
 //# sourceMappingURL=client-context.d.ts.map

@@ -40,7 +40,7 @@ describe.skipIf(!__BROWSER__ && !__REACTNATIVE__)('providers', () => {
             expect(() =>
                 render(
                     <RootWrap>
-                        <RpcProvider url="https://api.devnet.solana.com">
+                        <RpcProvider rpcUrl="https://api.devnet.solana.com">
                             <span>x</span>
                         </RpcProvider>
                     </RootWrap>,
@@ -75,5 +75,59 @@ describe.skipIf(!__BROWSER__ && !__REACTNATIVE__)('providers', () => {
         });
         expect(result.current.a).toBe(1);
         expect(result.current.b).toBe(2);
+    });
+
+    it('PluginProvider warns in dev when plugin identity churns across renders', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+            const { rerender } = render(
+                <RootWrap>
+                    <PluginProvider plugin={(c: object) => ({ ...c, n: 0 })}>
+                        <span>ok</span>
+                    </PluginProvider>
+                </RootWrap>,
+            );
+            // Re-render repeatedly with a fresh plugin each time to simulate
+            // a caller that forgot to memoize.
+            for (let i = 1; i <= 3; i++) {
+                rerender(
+                    <RootWrap>
+                        <PluginProvider plugin={(c: object) => ({ ...c, n: i })}>
+                            <span>ok</span>
+                        </PluginProvider>
+                    </RootWrap>,
+                );
+            }
+            expect(warn).toHaveBeenCalledTimes(1);
+            expect(warn.mock.calls[0]?.[0]).toMatch(/plugin identity is changing/);
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    it('PluginProvider does not warn when the plugin reference is stable', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+            const stable = (c: object) => ({ ...c, n: 1 });
+            const { rerender } = render(
+                <RootWrap>
+                    <PluginProvider plugin={stable}>
+                        <span>ok</span>
+                    </PluginProvider>
+                </RootWrap>,
+            );
+            for (let i = 0; i < 5; i++) {
+                rerender(
+                    <RootWrap>
+                        <PluginProvider plugin={stable}>
+                            <span>ok</span>
+                        </PluginProvider>
+                    </RootWrap>,
+                );
+            }
+            expect(warn).not.toHaveBeenCalled();
+        } finally {
+            warn.mockRestore();
+        }
     });
 });

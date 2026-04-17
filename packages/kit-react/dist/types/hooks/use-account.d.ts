@@ -8,7 +8,9 @@ import { type LiveQueryResult } from '../internal/live-store';
  * account data is decoded and returned as a typed {@link Account}. Without a
  * decoder, returns the raw {@link EncodedAccount}.
  *
- * Pass `null` for the address to disable the query.
+ * Pass `null` for the address to disable the query. A disabled query reports
+ * `{ data: undefined, error: undefined, isLoading: false }` — matching
+ * react-query / SWR semantics when the key is `null`.
  *
  * @param address - The address to watch, or `null` to disable.
  * @returns `{ data, error, isLoading }`. `data` is an `EncodedAccount | null`

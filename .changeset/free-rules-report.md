@@ -1,0 +1,5 @@
+---
+'@solana/kit-react': minor
+---
+
+Initial release of `@solana/kit-react` — React bindings for Kit. Adds providers (`KitClientProvider`, `RpcProvider`, `LiteSvmProvider`, `PayerProvider`, `IdentityProvider`, `PluginProvider`), signer hooks (`usePayer`, `useIdentity`), live-data hooks (`useBalance`, `useAccount`, `useTransactionConfirmation`, `useLiveQuery`, `useSubscription`), and action hooks (`useAction`, `useSendTransaction`, `useSendTransactions`, `usePlanTransaction`, `usePlanTransactions`). Each send / plan hook asserts only the single capability it calls, matching Kit's granular plugin model. Exports `useClientCapability` as the public, runtime-checked capability helper for third-party hook authors — the same mechanism core hooks use internally. Signer hooks duck-type on the optional `subscribeToPayer` / `subscribeToIdentity` capability-change convention so they stay reactive against any plugin that advertises it (e.g. `@solana/kit-plugin-wallet`) without depending on wallet-standard at the type level. `<WalletProvider>` and wallet hooks ship in the separate `@solana/kit-react-wallet` package.

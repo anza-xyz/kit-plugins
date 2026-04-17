@@ -2,6 +2,10 @@
 export { ChainContext, ClientContext, KitClientProvider, useChain, useClient } from './client-context';
 export type { ChainIdentifier, KitClientProviderProps } from './client-context';
 
+// Runtime-checked capability narrowing (third-party hook helper)
+export { useClientCapability } from './client-capability';
+export type { UseClientCapabilityOptions } from './client-capability';
+
 // Providers
 export { PluginProvider } from './providers/plugin-provider';
 export type { PluginProviderProps } from './providers/plugin-provider';
@@ -11,19 +15,9 @@ export { RpcProvider } from './providers/rpc-provider';
 export type { RpcProviderProps } from './providers/rpc-provider';
 export { LiteSvmProvider } from './providers/litesvm-provider';
 export type { LiteSvmProviderProps } from './providers/litesvm-provider';
-export { WalletProvider } from './providers/wallet-provider';
-export type { WalletProviderProps, WalletRole } from './providers/wallet-provider';
 
-// Wallet hooks
-export { useConnectedWallet, useWallets, useWalletState, useWalletStatus } from './hooks/wallet-state';
-export type { ConnectedWallet } from './hooks/wallet-state';
-export {
-    useConnectWallet,
-    useDisconnectWallet,
-    useSelectAccount,
-    useSignIn,
-    useSignMessage,
-} from './hooks/wallet-actions';
+// Signer hooks
+export { useIdentity, usePayer } from './hooks/signers';
 
 // Live data hooks
 export { useBalance } from './hooks/use-balance';
@@ -44,3 +38,5 @@ export { useAction } from './hooks/use-action';
 export type { ActionState, ActionStatus } from './hooks/use-action';
 export { useSendTransaction, useSendTransactions } from './hooks/use-send-transaction';
 export type { UseSendTransactionState, UseSendTransactionsState } from './hooks/use-send-transaction';
+export { usePlanTransaction, usePlanTransactions } from './hooks/use-plan-transaction';
+export type { UsePlanTransactionState, UsePlanTransactionsState } from './hooks/use-plan-transaction';

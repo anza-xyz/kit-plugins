@@ -8,8 +8,9 @@ import { type LiveQueryResult } from '../internal/live-store';
  * a newer subscription notification.
  *
  * Pass `null` to disable the query (e.g. when the wallet is not yet
- * connected). The hook remains mounted with `data` and `error` both
- * `undefined` and `isLoading` false.
+ * connected). A disabled query reports `{ data: undefined, error: undefined,
+ * isLoading: false }` — matching react-query / SWR semantics when the key is
+ * `null`, so you can render an empty / placeholder state without a spinner.
  *
  * @param address - The address whose balance to watch, or `null` to disable.
  * @returns `{ data, error, isLoading }`. `data` is a {@link Lamports} value
