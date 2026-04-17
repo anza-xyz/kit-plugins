@@ -20,6 +20,7 @@ This spec builds on two changes that must land first:
   "dependencies": {
     "@solana/wallet-account-signer": "^1.x",
     "@wallet-standard/app": "^1.x",
+    "@wallet-standard/base": "^1.x",
     "@wallet-standard/features": "^1.x",
     "@wallet-standard/ui": "^1.x",
     "@wallet-standard/ui-features": "^1.x",
@@ -339,6 +340,7 @@ import {
 import { getWalletFeature } from '@wallet-standard/ui-features';
 
 import type { UiWallet, UiWalletAccount } from '@wallet-standard/ui';
+import type { IdentifierString } from '@wallet-standard/base';
 import type { TransactionSigner, MessageSigner, SolanaChain } from '@solana/kit';
 
 // Internal helper — defines a throwing signer getter on the additions object.
@@ -487,17 +489,22 @@ function createWalletStore(config: WalletPluginConfig) {
 
   // -- Browser-only initialization below this point --
 
-  // -- Signer creation (resilient to read-only wallets) --
+  // -- Signer creation (resilient to read-only wallets and custom chains) --
 
   function tryCreateSigner(
     account: UiWalletAccount,
   ): TransactionSigner | (MessageSigner & TransactionSigner) | null {
     try {
-      return createSignerFromWalletAccount(account, config.chain);
+      // `config.chain` widens to `SolanaChain | (IdentifierString & {})` for
+      // the custom-chain escape hatch. `createSignerFromWalletAccount` types
+      // only `SolanaChain`, but at runtime it throws when the account doesn't
+      // support the chain — which we catch below. Non-Solana chains therefore
+      // degrade to `signer: null`, matching the read-only-wallet contract.
+      return createSignerFromWalletAccount(account, config.chain as SolanaChain);
     } catch {
-      // Wallet doesn't support signing (e.g. read-only / watch wallet).
-      // Connection proceeds without a signer — account is still usable
-      // for discovery, display, and persistence.
+      // Wallet doesn't support signing (read-only / watch wallet, or a
+      // non-Solana chain). Connection proceeds without a signer — the account
+      // is still usable for discovery, display, and persistence.
       return null;
     }
   }
@@ -1127,11 +1134,25 @@ wallet({ chain: 'solana:mainnet', storage: null })
 ```typescript
 type WalletPluginConfig = {
   /**
-   * The Solana chain this client targets.
-   * One client = one chain. To switch networks,
-   * create a separate client with a different chain and RPC endpoint.
+   * The chain this client targets.
+   *
+   * Accepts any `SolanaChain` (with literal autocomplete for
+   * 'solana:mainnet' / 'solana:devnet' / 'solana:testnet') and, as an escape
+   * hatch, any wallet-standard `IdentifierString` (`${string}:${string}`) for
+   * custom chains or non-Solana L2s. The `& {}` preserves literal autocomplete
+   * on the Solana members — without it TS would collapse the union into the
+   * wider template literal type.
+   *
+   * The plugin's runtime is chain-agnostic: `uiWallet.chains.includes(chain)`
+   * for discovery is a plain string check, and `createSignerFromWalletAccount`
+   * throws for chains it doesn't understand — which `tryCreateSigner` already
+   * catches, degrading to `signer: null` (matching the read-only-wallet
+   * contract).
+   *
+   * One client = one chain. To switch networks, create a separate client with
+   * a different chain and RPC endpoint.
    */
-  chain: SolanaChain;
+  chain: SolanaChain | (IdentifierString & {});
 
   /**
    * Optional filter function for wallet discovery.
@@ -1226,6 +1247,8 @@ Wallet-originated errors (e.g. user rejecting a connection prompt) are propagate
 **Descriptor-preserving composition.** The plugin uses `extendClient` from plugin-core to build the client, preserving getters and symbol-keyed properties from previous plugins. The updated `addUse` also preserves descriptors through `.use()` calls. Downstream plugins should use `extendClient` rather than spread to avoid flattening the dynamic payer getter.
 
 **Single chain per client.** Signers are bound to a specific chain at creation time. Switching chains requires a different RPC endpoint too. One client = one network.
+
+**Chain type includes a custom-chain escape hatch.** `WalletPluginConfig.chain` types as `SolanaChain | (IdentifierString & {})` rather than just `SolanaChain`. `SolanaChain` covers the 99% case with literal autocomplete; the `IdentifierString` escape hatch matches wallet-standard's native chain type (`UiWallet.chains: IdentifierString[]`) and unblocks custom chains or non-Solana L2s without requiring consumers to cast. The runtime is already chain-agnostic — the chain is a plain string passed to wallet-standard discovery and to `createSignerFromWalletAccount` (which throws for unknown chains, caught by `tryCreateSigner` → `signer: null`, same contract as read-only wallets).
 
 **Single wallet connection.** One active wallet at a time. dApps needing multiple can access `getState().wallets` and manage additional connections via wallet-standard APIs.
 
