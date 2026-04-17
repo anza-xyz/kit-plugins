@@ -1,7 +1,6 @@
 import type { ClientWithRpc, ClientWithRpcSubscriptions, SolanaRpcApi, SolanaRpcSubscriptionsApi } from '@solana/kit';
 
-import { useClient } from '../client-context';
-import { throwMissingProvider } from './errors';
+import { useClientCapability } from '../client-capability';
 
 /** @internal The subset of client capabilities needed by live-data hooks. */
 export type SolanaRpcClient = ClientWithRpc<SolanaRpcApi> & ClientWithRpcSubscriptions<SolanaRpcSubscriptionsApi>;
@@ -11,9 +10,10 @@ export type SolanaRpcClient = ClientWithRpc<SolanaRpcApi> & ClientWithRpcSubscri
  * Returns the client and asserts that it has both `rpc` and `rpcSubscriptions`.
  */
 export function useRpcClient(hookName: string): SolanaRpcClient {
-    const client = useClient();
-    if (!('rpc' in client) || !('rpcSubscriptions' in client)) {
-        throwMissingProvider(hookName, 'RpcProvider');
-    }
-    return client as unknown as SolanaRpcClient;
+    return useClientCapability<SolanaRpcClient>({
+        capability: ['rpc', 'rpcSubscriptions'],
+        hookName,
+        providerHint:
+            'Usually supplied by <RpcProvider> (remote RPC) or <LiteSvmProvider> (local/test) — or any provider that installs the RPC + subscriptions plugins.',
+    });
 }

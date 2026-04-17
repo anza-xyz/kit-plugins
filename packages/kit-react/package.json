@@ -1,7 +1,7 @@
 {
     "name": "@solana/kit-react",
     "version": "0.1.0",
-    "description": "React bindings for Kit: providers, wallet hooks, and live on-chain data hooks",
+    "description": "React bindings for Kit: providers, signer hooks, and live on-chain data hooks",
     "exports": {
         "types": "./dist/types/index.d.ts",
         "react-native": "./dist/index.react-native.mjs",
@@ -33,8 +33,7 @@
         "solana",
         "kit",
         "react",
-        "hooks",
-        "wallet"
+        "hooks"
     ],
     "scripts": {
         "build": "rimraf dist && tsup && tsc -p ./tsconfig.declarations.json",
@@ -48,22 +47,20 @@
     "peerDependencies": {
         "@solana/kit": "^6.8.0",
         "@solana/kit-plugin-instruction-plan": "workspace:*",
-        "@solana/kit-plugin-wallet": "workspace:*",
         "react": "^18.0.0 || ^19.0.0"
     },
     "dependencies": {
         "@solana/kit-plugin-litesvm": "workspace:*",
         "@solana/kit-plugin-rpc": "workspace:*",
         "@solana/kit-plugin-signer": "workspace:*",
-        "@solana/wallet-account-signer": "^6.6.0",
+        "@solana/promises": "^6.8.0",
         "@solana/wallet-standard-chains": "^1.1.1",
-        "@solana/wallet-standard-features": "^1.3.0",
-        "@wallet-standard/base": "^1.1.0",
-        "@wallet-standard/ui": "^1.0.1"
+        "@wallet-standard/base": "^1.1.0"
     },
     "devDependencies": {
         "@testing-library/react": "^16.1.0",
         "@types/react": "^19.0.0",
+        "@types/react-dom": "^19.0.0",
         "react": "^19.0.0",
         "react-dom": "^19.0.0"
     },

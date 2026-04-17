@@ -9,9 +9,9 @@ import {
 } from '@solana/kit';
 
 import {
+    disabledLiveStore,
     type LiveQueryResult,
     type LiveStore,
-    nullLiveStore,
     useLiveQueryResult,
     useLiveStore,
 } from '../internal/live-store';
@@ -25,7 +25,9 @@ import { useRpcClient } from '../internal/rpc-client';
  * account data is decoded and returned as a typed {@link Account}. Without a
  * decoder, returns the raw {@link EncodedAccount}.
  *
- * Pass `null` for the address to disable the query.
+ * Pass `null` for the address to disable the query. A disabled query reports
+ * `{ data: undefined, error: undefined, isLoading: false }` — matching
+ * react-query / SWR semantics when the key is `null`.
  *
  * @param address - The address to watch, or `null` to disable.
  * @returns `{ data, error, isLoading }`. `data` is an `EncodedAccount | null`
@@ -57,7 +59,7 @@ export function useAccount<TData extends object>(
     const store = useLiveStore<LiveStore<Account<TData> | EncodedAccount | null>>(
         signal => {
             if (address == null) {
-                return nullLiveStore<Account<TData> | EncodedAccount | null>();
+                return disabledLiveStore<Account<TData> | EncodedAccount | null>();
             }
             return createReactiveStoreWithInitialValueAndSlotTracking({
                 abortSignal: signal,

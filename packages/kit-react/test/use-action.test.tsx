@@ -5,22 +5,22 @@ import { useAction } from '../src';
 
 describe.skipIf(!__BROWSER__ && !__REACTNATIVE__)('useAction', () => {
     it('starts idle with no data or error', () => {
-        const { result } = renderHook(() => useAction(async () => 42));
+        const { result } = renderHook(() => useAction(() => Promise.resolve(42)));
         expect(result.current.status).toBe('idle');
         expect(result.current.data).toBeUndefined();
         expect(result.current.error).toBeUndefined();
     });
 
-    it('transitions idle → sending → success on a successful call', async () => {
+    it('transitions idle → running → success on a successful call', async () => {
         let resolveFn: (v: number) => void = () => {};
-        const fn = vi.fn(() => new Promise<number>(r => (resolveFn = r)));
+        const fn = vi.fn((_signal: AbortSignal) => new Promise<number>(r => (resolveFn = r)));
         const { result } = renderHook(() => useAction(fn));
 
         let pending!: Promise<number>;
         act(() => {
             pending = result.current.send();
         });
-        expect(result.current.status).toBe('sending');
+        expect(result.current.status).toBe('running');
         expect(result.current.data).toBeUndefined();
 
         await act(async () => {
@@ -52,7 +52,7 @@ describe.skipIf(!__BROWSER__ && !__REACTNATIVE__)('useAction', () => {
     });
 
     it('reset() returns state back to idle', async () => {
-        const { result } = renderHook(() => useAction(async () => 'ok'));
+        const { result } = renderHook(() => useAction(() => Promise.resolve('ok')));
         await act(async () => {
             await result.current.send();
         });
@@ -63,11 +63,25 @@ describe.skipIf(!__BROWSER__ && !__REACTNATIVE__)('useAction', () => {
         expect(result.current.data).toBeUndefined();
     });
 
-    it('only the most recent in-flight call updates state', async () => {
+    it('passes an AbortSignal as the first argument to fn', async () => {
+        const fn = vi.fn((_signal: AbortSignal) => Promise.resolve('ok'));
+        const { result } = renderHook(() => useAction(fn));
+
+        await act(async () => {
+            await result.current.send();
+        });
+
+        expect(fn).toHaveBeenCalledOnce();
+        const firstArg = fn.mock.calls[0]?.[0];
+        expect(firstArg).toBeInstanceOf(AbortSignal);
+        expect(firstArg?.aborted).toBe(false);
+    });
+
+    it('aborts a prior in-flight call when send is called again', async () => {
         let resolveA: (v: string) => void = () => {};
         let resolveB: (v: string) => void = () => {};
         const fn = vi
-            .fn<() => Promise<string>>()
+            .fn<(signal: AbortSignal) => Promise<string>>()
             .mockImplementationOnce(() => new Promise(r => (resolveA = r)))
             .mockImplementationOnce(() => new Promise(r => (resolveB = r)));
         const { result } = renderHook(() => useAction(fn));
@@ -79,12 +93,58 @@ describe.skipIf(!__BROWSER__ && !__REACTNATIVE__)('useAction', () => {
             pendingB = result.current.send();
         });
 
-        // First call resolves but is stale — no state update.
+        // The first send was superseded — its signal is aborted.
+        const firstSignal = fn.mock.calls[0]?.[0];
+        expect(firstSignal?.aborted).toBe(true);
+
+        // The first await rejects with AbortError even though the underlying
+        // fn eventually resolves.
+        let caughtA: unknown;
         await act(async () => {
             resolveA('first');
-            await pendingA;
+            try {
+                await pendingA;
+            } catch (e) {
+                caughtA = e;
+            }
         });
-        expect(result.current.status).toBe('sending');
+        expect((caughtA as Error | undefined)?.name).toBe('AbortError');
+
+        // State was not touched by the stale resolution.
+        expect(result.current.status).toBe('running');
+
+        // The second call completes normally.
+        await act(async () => {
+            resolveB('second');
+            await pendingB;
+        });
+        expect(result.current.status).toBe('success');
+        expect(result.current.data).toBe('second');
+    });
+
+    it('does not surface a stale error from a superseded call', async () => {
+        let rejectA: (e: unknown) => void = () => {};
+        let resolveB: (v: string) => void = () => {};
+        const fn = vi
+            .fn<(signal: AbortSignal) => Promise<string>>()
+            .mockImplementationOnce(() => new Promise((_, r) => (rejectA = r)))
+            .mockImplementationOnce(() => new Promise(r => (resolveB = r)));
+        const { result } = renderHook(() => useAction(fn));
+
+        let pendingA!: Promise<string>;
+        let pendingB!: Promise<string>;
+        act(() => {
+            pendingA = result.current.send();
+            pendingB = result.current.send();
+        });
+
+        // Stale call rejects late — should not move state into 'error'.
+        await act(async () => {
+            rejectA(new Error('stale boom'));
+            await pendingA.catch(() => undefined);
+        });
+        expect(result.current.status).toBe('running');
+        expect(result.current.error).toBeUndefined();
 
         await act(async () => {
             resolveB('second');
@@ -92,6 +152,34 @@ describe.skipIf(!__BROWSER__ && !__REACTNATIVE__)('useAction', () => {
         });
         expect(result.current.status).toBe('success');
         expect(result.current.data).toBe('second');
+    });
+
+    it('reset() aborts an in-flight call', async () => {
+        let resolveFn: (v: string) => void = () => {};
+        const fn = vi.fn((_signal: AbortSignal) => new Promise<string>(r => (resolveFn = r)));
+        const { result } = renderHook(() => useAction(fn));
+
+        let pending!: Promise<string>;
+        act(() => {
+            pending = result.current.send();
+        });
+        expect(result.current.status).toBe('running');
+
+        act(() => result.current.reset());
+        expect(result.current.status).toBe('idle');
+
+        // A late resolution after reset should not move state back to success.
+        let caught: unknown;
+        await act(async () => {
+            resolveFn('late');
+            try {
+                await pending;
+            } catch (e) {
+                caught = e;
+            }
+        });
+        expect((caught as Error | undefined)?.name).toBe('AbortError');
+        expect(result.current.status).toBe('idle');
     });
 
     it('returns a stable send reference across renders', () => {

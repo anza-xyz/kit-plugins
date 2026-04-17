@@ -7,7 +7,7 @@ import { type ReactNode } from 'react';
  *   `client.identity` both resolve to the wallet signer).
  * - `"payer"` — wallet pays fees only (`client.payer` resolves to the wallet).
  * - `"identity"` — wallet signs but a separate payer covers fees
- *   (`client.identity` resolves to the wallet; add a {@link PayerProvider}).
+ *   (`client.identity` resolves to the wallet; add a `PayerProvider`).
  * - `"none"` — wallet UI only. Neither `client.payer` nor `client.identity`
  *   is set; manual signer access via {@link useConnectedWallet}.
  */
@@ -16,9 +16,9 @@ export type WalletRole = 'identity' | 'none' | 'payer' | 'signer';
  * Props for {@link WalletProvider}.
  *
  * Extends the wallet plugin's config shape (minus `chain`, which is read from
- * the enclosing {@link KitClientProvider}): `autoConnect`, `storage`,
- * `storageKey`, and `filter` are all accepted as props and forwarded to the
- * underlying plugin. Additions: `children` and `role`.
+ * the enclosing `KitClientProvider`): `autoConnect`, `storage`, `storageKey`,
+ * and `filter` are all accepted as props and forwarded to the underlying
+ * plugin. Additions: `children` and `role`.
  */
 export type WalletProviderProps = Omit<WalletPluginConfig, 'chain'> & {
     /** React children to render inside the provider. */
@@ -35,13 +35,19 @@ export type WalletProviderProps = Omit<WalletPluginConfig, 'chain'> & {
  * {@link walletPayer}, {@link walletIdentity}, {@link walletWithoutSigner})
  * based on the `role` prop.
  *
- * Reads the chain from the enclosing {@link KitClientProvider} via
- * {@link useChain}. The default role of `"signer"` covers the common case
- * where the connected wallet pays for and signs transactions. Use `"payer"` /
- * `"identity"` / `"none"` for advanced setups (relayers, decoupled identity,
- * UI-only wallet management).
+ * Reads the chain from the enclosing `KitClientProvider` via `useChain`. The
+ * default role of `"signer"` covers the common case where the connected
+ * wallet pays for and signs transactions. Use `"payer"` / `"identity"` /
+ * `"none"` for advanced setups (relayers, decoupled identity, UI-only wallet
+ * management).
  *
- * @throws If no ancestor {@link KitClientProvider} is mounted.
+ * **Prop identity matters.** `filter`, `storage`, and `storageKey` are part
+ * of the plugin config — a new identity on any of them rebuilds the plugin,
+ * which re-creates the wallet store and tears down discovery / the active
+ * connection. Keep `filter` stable by memoizing it (`useMemo`) or hoisting
+ * it to module scope. A dev-mode warning flags sustained churn.
+ *
+ * @throws If no ancestor `KitClientProvider` is mounted.
  *
  * @example Common case
  * ```tsx
@@ -52,6 +58,25 @@ export type WalletProviderProps = Omit<WalletPluginConfig, 'chain'> & {
  *         </RpcProvider>
  *     </WalletProvider>
  * </KitClientProvider>
+ * ```
+ *
+ * @example Stable `filter` (hoisted to module scope)
+ * ```tsx
+ * import type { UiWallet } from '@wallet-standard/ui';
+ *
+ * // Module scope — stable identity across renders.
+ * const requireSignAndSend = (w: UiWallet) =>
+ *     w.features.includes('solana:signAndSendTransaction');
+ *
+ * function App() {
+ *     return (
+ *         <KitClientProvider chain="solana:mainnet">
+ *             <WalletProvider filter={requireSignAndSend}>
+ *                 <App />
+ *             </WalletProvider>
+ *         </KitClientProvider>
+ *     );
+ * }
  * ```
  *
  * @example Wallet is identity, relayer pays fees

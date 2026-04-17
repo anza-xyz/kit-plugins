@@ -1,38 +1,20 @@
-import type { Client, ClientWithPayer, MicroLamports } from '@solana/kit';
-import { solanaRpc } from '@solana/kit-plugin-rpc';
+import type { Client, ClientWithPayer } from '@solana/kit';
+import { solanaRpc, type SolanaRpcConfig } from '@solana/kit-plugin-rpc';
 import { type ReactNode, useMemo } from 'react';
 
 import { ClientContext, useClient } from '../client-context';
 
-/** Props for {@link RpcProvider}. */
-export type RpcProviderProps = {
+/**
+ * Props for {@link RpcProvider}.
+ *
+ * Extends {@link SolanaRpcConfig} directly so that every option accepted by
+ * the underlying `solanaRpc` plugin (`rpcUrl`, `rpcSubscriptionsUrl`,
+ * `maxConcurrency`, `priorityFees`, `rpcConfig`, `rpcSubscriptionsConfig`,
+ * `skipPreflight`) is available on the provider without duplication. Adding
+ * new config on the plugin surfaces here automatically.
+ */
+export type RpcProviderProps = SolanaRpcConfig & {
     children?: ReactNode;
-    /**
-     * Maximum number of concurrent transaction executions allowed.
-     *
-     * @default 10
-     */
-    maxConcurrency?: number;
-    /**
-     * Priority fees to set on transactions in micro-lamports per compute unit.
-     *
-     * @default no priority fees
-     */
-    priorityFees?: MicroLamports;
-    /**
-     * Whether to skip the preflight simulation when sending transactions.
-     *
-     * @default false
-     */
-    skipPreflight?: boolean;
-    /** URL of the Solana RPC endpoint. */
-    url: string;
-    /**
-     * URL of the Solana RPC Subscriptions (WebSocket) endpoint.
-     *
-     * Defaults to the `url` with the protocol changed from `http(s)` to `ws(s)`.
-     */
-    wsUrl?: string;
 };
 
 /**
@@ -44,38 +26,80 @@ export type RpcProviderProps = {
  * ({@link WalletProvider} with role `"signer"` or `"payer"`, or
  * {@link PayerProvider}). Throws at render if no payer is present.
  *
+ * For read-only apps that don't need transaction sending (explorers,
+ * dashboards, watchers), skip this provider entirely and install just the
+ * RPC + subscriptions plugins via `PluginProvider`:
+ *
+ * ```tsx
+ * import { PluginProvider } from '@solana/kit-react';
+ * import { solanaRpcConnection, solanaRpcSubscriptionsConnection } from '@solana/kit-plugin-rpc';
+ *
+ * <PluginProvider plugins={[
+ *     solanaRpcConnection('https://api.mainnet-beta.solana.com'),
+ *     solanaRpcSubscriptionsConnection('wss://api.mainnet-beta.solana.com'),
+ * ]}>
+ *     <App />
+ * </PluginProvider>
+ * ```
+ *
+ * `useBalance`, `useAccount`, `useTransactionConfirmation`, `useLiveQuery`,
+ * and `useSubscription` all work against that lighter stack — only
+ * transaction-sending hooks require the full `RpcProvider`.
+ *
  * @throws If no ancestor provider has set `client.payer`.
  *
  * @example
  * ```tsx
  * <KitClientProvider chain="solana:mainnet">
  *     <WalletProvider>
- *         <RpcProvider url="https://api.mainnet-beta.solana.com">
+ *         <RpcProvider rpcUrl="https://api.mainnet-beta.solana.com">
  *             <App />
  *         </RpcProvider>
  *     </WalletProvider>
  * </KitClientProvider>
  * ```
  */
-export function RpcProvider({ children, maxConcurrency, priorityFees, skipPreflight, url, wsUrl }: RpcProviderProps) {
+export function RpcProvider({ children, ...config }: RpcProviderProps) {
     const parent = useClient();
     if (!('payer' in parent)) {
         throw new Error(
-            "RpcProvider requires a payer. Wrap it in a WalletProvider (with role 'signer' or 'payer') or a PayerProvider.",
+            "RpcProvider requires a payer. Wrap it in a WalletProvider (with role 'signer' or 'payer') or a PayerProvider. " +
+                'For read-only apps that only need RPC reads, skip RpcProvider and use PluginProvider with ' +
+                'solanaRpcConnection + solanaRpcSubscriptionsConnection instead.',
         );
     }
+    const {
+        maxConcurrency,
+        priorityFees,
+        rpcConfig,
+        rpcSubscriptionsConfig,
+        rpcSubscriptionsUrl,
+        rpcUrl,
+        skipPreflight,
+    } = config;
     const client = useMemo(
         () =>
             (parent as Client<ClientWithPayer>).use(
                 solanaRpc({
                     maxConcurrency,
                     priorityFees,
-                    rpcSubscriptionsUrl: wsUrl,
-                    rpcUrl: url,
+                    rpcConfig,
+                    rpcSubscriptionsConfig,
+                    rpcSubscriptionsUrl,
+                    rpcUrl,
                     skipPreflight,
                 }),
             ) as Client<object>,
-        [parent, url, wsUrl, maxConcurrency, priorityFees, skipPreflight],
+        [
+            parent,
+            rpcUrl,
+            rpcSubscriptionsUrl,
+            maxConcurrency,
+            priorityFees,
+            skipPreflight,
+            rpcConfig,
+            rpcSubscriptionsConfig,
+        ],
     );
     return <ClientContext.Provider value={client}>{children}</ClientContext.Provider>;
 }

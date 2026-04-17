@@ -265,3 +265,45 @@ export type ClientWithWallet = {
     /** The wallet namespace — state, actions, and framework integration. */
     readonly wallet: WalletNamespace;
 };
+
+/**
+ * Convention for advertising that `client.payer` is reactive. A plugin that
+ * can mutate `client.payer` over time installs this sibling function so that
+ * reactive consumers (e.g. React's `useSyncExternalStore`) can re-read the
+ * capability without having to know which plugin installed it.
+ *
+ * The listener is invoked whenever the observable value of `client.payer`
+ * may have changed; consumers should re-read `client.payer` to get the
+ * current value.
+ *
+ * Returning the same listener reference more than once is safe — the returned
+ * unsubscribe is idempotent.
+ */
+export type ClientWithSubscribeToPayer = {
+    /**
+     * Registers a listener to be called whenever `client.payer` may have
+     * changed. Returns an unsubscribe function.
+     */
+    readonly subscribeToPayer: (listener: () => void) => () => void;
+};
+
+/**
+ * Convention for advertising that `client.identity` is reactive. A plugin
+ * that can mutate `client.identity` over time installs this sibling function
+ * so that reactive consumers (e.g. React's `useSyncExternalStore`) can
+ * re-read the capability without having to know which plugin installed it.
+ *
+ * The listener is invoked whenever the observable value of `client.identity`
+ * may have changed; consumers should re-read `client.identity` to get the
+ * current value.
+ *
+ * Returning the same listener reference more than once is safe — the returned
+ * unsubscribe is idempotent.
+ */
+export type ClientWithSubscribeToIdentity = {
+    /**
+     * Registers a listener to be called whenever `client.identity` may have
+     * changed. Returns an unsubscribe function.
+     */
+    readonly subscribeToIdentity: (listener: () => void) => () => void;
+};

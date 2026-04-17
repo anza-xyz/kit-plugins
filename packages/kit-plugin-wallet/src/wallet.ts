@@ -1,7 +1,12 @@
 import { type ClientWithIdentity, type ClientWithPayer, extendClient, withCleanup } from '@solana/kit';
 
 import { createWalletStore } from './store';
-import type { ClientWithWallet, WalletPluginConfig } from './types';
+import type {
+    ClientWithSubscribeToIdentity,
+    ClientWithSubscribeToPayer,
+    ClientWithWallet,
+    WalletPluginConfig,
+} from './types';
 
 // -- Internal helpers ---------------------------------------------------------
 
@@ -42,6 +47,17 @@ function createPlugin<TAdditions extends ClientWithWallet>(config: WalletPluginC
         const additions: Record<string, unknown> = { wallet: store };
         for (const prop of signerProperties) {
             defineSignerGetter(additions, prop, store);
+            // Install the matching `subscribeTo<Capability>` hook so reactive
+            // consumers can observe changes without naming this plugin
+            // directly. Forwarding `store.subscribe` can over-notify on
+            // unrelated wallet state (e.g. discovery), but consumers that
+            // bail on reference-equal snapshots (such as React's
+            // `useSyncExternalStore`) filter those out for free.
+            const subscribeProp =
+                prop === 'payer' ? 'subscribeToPayer' : prop === 'identity' ? 'subscribeToIdentity' : null;
+            if (subscribeProp) {
+                additions[subscribeProp] = store.subscribe;
+            }
         }
 
         return withCleanup(extendClient(client, additions), () => store[Symbol.dispose]()) as unknown as Disposable &
@@ -79,7 +95,13 @@ function createPlugin<TAdditions extends ClientWithWallet>(config: WalletPluginC
  * @see {@link WalletPluginConfig}
  */
 export function walletSigner(config: WalletPluginConfig) {
-    return createPlugin<ClientWithIdentity & ClientWithPayer & ClientWithWallet>(config, ['payer', 'identity']);
+    return createPlugin<
+        ClientWithIdentity &
+            ClientWithPayer &
+            ClientWithSubscribeToIdentity &
+            ClientWithSubscribeToPayer &
+            ClientWithWallet
+    >(config, ['payer', 'identity']);
 }
 
 /**
@@ -109,7 +131,7 @@ export function walletSigner(config: WalletPluginConfig) {
  * @see {@link WalletPluginConfig}
  */
 export function walletIdentity(config: WalletPluginConfig) {
-    return createPlugin<ClientWithIdentity & ClientWithWallet>(config, ['identity']);
+    return createPlugin<ClientWithIdentity & ClientWithSubscribeToIdentity & ClientWithWallet>(config, ['identity']);
 }
 
 /**
@@ -139,7 +161,7 @@ export function walletIdentity(config: WalletPluginConfig) {
  * @see {@link WalletPluginConfig}
  */
 export function walletPayer(config: WalletPluginConfig) {
-    return createPlugin<ClientWithPayer & ClientWithWallet>(config, ['payer']);
+    return createPlugin<ClientWithPayer & ClientWithSubscribeToPayer & ClientWithWallet>(config, ['payer']);
 }
 
 /**

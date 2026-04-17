@@ -1,6 +1,6 @@
 import { type ClientWithIdentity, type ClientWithPayer, createClient, TransactionSigner } from '@solana/kit';
 
-import { ClientWithWallet } from '../types';
+import { ClientWithSubscribeToIdentity, ClientWithSubscribeToPayer, ClientWithWallet } from '../types';
 import { walletIdentity, walletPayer, walletSigner, walletWithoutSigner } from '../wallet';
 
 const config = { chain: 'solana:mainnet' as const };
@@ -16,6 +16,12 @@ const signer = null as unknown as TransactionSigner;
         client.identity satisfies ClientWithIdentity['identity'];
         client.wallet satisfies ClientWithWallet['wallet'];
     }
+    // It exposes subscribeToPayer and subscribeToIdentity for reactive consumers.
+    {
+        const client = createClient().use(walletSigner(config));
+        client.subscribeToPayer satisfies ClientWithSubscribeToPayer['subscribeToPayer'];
+        client.subscribeToIdentity satisfies ClientWithSubscribeToIdentity['subscribeToIdentity'];
+    }
 }
 
 // [DESCRIBE] walletPayer
@@ -25,6 +31,13 @@ const signer = null as unknown as TransactionSigner;
         const client = createClient().use(walletPayer(config));
         client.payer satisfies ClientWithPayer['payer'];
         client.wallet satisfies ClientWithWallet['wallet'];
+    }
+    // It exposes subscribeToPayer but not subscribeToIdentity.
+    {
+        const client = createClient().use(walletPayer(config));
+        client.subscribeToPayer satisfies ClientWithSubscribeToPayer['subscribeToPayer'];
+        // @ts-expect-error subscribeToIdentity is only installed when identity is.
+        void client.subscribeToIdentity;
     }
     // It does not strip a previously-set identity.
     {
@@ -42,6 +55,13 @@ const signer = null as unknown as TransactionSigner;
         client.identity satisfies ClientWithIdentity['identity'];
         client.wallet satisfies ClientWithWallet['wallet'];
     }
+    // It exposes subscribeToIdentity but not subscribeToPayer.
+    {
+        const client = createClient().use(walletIdentity(config));
+        client.subscribeToIdentity satisfies ClientWithSubscribeToIdentity['subscribeToIdentity'];
+        // @ts-expect-error subscribeToPayer is only installed when payer is.
+        void client.subscribeToPayer;
+    }
     // It does not strip a previously-set payer.
     {
         const base = { payer: signer } as unknown as ClientWithPayer;
@@ -56,6 +76,14 @@ const signer = null as unknown as TransactionSigner;
     {
         const client = createClient().use(walletWithoutSigner(config));
         client.wallet satisfies ClientWithWallet['wallet'];
+    }
+    // It exposes neither subscribeToPayer nor subscribeToIdentity.
+    {
+        const client = createClient().use(walletWithoutSigner(config));
+        // @ts-expect-error subscribeToPayer is only installed when payer is.
+        void client.subscribeToPayer;
+        // @ts-expect-error subscribeToIdentity is only installed when identity is.
+        void client.subscribeToIdentity;
     }
     // It does not strip a previously-set payer.
     {

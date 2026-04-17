@@ -21,6 +21,11 @@ export type UseSubscriptionResult<T> = {
  * The `factory` is invoked when `deps` change (or on mount) with a fresh
  * {@link AbortSignal} that is triggered on dep change and unmount.
  *
+ * Return `null` from the factory to disable the subscription — matching the
+ * {@link useBalance} / {@link useAccount} / {@link useTransactionConfirmation}
+ * `null`-gate convention. A disabled subscription leaves `data` and `error`
+ * as `undefined` without subscribing or firing any RPC traffic.
+ *
  * @example
  * ```tsx
  * const { data: slot } = useSubscription(
@@ -29,16 +34,16 @@ export type UseSubscriptionResult<T> = {
  * );
  * ```
  *
- * @example
+ * @example Gated on a feature flag
  * ```tsx
  * const { data: logs } = useSubscription(
- *     () => client.rpcSubscriptions.logsNotifications(programId),
- *     [client, programId],
+ *     () => (enabled ? client.rpcSubscriptions.logsNotifications(programId) : null),
+ *     [client, programId, enabled],
  * );
  * ```
  */
 export function useSubscription<T>(
-    factory: (signal: AbortSignal) => PendingRpcSubscriptionsRequest<T>,
+    factory: (signal: AbortSignal) => PendingRpcSubscriptionsRequest<T> | null,
     deps: DependencyList,
 ): UseSubscriptionResult<T> {
     const [data, setData] = useState<T | undefined>(undefined);
@@ -49,9 +54,14 @@ export function useSubscription<T>(
         setData(undefined);
         setError(undefined);
 
+        const request = factory(controller.signal);
+        if (request === null) {
+            // Disabled by caller — no subscription, no traffic.
+            return () => controller.abort();
+        }
+
         void (async () => {
             try {
-                const request = factory(controller.signal);
                 const iterable = await request.subscribe({ abortSignal: controller.signal });
                 for await (const notification of iterable) {
                     if (controller.signal.aborted) return;
@@ -64,6 +74,7 @@ export function useSubscription<T>(
         })();
 
         return () => controller.abort();
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- library passthrough: `factory` is caller-controlled; deps list is the contract.
     }, deps);
 
     return { data, error };
