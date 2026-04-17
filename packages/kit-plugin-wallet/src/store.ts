@@ -1,5 +1,6 @@
 import { type SignatureBytes, SOLANA_ERROR__WALLET__NOT_CONNECTED, SolanaError } from '@solana/kit';
 import { createSignerFromWalletAccount } from '@solana/wallet-account-signer';
+import type { SolanaChain } from '@solana/wallet-standard-chains';
 import {
     SolanaSignIn,
     type SolanaSignInFeature,
@@ -143,9 +144,16 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
 
     function tryCreateSigner(account: UiWalletAccount): WalletSigner | null {
         try {
-            return createSignerFromWalletAccount(account, config.chain);
+            // `config.chain` widens to `SolanaChain | (IdentifierString & {})`
+            // for the custom-chain escape hatch. `createSignerFromWalletAccount`
+            // only types `SolanaChain`, but its runtime throws for chains it
+            // doesn't understand — which we catch below. Non-Solana chains
+            // therefore degrade to `signer: null`, matching the read-only
+            // wallet contract.
+            return createSignerFromWalletAccount(account, config.chain as SolanaChain);
         } catch {
-            // Wallet doesn't support signing (e.g. read-only / watch wallet).
+            // Wallet doesn't support signing (read-only / watch wallet, or a
+            // non-Solana chain).
             return null;
         }
     }
