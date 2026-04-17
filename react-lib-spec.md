@@ -1,7 +1,7 @@
-# RFC: `@solana/react-kit` — React Bindings for Kit
+# RFC: `@solana/kit-react` — React Bindings for Kit
 
 **Status:** Draft
-**Package:** `@solana/react-kit`
+**Package:** `@solana/kit-react`
 
 ## Summary
 
@@ -15,11 +15,11 @@ The Kit client is an implementation detail — consumers interact with providers
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│  @solana/react-kit/swr          (optional adapter)   │
-│  @solana/react-kit/query        (optional adapter)   │
+│  @solana/kit-react/swr          (optional adapter)   │
+│  @solana/kit-react/query        (optional adapter)   │
 │  Generic bridges + mutation hooks                    │
 ├──────────────────────────────────────────────────────┤
-│  @solana/react-kit              (core, zero deps)    │
+│  @solana/kit-react              (core, zero deps)    │
 │  Providers, wallet hooks, live data hooks            │
 │  useSyncExternalStore for all reactive state         │
 ├──────────────────────────────────────────────────────┤
@@ -39,7 +39,7 @@ The Kit client is an implementation detail — consumers interact with providers
 
 **Adapters are thin.** The SWR and TanStack Query adapters provide a generic bridge from Kit's reactive stores into the cache library, plus mutation hooks. One-shot reads are just "use SWR/TanStack directly, see docs."
 
-## Core Library (`@solana/react-kit`)
+## Core Library (`@solana/kit-react`)
 
 ### Dependencies
 
@@ -60,20 +60,22 @@ Zero dependencies beyond React and Kit plugins. No cache library required. `@sol
 
 ### Providers
 
-Each provider reads the client from context, extends it with `.use()`, and provides the new client. The nesting order is the plugin chain order — each provider maps to a Kit plugin. If no client exists in context, the outermost provider creates one with `createClient()`.
+`KitClientProvider` is the root — every app mounts it once, at the top of the tree. It creates the base Kit client and publishes the configured chain. Every other provider (`WalletProvider`, `PayerProvider`, `RpcProvider`, …) reads the client from context, extends it with `.use()`, and provides the new client to its subtree. The nesting order of those providers is the plugin chain order — each maps to a Kit plugin.
 
 #### Common case
 
 ```tsx
-import { WalletProvider, RpcProvider } from '@solana/react-kit';
+import { KitClientProvider, WalletProvider, RpcProvider } from '@solana/kit-react';
 
 function App() {
     return (
-        <WalletProvider chain="solana:mainnet">
-            <RpcProvider url="https://api.mainnet-beta.solana.com" wsUrl="wss://api.mainnet-beta.solana.com">
-                <MyApp />
-            </RpcProvider>
-        </WalletProvider>
+        <KitClientProvider chain="solana:mainnet">
+            <WalletProvider>
+                <RpcProvider url="https://api.mainnet-beta.solana.com" wsUrl="wss://api.mainnet-beta.solana.com">
+                    <MyApp />
+                </RpcProvider>
+            </WalletProvider>
+        </KitClientProvider>
     );
 }
 ```
@@ -88,19 +90,21 @@ createClient()
 
 #### Provider reference
 
-**`ChainProvider`** — pure context provider that stores a `SolanaChain` and creates the base client. Does not map to a plugin. Provides `useChain()`. `WalletProvider` renders a `ChainProvider` internally, so most apps don't need it explicitly. Use it directly when there's no `WalletProvider` (e.g. testing setups, server-side scripts):
+**`KitClientProvider`** — root provider. Seeds the client context with a fresh Kit client via `createClient()` and publishes the configured chain for `useChain()`. Does not map to a plugin — it's the base that every other provider composes on top of. Every `@solana/kit-react` tree must have exactly one `KitClientProvider` ancestor:
 
 ```tsx
-<ChainProvider chain="solana:devnet">
+<KitClientProvider chain="solana:devnet">
     <PayerProvider signer={testPayer}>
         <LiteSvmProvider>
             <App /> {/* useChain() returns "solana:devnet" */}
         </LiteSvmProvider>
     </PayerProvider>
-</ChainProvider>
+</KitClientProvider>
 ```
 
-**`WalletProvider`** — wraps one of the wallet plugins. Renders a `ChainProvider` internally with the provided `chain` prop. Accepts an optional `role` prop that defaults to `"signer"` — the common case where the wallet both pays for and signs transactions. Other roles are available for advanced setups: `"payer"` (wallet pays fees only), `"identity"` (wallet signs but a relayer pays), or `"none"` (wallet UI only, manual signer access via `useConnectedWallet()`). These map to the `walletSigner`, `walletPayer`, `walletIdentity`, and `walletWithoutSigner` plugins respectively. Also accepts `autoConnect`, `storage`, `storageKey`, and `filter` props, forwarded to the underlying wallet plugin.
+The `chain` prop accepts any `SolanaChain` (with autocomplete) and — as an escape hatch — any wallet-standard `IdentifierString` (`${string}:${string}`) for custom or L2 chains. The Solana literals remain in the autocomplete list thanks to the `T | (IdentifierString & {})` union pattern.
+
+**`WalletProvider`** — wraps one of the wallet plugins. Reads the chain from the enclosing `KitClientProvider` via context. Accepts an optional `role` prop that defaults to `"signer"` — the common case where the wallet both pays for and signs transactions. Other roles are available for advanced setups: `"payer"` (wallet pays fees only), `"identity"` (wallet signs but a relayer pays), or `"none"` (wallet UI only, manual signer access via `useConnectedWallet()`). These map to the `walletSigner`, `walletPayer`, `walletIdentity`, and `walletWithoutSigner` plugins respectively. Also accepts `autoConnect`, `storage`, `storageKey`, and `filter` props, forwarded to the underlying wallet plugin.
 
 **`PayerProvider`** and **`IdentityProvider`** — set `client.payer` and `client.identity` respectively from an explicit signer. Use these when the payer or identity is not the connected wallet (e.g. a backend relayer, a different keypair).
 
@@ -127,36 +131,47 @@ Internally applies each plugin via `client.use()`. This means any Kit plugin is 
 #### Advanced examples
 
 ```tsx
-import { WalletProvider, PayerProvider, RpcProvider } from '@solana/react-kit';
+import { KitClientProvider, WalletProvider, PayerProvider, RpcProvider } from '@solana/kit-react';
 
 // Wallet is identity, relayer pays
-<WalletProvider chain="solana:mainnet" role="identity">
-    <PayerProvider signer={relayerSigner}>
-        <RpcProvider url="https://..." wsUrl="wss://...">
-            <App />
-        </RpcProvider>
-    </PayerProvider>
-</WalletProvider>
-
-// Wallet is UI only, payer and identity are explicit
-<WalletProvider chain="solana:mainnet" role="none">
-    <IdentityProvider signer={identitySigner}>
+<KitClientProvider chain="solana:mainnet">
+    <WalletProvider role="identity">
         <PayerProvider signer={relayerSigner}>
             <RpcProvider url="https://..." wsUrl="wss://...">
                 <App />
             </RpcProvider>
         </PayerProvider>
-    </IdentityProvider>
-</WalletProvider>
+    </WalletProvider>
+</KitClientProvider>
+
+// Wallet is UI only, payer and identity are explicit
+<KitClientProvider chain="solana:mainnet">
+    <WalletProvider role="none">
+        <IdentityProvider signer={identitySigner}>
+            <PayerProvider signer={relayerSigner}>
+                <RpcProvider url="https://..." wsUrl="wss://...">
+                    <App />
+                </RpcProvider>
+            </PayerProvider>
+        </IdentityProvider>
+    </WalletProvider>
+</KitClientProvider>
 
 // Testing with LiteSVM — no wallet, explicit chain
-<ChainProvider chain="solana:devnet">
+<KitClientProvider chain="solana:devnet">
     <PayerProvider signer={testPayer}>
         <LiteSvmProvider>
             <App />
         </LiteSvmProvider>
     </PayerProvider>
-</ChainProvider>
+</KitClientProvider>
+
+// Custom chain identifier (escape hatch for L2s or non-Solana chains)
+<KitClientProvider chain="l2:mainnet">
+    <PluginProvider plugin={customChainPlugin()}>
+        <App />
+    </PluginProvider>
+</KitClientProvider>
 ```
 
 ### Hooks
@@ -178,11 +193,25 @@ const ClientContext: React.Context<Client>;
 function useClient(): Client;
 
 /**
- * Returns the current chain identifier from context (e.g. "solana:mainnet").
- * Useful for chain-dependent logic such as constructing explorer URLs or
- * passing to createSignerFromWalletAccount.
+ * The wallet-standard chain identifier accepted by `KitClientProvider`.
+ *
+ * Unions `SolanaChain` (autocompletes "solana:mainnet" / "solana:devnet" /
+ * "solana:testnet") with wallet-standard's `IdentifierString` as an escape
+ * hatch for custom or non-Solana chains. The `& {}` preserves literal
+ * autocomplete — TypeScript won't collapse the literals into the wider
+ * template type.
  */
-function useChain(): SolanaChain;
+type ChainIdentifier = SolanaChain | (IdentifierString & {});
+
+/**
+ * Returns the current chain identifier from context.
+ *
+ * Defaults to the narrow `SolanaChain` literal union — callers get
+ * autocomplete and no cast for the 99% case. Power users who opted into
+ * a custom chain at the root widen the return type via the generic (same
+ * escape-hatch pattern as `useClient<T>()`).
+ */
+function useChain<T extends IdentifierString = SolanaChain>(): T;
 ```
 
 #### Wallet
@@ -271,7 +300,7 @@ const signer = useMemo(
 );
 ```
 
-`createSignerFromWalletAccount` returns a signer that implements `TransactionModifyingSigner`, `TransactionSendingSigner` (if the wallet supports `solana:signAndSendTransaction`), and `MessageSigner` (if the wallet supports `solana:signMessage`). No react-kit hook is needed here — this is a plain kit function.
+`createSignerFromWalletAccount` returns a signer that implements `TransactionModifyingSigner`, `TransactionSendingSigner` (if the wallet supports `solana:signAndSendTransaction`), and `MessageSigner` (if the wallet supports `solana:signMessage`). No kit-react hook is needed here — this is a plain kit function.
 
 Implementation:
 
@@ -553,7 +582,7 @@ const { data: slot } = useSubscription(
 
 #### Sending transactions
 
-Wraps `client.sendTransaction()` and `client.sendTransactions()` (from the instruction-plan plugin) with React async state tracking. These are the primary way to send transactions in react-kit — they handle the full plan → sign → send → confirm lifecycle.
+Wraps `client.sendTransaction()` and `client.sendTransactions()` (from the instruction-plan plugin) with React async state tracking. These are the primary way to send transactions in kit-react — they handle the full plan → sign → send → confirm lifecycle.
 
 ```typescript
 type ActionState<T> = {
@@ -751,7 +780,7 @@ Providing a generic `useRpcQuery` hook would be fighting against React's lack of
 
 ## Third-party extensions
 
-Any Kit plugin works with react-kit out of the box via `PluginProvider` — no React-specific wrapper needed from the plugin author. Plugin authors can optionally ship typed convenience hooks for better DX.
+Any Kit plugin works with kit-react out of the box via `PluginProvider` — no React-specific wrapper needed from the plugin author. Plugin authors can optionally ship typed convenience hooks for better DX.
 
 ### Example: a DAS plugin package
 
@@ -767,16 +796,18 @@ export function dasPlugin(config: DasConfig): Plugin<{ das: DasClient }>;
 **2. Usage with `PluginProvider`** — no React wrapper from the plugin author needed:
 
 ```tsx
-import { PluginProvider, WalletProvider, RpcProvider } from '@solana/react-kit';
+import { KitClientProvider, PluginProvider, WalletProvider, RpcProvider } from '@solana/kit-react';
 import { dasPlugin } from '@my-org/kit-plugin-das';
 
-<WalletProvider chain="solana:mainnet">
-    <PluginProvider plugin={dasPlugin({ endpoint: 'https://mainnet.helius-rpc.com/?api-key=...' })}>
-        <RpcProvider url="..." wsUrl="...">
-            <App />
-        </RpcProvider>
-    </PluginProvider>
-</WalletProvider>
+<KitClientProvider chain="solana:mainnet">
+    <WalletProvider>
+        <PluginProvider plugin={dasPlugin({ endpoint: 'https://mainnet.helius-rpc.com/?api-key=...' })}>
+            <RpcProvider url="..." wsUrl="...">
+                <App />
+            </RpcProvider>
+        </PluginProvider>
+    </WalletProvider>
+</KitClientProvider>
 ```
 
 After `PluginProvider`, any `useClient()` call in the subtree returns the DAS-extended client at runtime.
@@ -784,8 +815,8 @@ After `PluginProvider`, any `useClient()` call in the subtree returns the DAS-ex
 **3. Optional typed convenience hooks:**
 
 ```typescript
-// @my-org/react-kit-das
-import { useClient } from '@solana/react-kit';
+// @my-org/kit-react-das
+import { useClient } from '@solana/kit-react';
 import type { DasClient } from '@my-org/kit-plugin-das';
 
 export function useAsset(address: Address) {
@@ -808,14 +839,14 @@ function useClient<TClient extends Client = Client>(): TClient;
 
 This is a type assertion, not an inference — it's the hook author's responsibility to ensure `DasProvider` (or equivalent) is present in the tree. The generic is intentionally an escape hatch, not the primary API.
 
-## SWR Adapter (`@solana/react-kit/swr`)
+## SWR Adapter (`@solana/kit-react/swr`)
 
 ### Dependencies
 
 ```json
 {
   "peerDependencies": {
-    "@solana/react-kit": "^1.x",
+    "@solana/kit-react": "^1.x",
     "swr": "^2.x"
   }
 }
@@ -855,10 +886,10 @@ const { data, error, isLoading } = useLiveSwr(
 
 Same API as core's `useSendTransaction` / `useSendTransactions`, but backed by SWR's `useSWRMutation`. The key difference is cache integration — you can automatically revalidate SWR queries after a successful transaction (e.g. refetch balances after a transfer).
 
-Since these hooks live under the `@solana/react-kit/swr` entry point, they use the same names as core — the import path disambiguates:
+Since these hooks live under the `@solana/kit-react/swr` entry point, they use the same names as core — the import path disambiguates:
 
 ```typescript
-import { useSendTransaction } from '@solana/react-kit/swr';
+import { useSendTransaction } from '@solana/kit-react/swr';
 ```
 
 ```typescript
@@ -881,7 +912,7 @@ function useSendTransactions(options?: {
 Usage:
 
 ```tsx
-import { useSendTransaction } from '@solana/react-kit/swr';
+import { useSendTransaction } from '@solana/kit-react/swr';
 
 const { trigger, isMutating, error } = useSendTransaction({
     revalidateKeys: [['balance', sourceAddress]],
@@ -899,14 +930,14 @@ Not provided — use SWR directly:
 const { data } = useSWR(['epochInfo'], () => client.rpc.getEpochInfo().send());
 ```
 
-## TanStack Query Adapter (`@solana/react-kit/query`)
+## TanStack Query Adapter (`@solana/kit-react/query`)
 
 ### Dependencies
 
 ```json
 {
   "peerDependencies": {
-    "@solana/react-kit": "^1.x",
+    "@solana/kit-react": "^1.x",
     "@tanstack/react-query": "^5.x"
   }
 }
@@ -932,10 +963,10 @@ function useLiveQuery<T>(
 
 Same API as core's `useSendTransaction` / `useSendTransactions`, but backed by TanStack's `useMutation`. The key differences are automatic cache invalidation, optimistic updates, and visibility in TanStack devtools.
 
-Since these hooks live under the `@solana/react-kit/query` entry point, they use the same names as core — the import path disambiguates:
+Since these hooks live under the `@solana/kit-react/query` entry point, they use the same names as core — the import path disambiguates:
 
 ```typescript
-import { useSendTransaction } from '@solana/react-kit/query';
+import { useSendTransaction } from '@solana/kit-react/query';
 ```
 
 ```typescript
@@ -960,7 +991,7 @@ function useSendTransactions(options?: {
 Usage:
 
 ```tsx
-import { useSendTransaction } from '@solana/react-kit/query';
+import { useSendTransaction } from '@solana/kit-react/query';
 
 const { mutateAsync, isPending, error } = useSendTransaction({
     invalidateKeys: [['balance', sourceAddress]],
@@ -981,7 +1012,7 @@ await mutateAsync(client.system.instructions.transfer({ source, destination, amo
 Implementation:
 
 ```tsx
-import { useClient } from '@solana/react-kit';
+import { useClient } from '@solana/kit-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 function useSendTransaction(options?: {
@@ -1007,7 +1038,7 @@ function useSendTransaction(options?: {
 The SWR adapter follows the same pattern with `useSWRMutation`:
 
 ```tsx
-import { useClient } from '@solana/react-kit';
+import { useClient } from '@solana/kit-react';
 import useSWRMutation from 'swr/mutation';
 
 function useSendTransaction(options?: { revalidateKeys?: SWRKey[] }) {
@@ -1067,7 +1098,11 @@ const { data } = useQuery({
 
 **Adapters bridge, not wrap.** The SWR and TanStack adapters provide a generic bridge from Kit's reactive store into the cache library. They don't re-implement the subscription logic — they just pipe `subscribe`/`getState`/`getError` into the cache library's subscription API.
 
-**Composable providers only.** Each provider maps to a Kit plugin. The nesting order is the plugin chain order. No bundle provider — one way to do things, no cliff when you need to customize. `PluginProvider` allows any Kit plugin to participate without shipping a React-specific wrapper.
+**Composable providers only.** A single `KitClientProvider` at the root creates the client and publishes the chain. Every other provider maps to a Kit plugin, and their nesting order is the plugin chain order. No bundle provider — one way to do things, no cliff when you need to customize. `PluginProvider` allows any Kit plugin to participate without shipping a React-specific wrapper.
+
+**Explicit root, not implicit.** An earlier draft had `WalletProvider` lazily create the client and chain context when no ancestor was present, so the common case could skip a provider. In practice that made the provider hierarchy harder to reason about — debugging "where did this client come from?" meant tracing which wrapper silently created it. Making `KitClientProvider` a required explicit root costs one extra line in the common case and makes the client's origin obvious.
+
+**`ChainIdentifier`, not just `SolanaChain`.** The chain prop on `KitClientProvider` accepts `SolanaChain | (IdentifierString & {})`. Known Solana chains (`"solana:mainnet"`, etc.) autocomplete as literals; any other wallet-standard-shaped identifier (`${string}:${string}`) is accepted as an escape hatch for custom chains and L2s. The `& {}` is the canonical TS trick for preserving literal autocomplete alongside a wider string-template type.
 
 **No dedicated transfer/token/stake hooks.** `useSendTransaction()` is generic — it accepts any instruction, instruction plan, or transaction message. Dedicated hooks like `useSolTransfer()` or `useSplToken()` would be thin wrappers that don't add meaningful logic. They can be built on top by higher-level libraries.
 
@@ -1075,19 +1110,19 @@ const { data } = useQuery({
 
 **Library, not a plugin.** An alternative design would be a `react()` Kit plugin — `createClient().use(walletSigner()).use(solanaRpc()).use(react())` — which is appealing because it's the same `use()` API developers already know and makes the plugin chain explicit. However, React needs to own the client lifecycle: prop changes trigger client recreation (e.g. network switching), multiple provider trees need independent clients, cleanup on unmount must abort subscriptions and dispose resources, and SSR requires a fresh client per request. All of these require the client to be created and managed inside React, which means providers. The composable provider approach expresses the same plugin chain as nesting order — each provider calls `.use()` internally — so the composition model is identical, just adapted to React's lifecycle.
 
-**Single chain per `WalletProvider`.** Each `WalletProvider` is scoped to one chain — discovery, connection, and signer creation all depend on it. Apps that need multiple chains (e.g. a mainnet trading section and a devnet testing section) use separate `WalletProvider`s, which means separate wallet connections. This is the correct behavior: a wallet that supports `solana:mainnet` may not support a different chain like `l2:mainnet`, so you can't safely share a connection across chains.
+**Single chain per `KitClientProvider`.** Each `KitClientProvider` is scoped to one chain — discovery, connection, and signer creation all depend on it. Apps that need multiple chains (e.g. a mainnet trading section and a devnet testing section) use separate `KitClientProvider`s, which means separate clients and separate wallet connections. This is the correct behavior: a wallet that supports `solana:mainnet` may not support a different chain like `l2:mainnet`, so you can't safely share a connection across chains.
 
 A future backward-compatible enhancement could enable opt-in state syncing between providers: if `WalletStorage` gained an optional `subscribe` method (matching the pattern used by Zustand's `persist` and TanStack Query's storage adapters), the plugin could react to external writes and auto-connect when a sibling provider connects. Both providers would still independently verify chain support — the shared storage just propagates the wallet selection, not the connection itself. Plain `localStorage` (no `subscribe`) would continue to work unchanged.
 
 ## Comparison with framework-kit
 
-[`framework-kit`](https://github.com/solana-foundation/framework-kit) is a feature-complete React library for Solana built on a different architecture (`@solana/client` + Zustand + SWR). `react-kit` is not a replacement — it's a lower-level foundation that framework-kit (or similar libraries) could build on top of.
+[`framework-kit`](https://github.com/solana-foundation/framework-kit) is a feature-complete React library for Solana built on a different architecture (`@solana/client` + Zustand + SWR). `kit-react` is not a replacement — it's a lower-level foundation that framework-kit (or similar libraries) could build on top of.
 
-### What react-kit covers
+### What kit-react covers
 
 All of framework-kit's core functionality is covered:
 
-| Area | framework-kit | react-kit |
+| Area | framework-kit | kit-react |
 |------|--------------|-----------|
 | Wallet connection | `useWallet`, `useWalletSession`, `useConnectWallet`, `useDisconnectWallet` | `useWalletStatus`, `useConnectedWallet`, `useConnectWallet`, `useDisconnectWallet` |
 | Wallet discovery | Via `autoDiscover()` + connectors | `useWallets()` (wallet-standard via plugin) |
@@ -1108,7 +1143,7 @@ These framework-kit features are omitted by design, not oversight:
 - **Wallet modal state** (`useWalletModalState`, `WalletConnectionManager`) — UI concern, left to consumer or UI libraries.
 - **SWR query infrastructure** (`useSolanaRpcQuery`, query key scoping) — each cache library handles this natively.
 
-### What react-kit adds
+### What kit-react adds
 
 Features that framework-kit does not provide:
 
@@ -1118,16 +1153,17 @@ Features that framework-kit does not provide:
 - **`useSubscription`** — raw subscription hook for subscription-only data.
 - **`PluginProvider`** — any Kit plugin works without a React-specific wrapper.
 - **`PayerProvider` / `IdentityProvider`** — separate payer and identity from wallet.
+- **`KitClientProvider`** — explicit root that creates the Kit client and publishes the chain, so the provider hierarchy is traceable without hidden wrappers.
 - **`LiteSvmProvider`** — drop-in testing provider backed by a local SVM.
 - **Granular wallet hooks** — `useWallets()`, `useWalletStatus()`, `useConnectedWallet()` subscribe to only the slice they need.
 
 ### Comparison with connectorkit
 
-[`connectorkit`](https://github.com/nicholasgasior/connectorkit) (`@solana/connector`) is a production wallet connection library with headless UI components, multi-transport support (WalletConnect, Mobile Wallet Adapter), legacy `@solana/web3.js` compatibility, and devtools. react-kit provides the core primitives that connectorkit could build on top of.
+[`connectorkit`](https://github.com/nicholasgasior/connectorkit) (`@solana/connector`) is a production wallet connection library with headless UI components, multi-transport support (WalletConnect, Mobile Wallet Adapter), legacy `@solana/web3.js` compatibility, and devtools. kit-react provides the core primitives that connectorkit could build on top of.
 
-#### What react-kit covers
+#### What kit-react covers
 
-| Area | connectorkit | react-kit |
+| Area | connectorkit | kit-react |
 |------|-------------|-----------|
 | Wallet discovery | `useWalletConnectors()` (connector metadata) | `useWallets()` (UiWallet objects) |
 | Wallet status | `useWallet()` (discriminated union) | `useWalletStatus()` + `useConnectedWallet()` |
@@ -1142,7 +1178,7 @@ Features that framework-kit does not provide:
 
 #### What connectorkit adds on top
 
-These are app-layer and transport-layer concerns that react-kit intentionally leaves to higher-level libraries:
+These are app-layer and transport-layer concerns that kit-react intentionally leaves to higher-level libraries:
 
 - **Headless UI components** — `WalletListElement`, `BalanceElement`, `TokenListElement`, `TransactionHistoryElement`, `ClusterElement`, `AccountElement`, `DisconnectElement` (all render-prop based)
 - **Multi-transport wallet support** — WalletConnect (QR codes, deep links) and Mobile Wallet Adapter alongside browser extensions, with branded connector IDs to distinguish transports to the same wallet
@@ -1153,9 +1189,9 @@ These are app-layer and transport-layer concerns that react-kit intentionally le
 - **Error boundaries** — recoverable errors, retry logic, fallback UI
 - **Devtools** — `@solana/connector-debugger` with transaction inspection
 
-#### How connectorkit would build on react-kit
+#### How connectorkit would build on kit-react
 
-Connectorkit would wrap react-kit's providers and compose its hooks on top of react-kit's primitives:
+Connectorkit would wrap kit-react's providers and compose its hooks on top of kit-react's primitives:
 
 ```tsx
 // Connectorkit disables plugin-level persistence and auto-connect,
@@ -1164,11 +1200,13 @@ function ConnectorProvider({ config, children }) {
     const [chain, setChain] = useState(config.initialCluster);
 
     return (
-        <WalletProvider chain={chain} autoConnect={false} storage={null}>
-            <ConnectorAutoConnect config={config}>
-                {children}
-            </ConnectorAutoConnect>
-        </WalletProvider>
+        <KitClientProvider chain={chain}>
+            <WalletProvider autoConnect={false} storage={null}>
+                <ConnectorAutoConnect config={config}>
+                    {children}
+                </ConnectorAutoConnect>
+            </WalletProvider>
+        </KitClientProvider>
     );
 }
 ```
@@ -1185,11 +1223,11 @@ Key integration points:
 
 [`wallet-ui`](https://github.com/nicholasgasior/wallet-ui) (`@wallet-ui/react`) is a simpler wallet library — a modern, Wallet-Standard-native replacement for the old wallet-adapter. It provides wallet connection hooks, account/cluster persistence, and headless UI components (dropdowns, modals, wallet lists) styled via data attributes and optional Tailwind CSS.
 
-#### What react-kit covers
+#### What kit-react covers
 
-Wallet-UI has significant overlap with react-kit + kit-plugin-wallet. The core state management, wallet discovery, connection, and persistence are all handled:
+Wallet-UI has significant overlap with kit-react + kit-plugin-wallet. The core state management, wallet discovery, connection, and persistence are all handled:
 
-| Area | wallet-ui | react-kit |
+| Area | wallet-ui | kit-react |
 |------|----------|-----------|
 | Wallet discovery | `useWalletUiWallets()` | `useWallets()` |
 | Bundled wallet state | `useWalletUi()` | `useWallets()` + `useConnectedWallet()` + `useWalletStatus()` |
@@ -1198,11 +1236,11 @@ Wallet-UI has significant overlap with react-kit + kit-plugin-wallet. The core s
 | Transaction signer | `useWalletUiSigner({ account })` | `useConnectedWallet().signer` |
 | Cluster selection | `useWalletUiCluster()` | `useChain()` + provider props |
 | Account persistence | Nanostores persistent atom (`wallet-ui:account`) | kit-plugin-wallet storage (`kit-wallet`) |
-| Cluster persistence | Nanostores persistent atom (`wallet-ui:cluster`) | Not in react-kit (app-layer concern) |
+| Cluster persistence | Nanostores persistent atom (`wallet-ui:cluster`) | Not in kit-react (app-layer concern) |
 
 #### What wallet-ui adds on top
 
-Wallet-UI's unique contribution is its **UI component layer** — react-kit provides no UI:
+Wallet-UI's unique contribution is its **UI component layer** — kit-react provides no UI:
 
 - **`WalletUiDropdown`** — connect/disconnect dropdown with wallet list
 - **`WalletUiModal`** / **`WalletUiModalTrigger`** — wallet selection modal
@@ -1213,24 +1251,26 @@ Wallet-UI's unique contribution is its **UI component layer** — react-kit prov
 - **`BaseDropdown`** / **`BaseModal`** — generic headless primitives (Zag.js)
 - **`@wallet-ui/css`** / **`@wallet-ui/tailwind`** — optional Tailwind styling via `data-wu` attributes
 
-#### How wallet-ui would build on react-kit
+#### How wallet-ui would build on kit-react
 
-Wallet-UI is the simplest integration — its core state (Nanostores + contexts) maps directly to react-kit's hooks with no friction:
+Wallet-UI is the simplest integration — its core state (Nanostores + contexts) maps directly to kit-react's hooks with no friction:
 
 ```tsx
-// Wallet-UI's provider would wrap react-kit's WalletProvider
+// Wallet-UI's provider would wrap kit-react's KitClientProvider + WalletProvider
 // and use its hooks instead of Nanostores for state.
 function WalletUi({ config, children }) {
     return (
-        <WalletProvider chain={config.clusters[0].id}>
-            <WalletUiClusterContextProvider clusters={config.clusters}>
-                {children}
-            </WalletUiClusterContextProvider>
-        </WalletProvider>
+        <KitClientProvider chain={config.clusters[0].id}>
+            <WalletProvider>
+                <WalletUiClusterContextProvider clusters={config.clusters}>
+                    {children}
+                </WalletUiClusterContextProvider>
+            </WalletProvider>
+        </KitClientProvider>
     );
 }
 
-// Wallet-UI's hooks become thin wrappers around react-kit
+// Wallet-UI's hooks become thin wrappers around kit-react
 function useWalletUi() {
     const wallets = useWallets();
     const connected = useConnectedWallet();
@@ -1249,15 +1289,15 @@ function useWalletUi() {
 }
 ```
 
-The plugin's built-in persistence (`walletName:address` format) matches what wallet-ui already stores, so wallet-ui can use it directly — no need to disable and reimplement like connectorkit. The UI components (dropdowns, modals, wallet lists) remain wallet-ui's value-add, now built on react-kit's hooks instead of its own state layer.
+The plugin's built-in persistence (`walletName:address` format) matches what wallet-ui already stores, so wallet-ui can use it directly — no need to disable and reimplement like connectorkit. The UI components (dropdowns, modals, wallet lists) remain wallet-ui's value-add, now built on kit-react's hooks instead of its own state layer.
 
 ### Comparison with wallet-adapter
 
-[`wallet-adapter`](https://github.com/anza-xyz/wallet-adapter) (`@solana/wallet-adapter-react`) is the most widely used wallet library in the Solana ecosystem. It's the API most React developers are currently familiar with. react-kit is not a drop-in replacement — it's built on Kit and wallet-standard instead of web3.js and the adapter pattern — but the mental model maps closely.
+[`wallet-adapter`](https://github.com/anza-xyz/wallet-adapter) (`@solana/wallet-adapter-react`) is the most widely used wallet library in the Solana ecosystem. It's the API most React developers are currently familiar with. kit-react is not a drop-in replacement — it's built on Kit and wallet-standard instead of web3.js and the adapter pattern — but the mental model maps closely.
 
 #### API mapping
 
-| wallet-adapter | react-kit | Notes |
+| wallet-adapter | kit-react | Notes |
 |---|---|---|
 | `useWallet().wallets` | `useWallets()` | `UiWallet[]` (wallet-standard) instead of `Wallet[]` (adapter wrapper) |
 | `useWallet().wallet` | `useConnectedWallet()?.wallet` | |
@@ -1273,6 +1313,7 @@ The plugin's built-in persistence (`walletName:address` format) matches what wal
 | `useWallet().signIn` | `useSignIn()` | |
 | `useConnection().connection` | `useClient().rpc` | Kit client instead of web3.js `Connection` |
 | `ConnectionProvider` | `RpcProvider` | |
+| (implicit in `WalletProvider`) | `KitClientProvider` | Explicit root owning the client + chain |
 | `WalletProvider` | `WalletProvider` | Props-based config instead of adapter instances |
 | `WalletModalProvider` / `useWalletModal` | Not provided | UI concern — use wallet-ui or connectorkit |
 | `WalletMultiButton` | Not provided | UI concern |
@@ -1282,23 +1323,23 @@ The plugin's built-in persistence (`walletName:address` format) matches what wal
 
 #### Key differences developers will notice
 
-**No adapter pattern.** wallet-adapter requires importing and instantiating adapters per wallet (`new PhantomWalletAdapter()`). react-kit uses wallet-standard — wallets register themselves, no imports needed.
+**No adapter pattern.** wallet-adapter requires importing and instantiating adapters per wallet (`new PhantomWalletAdapter()`). kit-react uses wallet-standard — wallets register themselves, no imports needed.
 
-**No `select` + `connect` two-step.** wallet-adapter separates wallet selection from connection. react-kit's `useConnectWallet()` takes a `UiWallet` and connects in one call. The two-step pattern was an artifact of the adapter model where selection and connection were separate concerns.
+**No `select` + `connect` two-step.** wallet-adapter separates wallet selection from connection. kit-react's `useConnectWallet()` takes a `UiWallet` and connects in one call. The two-step pattern was an artifact of the adapter model where selection and connection were separate concerns.
 
-**No `publicKey`.** wallet-adapter developers are used to `wallet.publicKey` as the primary identifier. In react-kit it's `useConnectedWallet()?.account.address` — a string `Address` instead of a `PublicKey` class. This is a Kit-wide change.
+**No `publicKey`.** wallet-adapter developers are used to `wallet.publicKey` as the primary identifier. In kit-react it's `useConnectedWallet()?.account.address` — a string `Address` instead of a `PublicKey` class. This is a Kit-wide change.
 
-**Instructions, not transactions.** wallet-adapter's `sendTransaction` takes a pre-built `Transaction` + `Connection`. react-kit's `useSendTransaction` takes instructions — the plugin chain handles blockhash, fee payer, signing, sending, and confirmation. For cases that need manual transaction construction (sign-then-send, partial signing), `useAction` + Kit's signing primitives provide full control.
+**Instructions, not transactions.** wallet-adapter's `sendTransaction` takes a pre-built `Transaction` + `Connection`. kit-react's `useSendTransaction` takes instructions — the plugin chain handles blockhash, fee payer, signing, sending, and confirmation. For cases that need manual transaction construction (sign-then-send, partial signing), `useAction` + Kit's signing primitives provide full control.
 
-**No bundled UI.** wallet-adapter ships `WalletMultiButton` and modal components that were a common pain point — hard to customize and didn't match app design systems. react-kit is headless. UI comes from wallet-ui, connectorkit, or the app's own components.
+**No bundled UI.** wallet-adapter ships `WalletMultiButton` and modal components that were a common pain point — hard to customize and didn't match app design systems. kit-react is headless. UI comes from wallet-ui, connectorkit, or the app's own components.
 
-**Granular hooks.** wallet-adapter puts everything on one `useWallet()` context — any wallet state change re-renders all consumers. react-kit splits into focused hooks (`useWallets`, `useWalletStatus`, `useConnectedWallet`, etc.) so components subscribe only to what they need.
+**Granular hooks.** wallet-adapter puts everything on one `useWallet()` context — any wallet state change re-renders all consumers. kit-react splits into focused hooks (`useWallets`, `useWalletStatus`, `useConnectedWallet`, etc.) so components subscribe only to what they need.
 
-**No global error handler.** wallet-adapter's `onError` prop was a second error channel alongside thrown errors, which caused confusion about which path errors take. react-kit uses standard React patterns: hook-level errors (`useBalance().error`), promise rejection (`await connect(wallet)` throws on failure), and Error Boundaries for unexpected failures.
+**No global error handler.** wallet-adapter's `onError` prop was a second error channel alongside thrown errors, which caused confusion about which path errors take. kit-react uses standard React patterns: hook-level errors (`useBalance().error`), promise rejection (`await connect(wallet)` throws on failure), and Error Boundaries for unexpected failures.
 
 ### Before and after: Kit example React app
 
-The [Kit example React app](https://github.com/anza-xyz/kit/tree/main/examples/react-app) is a complete wallet/transaction app built directly on `@solana/kit` and `@solana/react` — without any higher-level library. It demonstrates what developers must build today. Comparing it to react-kit shows the boilerplate that react-kit eliminates.
+The [Kit example React app](https://github.com/anza-xyz/kit/tree/main/examples/react-app) is a complete wallet/transaction app built directly on `@solana/kit` and `@solana/react` — without any higher-level library. It demonstrates what developers must build today. Comparing it to kit-react shows the boilerplate that kit-react eliminates.
 
 #### Provider setup
 
@@ -1318,14 +1359,16 @@ The [Kit example React app](https://github.com/anza-xyz/kit/tree/main/examples/r
 </ChainContextProvider>
 ```
 
-**With react-kit:**
+**With kit-react:**
 
 ```tsx
-<WalletProvider chain="solana:devnet">
-    <RpcProvider url="https://api.devnet.solana.com" wsUrl="wss://api.devnet.solana.com">
-        <App />
-    </RpcProvider>
-</WalletProvider>
+<KitClientProvider chain="solana:devnet">
+    <WalletProvider>
+        <RpcProvider url="https://api.devnet.solana.com" wsUrl="wss://api.devnet.solana.com">
+            <App />
+        </RpcProvider>
+    </WalletProvider>
+</KitClientProvider>
 ```
 
 Chain context, RPC client creation, wallet persistence, and localStorage sync are handled by the providers and the underlying plugins.
@@ -1334,7 +1377,7 @@ Chain context, RPC client creation, wallet persistence, and localStorage sync ar
 
 **Today** — ~100 lines of custom code: manually filter wallets by `StandardConnect` / `StandardDisconnect` features, build a menu with per-wallet submenus for account selection, compare accounts with `uiWalletAccountsAreSame()`, handle connect/disconnect errors, and manage a separate Sign In With Solana menu.
 
-**With react-kit:**
+**With kit-react:**
 
 ```tsx
 const wallets = useWallets();
@@ -1348,7 +1391,7 @@ const connected = useConnectedWallet();
 
 **Today** — a custom `balanceSubscribe` function (~40 lines) that manually creates a `createReactiveStoreWithInitialValueAndSlotTracking`, manages `AbortController` lifecycle, bridges into SWR via `useSWRSubscription`, and tracks seen errors with a `WeakSet` to avoid duplicate dialogs.
 
-**With react-kit:**
+**With kit-react:**
 
 ```tsx
 const { data: balance, error, isLoading } = useBalance(address);
@@ -1358,7 +1401,7 @@ const { data: balance, error, isLoading } = useBalance(address);
 
 **Today** — three separate feature panels (sign & send, sign then send, partial sign), each 150–350 lines. Each manually: builds a form, converts SOL strings to lamports, fetches the latest blockhash, pipes together a transaction message with `setTransactionMessageFeePayerSigner` / `setTransactionMessageLifetimeUsingBlockhash` / `appendTransactionMessageInstruction`, manages a multi-state state machine (`'inputs-form-active' | 'creating-transaction' | 'ready-to-send' | 'sending-transaction'`), signs, sends, confirms, and manually calls `mutate()` to invalidate the SWR balance cache.
 
-**With react-kit** — the common case (sign & send) is one line:
+**With kit-react** — the common case (sign & send) is one line:
 
 ```tsx
 const { send, status, data, error } = useSendTransaction();
@@ -1393,7 +1436,7 @@ Balance invalidation is handled by the adapter's mutation hooks (`invalidateKeys
 
 **Today** — the slot indicator component (~50 lines) manually creates a reactive store from `rpcSubscriptions.slotNotifications().reactive()`, wires it into `useSyncExternalStore` with a custom subscribe/getSnapshot, and manages an `AbortController` in a `useEffect`.
 
-**With react-kit:**
+**With kit-react:**
 
 ```tsx
 const { data: slot } = useSubscription(
@@ -1404,9 +1447,9 @@ const { data: slot } = useSubscription(
 
 #### Summary
 
-| Area | Kit example (today) | react-kit |
+| Area | Kit example (today) | kit-react |
 |------|-------------------|-----------|
-| Provider setup | 3 custom contexts, localStorage sync, manual RPC creation | 2 providers |
+| Provider setup | 3 custom contexts, localStorage sync, manual RPC creation | 3 providers (`KitClientProvider` + `WalletProvider` + `RpcProvider`) |
 | Wallet UI | ~100 lines, manual feature filtering | Hooks + your own UI |
 | Balance | ~50 lines, SWR + reactive store + AbortController + WeakSet | `useBalance(address)` |
 | Transaction (×3 types) | 150–350 lines each, manual state machines | `useSendTransaction()` |
@@ -1414,4 +1457,4 @@ const { data: slot } = useSubscription(
 | Chain switching | Custom context + localStorage + URL resolution | Provider props |
 | **Total custom code** | **~1,200 lines** | **Focus on app-specific logic** |
 
-The Kit example app is well-written — the complexity is inherent to building on low-level primitives. react-kit absorbs that complexity into reusable hooks and providers so developers can focus on their app.
+The Kit example app is well-written — the complexity is inherent to building on low-level primitives. kit-react absorbs that complexity into reusable hooks and providers so developers can focus on their app.
