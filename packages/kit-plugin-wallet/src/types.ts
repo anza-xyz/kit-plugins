@@ -1,6 +1,7 @@
 import type { MessageSigner, SignatureBytes, TransactionSigner } from '@solana/kit';
 import type { SolanaChain } from '@solana/wallet-standard-chains';
 import type { SolanaSignInInput, SolanaSignInOutput } from '@solana/wallet-standard-features';
+import type { IdentifierString } from '@wallet-standard/base';
 import type { UiWallet, UiWalletAccount } from '@wallet-standard/ui';
 
 /**
@@ -101,12 +102,21 @@ export type WalletPluginConfig = {
     autoConnect?: boolean;
 
     /**
-     * The Solana chain this client targets (e.g. `'solana:mainnet'`).
+     * The chain this client targets (e.g. `'solana:mainnet'`).
+     *
+     * Accepts any {@link SolanaChain} (with literal autocomplete) and, as an
+     * escape hatch, any wallet-standard {@link IdentifierString} shape
+     * (`${string}:${string}`) for custom chains or non-Solana L2s. The plugin's
+     * runtime behavior is chain-agnostic — it passes the identifier to
+     * wallet-standard discovery (`uiWallet.chains.includes(chain)`) and to
+     * `createSignerFromWalletAccount`. Wallets that don't advertise the chain
+     * are filtered out, and accounts that can't produce a signer for the chain
+     * resolve to `signer: null` (matching the read-only-wallet contract).
      *
      * One client = one chain. To switch networks, create a separate client
      * with a different chain and RPC endpoint.
      */
-    chain: SolanaChain;
+    chain: SolanaChain | (IdentifierString & {});
 
     /**
      * Optional filter function for wallet discovery. Called for each wallet

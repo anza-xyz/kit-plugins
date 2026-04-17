@@ -190,6 +190,9 @@ importers:
       '@wallet-standard/app':
         specifier: ^1.1.0
         version: 1.1.0
+      '@wallet-standard/base':
+        specifier: ^1.1.0
+        version: 1.1.0
       '@wallet-standard/errors':
         specifier: ^0.1.1
         version: 0.1.1
