@@ -1,8 +1,7 @@
 import type { ClientWithIdentity, ClientWithPayer, TransactionSigner } from '@solana/kit';
 import { useSyncExternalStore } from 'react';
 
-import { useClient } from '../client-context';
-import { throwMissingCapability } from '../internal/errors';
+import { useClientCapability } from '../client-capability';
 
 /**
  * @internal No-op subscribe for `useSyncExternalStore` when the client doesn't
@@ -60,24 +59,22 @@ function readOptional<T>(read: () => T): NonNullable<T> | null {
  *   full wallet connection.
  */
 export function usePayer(): TransactionSigner | null {
-    const client = useClient<Partial<ClientWithPayer> & SubscribeToCapability<'payer'>>();
-    const getSnapshot = () => readOptional(() => client.payer);
+    // Capability check happens first (inside useClientCapability): throws with
+    // a consistent message if no payer plugin is installed. The returned
+    // client is statically narrowed to include `payer`.
+    const client = useClientCapability<Partial<ClientWithPayer> & SubscribeToCapability<'payer'>>({
+        capability: 'payer',
+        hookName: 'usePayer',
+        providerHint:
+            'Usually supplied by <WalletProvider> (with role "signer" or "payer") or <PayerProvider> — or any provider that installs a payer plugin.',
+    });
 
     // Subscribe via the `subscribeToPayer` convention so the hook re-renders
     // when a reactive payer plugin mutates `client.payer`. No-op for static
     // payers. `getSnapshot` is passed as `getServerSnapshot` too — the static
     // read works identically on server and client.
-    const payer = useSyncExternalStore(client.subscribeToPayer ?? NOOP_SUBSCRIBE, getSnapshot, getSnapshot);
-
-    if (!('payer' in client)) {
-        throwMissingCapability(
-            'usePayer',
-            '`client.payer`',
-            'Usually supplied by <WalletProvider> (with role "signer" or "payer") or <PayerProvider> — or any provider that installs a payer plugin.',
-        );
-    }
-
-    return payer;
+    const getSnapshot = () => readOptional(() => client.payer);
+    return useSyncExternalStore(client.subscribeToPayer ?? NOOP_SUBSCRIBE, getSnapshot, getSnapshot);
 }
 
 /**
@@ -102,18 +99,13 @@ export function usePayer(): TransactionSigner | null {
  * @see {@link usePayer}
  */
 export function useIdentity(): TransactionSigner | null {
-    const client = useClient<Partial<ClientWithIdentity> & SubscribeToCapability<'identity'>>();
-    const getSnapshot = () => readOptional(() => client.identity);
-
-    const identity = useSyncExternalStore(client.subscribeToIdentity ?? NOOP_SUBSCRIBE, getSnapshot, getSnapshot);
-
-    if (!('identity' in client)) {
-        throwMissingCapability(
-            'useIdentity',
-            '`client.identity`',
+    const client = useClientCapability<Partial<ClientWithIdentity> & SubscribeToCapability<'identity'>>({
+        capability: 'identity',
+        hookName: 'useIdentity',
+        providerHint:
             'Usually supplied by <WalletProvider> (with role "signer" or "identity") or <IdentityProvider> — or any provider that installs an identity plugin.',
-        );
-    }
+    });
 
-    return identity;
+    const getSnapshot = () => readOptional(() => client.identity);
+    return useSyncExternalStore(client.subscribeToIdentity ?? NOOP_SUBSCRIBE, getSnapshot, getSnapshot);
 }

@@ -31,8 +31,10 @@ export type UseSendTransactionsState = ActionState<
  * Calling `send` again while a previous transaction is in flight aborts the
  * prior call — the hook-managed `AbortSignal` is threaded into
  * `client.sendTransaction`'s config so the underlying RPC request is
- * cancelled, not just the outer await. See {@link useAction} for abort
- * semantics.
+ * cancelled, not just the outer await. `reset()` has the same effect. Callers
+ * that `await send(...)` should filter `AbortError` so a supersede doesn't
+ * surface as a user-visible error (see {@link useAction} for full abort
+ * semantics).
  *
  * Requires an ancestor provider that installs `client.sendTransaction`
  * (e.g. {@link RpcProvider} or {@link LiteSvmProvider}).
@@ -42,7 +44,18 @@ export type UseSendTransactionsState = ActionState<
  * @example
  * ```tsx
  * const { send, status, data, error } = useSendTransaction();
- * await send(getTransferInstruction({ source, destination, amount }));
+ *
+ * async function onClick() {
+ *     try {
+ *         const result = await send(getTransferInstruction({ source, destination, amount }));
+ *         navigate(`/tx/${result.signature}`);
+ *     } catch (err) {
+ *         // Superseded by another send() or a reset() — the hook's reactive
+ *         // state already reflects the new action; don't show a stale error.
+ *         if ((err as Error).name === 'AbortError') return;
+ *         toast.error(String(err));
+ *     }
+ * }
  * ```
  *
  * @see {@link useSendTransactions}
@@ -73,8 +86,10 @@ export function useSendTransaction(): UseSendTransactionState {
  *
  * The hook-managed `AbortSignal` is threaded into
  * `client.sendTransactions`'s config, so calling `send` again while the
- * prior batch is in flight cancels the underlying work. See {@link useAction}
- * for abort semantics.
+ * prior batch is in flight cancels the underlying work. `reset()` has the
+ * same effect. Callers that `await send(...)` should filter `AbortError` —
+ * see {@link useSendTransaction}'s example for the idiomatic shape, and
+ * {@link useAction} for full abort semantics.
  *
  * @throws If no ancestor provider installs `client.sendTransactions`.
  *

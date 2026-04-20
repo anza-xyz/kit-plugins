@@ -40,9 +40,24 @@ import { useRpcClient } from '../internal/rpc-client';
  * ```
  *
  * @example With a decoder
+ *
+ * **Decoder identity matters.** A new `decoder` reference on each render
+ * rebuilds the underlying store, tearing down the subscription. Hoist the
+ * decoder to module scope (or memoize it) so the identity is stable:
+ *
  * ```tsx
- * const { data } = useAccount(gameAddress, getGameStateDecoder());
+ * // Module scope — stable identity across renders.
+ * const gameStateDecoder = getGameStateDecoder();
+ *
+ * function GameView({ gameAddress }: { gameAddress: Address }) {
+ *     const { data } = useAccount(gameAddress, gameStateDecoder);
+ *     // ...
+ * }
  * ```
+ *
+ * `react-hooks/exhaustive-deps` will flag inline decoders in *your* call
+ * site's deps list, which is the idiomatic feedback loop for this kind of
+ * mistake.
  *
  * @see {@link useBalance}
  */

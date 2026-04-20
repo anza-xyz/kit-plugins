@@ -5,8 +5,10 @@ import {
     walletSigner,
     walletWithoutSigner,
 } from '@solana/kit-plugin-wallet';
-import { PluginProvider, useChain, useClient, useIdentityChurnWarning } from '@solana/kit-react';
-import { type ReactNode, useEffect, useMemo } from 'react';
+import { PluginProvider, useChain, useIdentityChurnWarning } from '@solana/kit-react';
+import { type ReactNode, useMemo } from 'react';
+
+import { useParentWithoutWallet } from './internal/parent-assertions';
 
 /**
  * The role the connected wallet plays on the client.
@@ -111,26 +113,17 @@ export function WalletProvider({
     storageKey,
 }: WalletProviderProps) {
     const chain = useChain();
-    const parent = useClient();
-
-    // Warn in dev when a wallet plugin is already installed on the client.
-    // Common cause: a pre-built client was passed to `KitClientProvider` with
-    // `walletSigner()` (or similar) baked in, and then `<WalletProvider>` is
-    // also mounted below — the plugin gets installed twice and the two
-    // instances compete for the same `client.wallet` namespace. Also triggers
-    // for intentional `PluginProvider({ plugin: walletSigner(...) })`
-    // stacks that nest `<WalletProvider>` underneath.
-    const hasWallet = 'wallet' in parent;
-    useEffect(() => {
-        if (process.env.NODE_ENV !== 'production' && hasWallet) {
-            console.warn(
-                '<WalletProvider>: a wallet plugin is already installed on the client (detected `client.wallet`). ' +
-                    'Mounting WalletProvider on top of a client that already has a wallet plugin ' +
-                    'installs it twice and may produce inconsistent state. Either drop the <WalletProvider>, ' +
-                    'or build a KitClientProvider `client` without the baked-in wallet plugin.',
-            );
-        }
-    }, [hasWallet]);
+    // Refuse to double-install. Common cause: a pre-built client passed to
+    // `KitClientProvider` already has `walletSigner()` (or similar) baked in,
+    // and then `<WalletProvider>` is also mounted below — two plugin
+    // instances would compete for the same `client.wallet` namespace (two
+    // discovery listeners, two storage reads, inconsistent state). Also
+    // catches `<PluginProvider plugin={walletSigner(...)}>` stacks with
+    // `<WalletProvider>` nested underneath. Throwing (vs short-circuiting)
+    // keeps React's normal "inner provider shadows outer" mental model — a
+    // silent skip would ignore the inner's `storageKey` / `filter` / `storage`
+    // without warning.
+    useParentWithoutWallet();
 
     // Dev-only: warn when `filter` / `storage` / `storageKey` prop identity
     // changes across renders. Any of these churning rebuilds the plugin,
@@ -145,6 +138,10 @@ export function WalletProvider({
         providerName: '<WalletProvider>',
     });
 
+    // Deps list the five individual props that feed `config` rather than
+    // `config` itself — `config` is constructed fresh inside the memo body on
+    // every render, so including it would defeat the memoization. Keep the
+    // deps array in sync with the `WalletPluginConfig` fields above.
     const plugin = useMemo(() => {
         const config: WalletPluginConfig = { autoConnect, chain, filter, storage, storageKey };
         switch (role) {

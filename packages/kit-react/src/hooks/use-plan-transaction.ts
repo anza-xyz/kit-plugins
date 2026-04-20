@@ -30,18 +30,36 @@ export type UsePlanTransactionsState = ActionState<
  *
  * The hook-managed `AbortSignal` is threaded into `client.planTransaction`'s
  * config, so calling `send` again or calling `reset()` cancels any pending
- * planning work. See {@link useAction} for abort semantics.
+ * planning work. Callers that `await send(...)` should filter `AbortError`
+ * so a supersede doesn't surface as a user-visible error (see
+ * {@link useAction} for full abort semantics).
  *
  * @throws If no ancestor provider installs `client.planTransaction`.
  *
  * @example Preview then send
  * ```tsx
- * const { send: plan, data: planned, status: planStatus } = usePlanTransaction();
- * const { send: execute, status: sendStatus } = useSendTransaction();
+ * const { send: plan, data: planned } = usePlanTransaction();
+ * const { send: execute } = useSendTransaction();
  *
- * await plan(getTransferInstruction({ source, destination, amount }));
- * // ... user reviews `planned` in a confirmation modal ...
- * await execute(planned); // SingleTransactionPlan feeds straight into sendTransaction
+ * async function onReview() {
+ *     try {
+ *         await plan(getTransferInstruction({ source, destination, amount }));
+ *         // `planned` is now in state — render the confirmation modal.
+ *     } catch (err) {
+ *         if ((err as Error).name === 'AbortError') return;
+ *         toast.error(String(err));
+ *     }
+ * }
+ *
+ * async function onConfirm() {
+ *     if (!planned) return;
+ *     try {
+ *         await execute(planned); // SingleTransactionPlan feeds straight into sendTransaction
+ *     } catch (err) {
+ *         if ((err as Error).name === 'AbortError') return;
+ *         toast.error(String(err));
+ *     }
+ * }
  * ```
  *
  * @see {@link usePlanTransactions} — multi-transaction variant.
@@ -66,6 +84,11 @@ export function usePlanTransaction(): UsePlanTransactionState {
  * {@link useSendTransactions} as {@link usePlanTransaction} has to
  * {@link useSendTransaction}: it returns the full multi-transaction plan so
  * callers can preview splitting / ordering before executing.
+ *
+ * Calling `send` again while planning is in flight aborts the prior call;
+ * `reset()` does the same. Callers that `await send(...)` should filter
+ * `AbortError` — see {@link usePlanTransaction}'s example for the idiomatic
+ * shape, and {@link useAction} for full abort semantics.
  *
  * @throws If no ancestor provider installs `client.planTransactions`.
  *

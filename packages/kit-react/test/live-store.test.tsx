@@ -4,15 +4,15 @@ import { describe, expect, it } from 'vitest';
 import type { LiveStore } from '../src/internal/live-store';
 import { nullLiveStore, useLiveQueryResult, useLiveStore } from '../src/internal/live-store';
 
-type StubStore<T> = LiveStore<T> & { emit: (value: T | undefined, error?: unknown) => void };
+type StubStore<T> = LiveStore<T> & { emit: (value: T | undefined, err?: unknown, slot?: bigint) => void };
 
 function createStubStore<T>(): StubStore<T> {
     const listeners = new Set<() => void>();
-    let state: { value: T } | undefined;
+    let state: { context: { slot: bigint }; value: T } | undefined;
     let error: unknown;
     return {
-        emit(value, err) {
-            state = value === undefined ? undefined : ({ value } as { value: T });
+        emit(value, err, slot = 0n) {
+            state = value === undefined ? undefined : { context: { slot }, value };
             error = err;
             listeners.forEach(l => l());
         },
@@ -66,6 +66,7 @@ describe.skipIf(!__BROWSER__ && !__REACTNATIVE__)('useLiveQueryResult', () => {
         expect(result.current.data).toBeUndefined();
         expect(result.current.error).toBeUndefined();
         expect(result.current.isLoading).toBe(true);
+        expect(result.current.slot).toBeUndefined();
     });
 
     it('updates data on store emission', () => {
@@ -76,6 +77,17 @@ describe.skipIf(!__BROWSER__ && !__REACTNATIVE__)('useLiveQueryResult', () => {
         expect(result.current.isLoading).toBe(false);
     });
 
+    it('exposes the slot from the current snapshot', () => {
+        const store = createStubStore<number>();
+        const { result } = renderHook(() => useLiveQueryResult(store));
+        act(() => store.emit(42, undefined, 123n));
+        expect(result.current.slot).toBe(123n);
+        // Later snapshot at a higher slot: data and slot update together.
+        act(() => store.emit(43, undefined, 124n));
+        expect(result.current.data).toBe(43);
+        expect(result.current.slot).toBe(124n);
+    });
+
     it('surfaces errors and stops loading', () => {
         const store = createStubStore<number>();
         const { result } = renderHook(() => useLiveQueryResult(store));
@@ -83,6 +95,8 @@ describe.skipIf(!__BROWSER__ && !__REACTNATIVE__)('useLiveQueryResult', () => {
         act(() => store.emit(undefined, boom));
         expect(result.current.error).toBe(boom);
         expect(result.current.isLoading).toBe(false);
+        // Error-only snapshot has no value, so no slot either.
+        expect(result.current.slot).toBeUndefined();
     });
 });
 

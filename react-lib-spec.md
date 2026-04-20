@@ -419,6 +419,32 @@ Static plugins without the subscribe hook still work fine: the hook falls back t
 
 This is currently a kit-react convention. See [Future directions](#future-directions) for the option of promoting it to a shared kit-core helper once a second reactive consumer (Vue, Svelte, …) or a second reactive plugin appears.
 
+##### Reading capabilities whose getters may throw
+
+Wallet-backed payer / identity plugins expose `client.payer` and `client.identity` as getters that **throw** when the wallet is disconnected (there is no signer to return; `undefined` would be a type lie). `useSyncExternalStore` propagates an exception from `getSnapshot` by unmounting the subtree, so the hook can't read the getter directly.
+
+Both `usePayer` and `useIdentity` read through a small `readOptional` helper that coerces thrown getters to `null`:
+
+```typescript
+function readOptional<T>(read: () => T): NonNullable<T> | null {
+    try {
+        return read() ?? null;
+    } catch {
+        return null;
+    }
+}
+
+function usePayer(): TransactionSigner | null {
+    const client = useClient<Partial<ClientWithPayer> & SubscribeToCapability<'payer'>>();
+    const getSnapshot = () => readOptional(() => client.payer);
+    const payer = useSyncExternalStore(client.subscribeToPayer ?? NOOP_SUBSCRIBE, getSnapshot, getSnapshot);
+    if (!('payer' in client)) throwMissingCapability('usePayer', '`client.payer`', '…');
+    return payer;
+}
+```
+
+This is load-bearing for wallet-backed flows: without the swallow, mounting `<WalletProvider>` before a wallet connects would crash the subtree on first render. The swallow is specifically for the "present but unavailable" state — the outer `'payer' in client` check still throws loudly when no payer plugin is installed at all, so missing-provider bugs are not hidden.
+
 #### Getting a kit signer from a wallet account
 
 For cases where you need a signer for an account other than the connected one (e.g. a different account within the same wallet, or multi-wallet flows), use `createSignerFromWalletAccount` from `@solana/wallet-account-signer` with any `UiWalletAccount`:
@@ -510,6 +536,15 @@ type LiveQueryResult<T> = {
      * state instead of a forever-loading spinner.
      */
     isLoading: boolean;
+    /**
+     * The slot `data` was observed at. `undefined` while loading, disabled, on
+     * server render, or when only an error has arrived. Drawn from the same
+     * snapshot as `data`, so the two always correspond: a later subscription
+     * notification at a higher slot updates both in the same commit. Useful
+     * for "as of slot X" freshness indicators, coordinating a refetch with a
+     * just-sent transaction's slot, and stale-data detection.
+     */
+    slot: Slot | undefined;
 };
 
 /**
@@ -555,6 +590,8 @@ function useTransactionConfirmation(
 - **Active, no data yet** — the query is running, waiting for the first value. `isLoading: true`. Render a spinner.
 - **Server render** — the query is inert on the server (no HTTP / WebSocket); from the consumer's perspective the value is still "pending", so the hook reports `isLoading: true` and hydration matches the first client render before the real store kicks in.
 
+Internally this is two static "empty" stores, not one: `disabledLiveStore` is tagged so `useLiveQueryResult` can report `isLoading: false`, while `nullLiveStore` (used on server builds) isn't, so the same snapshot shows `isLoading: true`. Collapsing them would force the caller to pick a single meaning for "empty", which only one of the three cases wants.
+
 Implementation sketch:
 
 ```tsx
@@ -563,13 +600,16 @@ function useBalance(address: Address | null): LiveQueryResult<Lamports> {
 
     const store = useLiveStore(
         (signal) => {
-            if (!address) return nullStore;
+            if (!address) return disabledLiveStore<Lamports>();
             return createReactiveStoreWithInitialValueAndSlotTracking({
                 abortSignal: signal,
                 rpcRequest: client.rpc.getBalance(address),
                 rpcSubscriptionRequest: client.rpcSubscriptions.accountNotifications(address),
-                rpcValueMapper: (response) => response.value,
-                rpcSubscriptionValueMapper: (notification) => notification.lamports,
+                // The factory unwraps the `SolanaRpcResponse` envelope before
+                // handing it to the mapper, so `value` here is already
+                // `Lamports`, not `{ value: Lamports, ... }`.
+                rpcValueMapper: (lamports) => lamports,
+                rpcSubscriptionValueMapper: ({ lamports }) => lamports,
             });
         },
         [client, address],
@@ -586,19 +626,19 @@ function useAccount<TData extends object>(
 
     const store = useLiveStore(
         (signal) => {
-            if (!address) return nullStore;
+            if (!address) return disabledLiveStore<Account<TData> | EncodedAccount | null>();
             return createReactiveStoreWithInitialValueAndSlotTracking({
                 abortSignal: signal,
                 rpcRequest: client.rpc.getAccountInfo(address, { encoding: 'base64' }),
                 rpcSubscriptionRequest: client.rpcSubscriptions.accountNotifications(address, { encoding: 'base64' }),
-                rpcValueMapper: (response) => {
-                    if (!response.value) return null;
-                    const encoded = parseBase64RpcAccount(address, response.value);
+                rpcValueMapper: (value) => {
+                    if (!value) return null;
+                    const encoded = parseBase64RpcAccount(address, value);
                     return decoder ? decodeAccount(encoded, decoder) : encoded;
                 },
-                rpcSubscriptionValueMapper: (notification) => {
-                    if (!notification.value) return null;
-                    const encoded = parseBase64RpcAccount(address, notification.value);
+                rpcSubscriptionValueMapper: (value) => {
+                    if (!value) return null;
+                    const encoded = parseBase64RpcAccount(address, value);
                     return decoder ? decodeAccount(encoded, decoder) : encoded;
                 },
             });
@@ -618,7 +658,7 @@ function useTransactionConfirmation(
 
     const store = useLiveStore(
         (signal) => {
-            if (!signature) return nullStore;
+            if (!signature) return disabledLiveStore<TransactionConfirmationStatus>();
             return createReactiveStoreWithInitialValueAndSlotTracking({
                 abortSignal: signal,
                 rpcRequest: client.rpc.getSignatureStatuses([signature]),
@@ -644,44 +684,71 @@ function useTransactionConfirmation(
 }
 ```
 
-Where `nullStore` is a static no-op store for disabled hooks, and `useLiveStore` is an internal helper that manages store creation, abort, and cleanup:
+Where the two static "empty" stores (`disabledLiveStore` for user-initiated disable, `nullLiveStore` for server render) and `useLiveStore` are internal helpers:
 
 ```typescript
-/** Static store that never emits — used when a hook is disabled (null address/signature). */
-const nullStore: ReactiveStore<any> = {
-    getState: () => undefined,
-    getError: () => undefined,
-    subscribe: () => () => {},
-};
+/**
+ * Static store that never emits. `useLiveQueryResult` reports `isLoading: true`
+ * so SSR matches the first client render (loading), and the real store kicks
+ * in once the client mounts.
+ */
+function nullLiveStore<T>(): ReactiveStore<T> {
+    return {
+        getState: () => undefined,
+        getError: () => undefined,
+        subscribe: () => () => {},
+    };
+}
+
+/**
+ * Static store tagged as "disabled". `useLiveQueryResult` detects the tag and
+ * reports `isLoading: false` — matches react-query / SWR semantics when the
+ * key is `null`, so disabled queries don't render forever-loading UI.
+ */
+const DISABLED = Symbol('DisabledLiveStore');
+
+function disabledLiveStore<T>(): ReactiveStore<T> & { readonly [DISABLED]: true } {
+    return {
+        [DISABLED]: true,
+        getState: () => undefined,
+        getError: () => undefined,
+        subscribe: () => () => {},
+    };
+}
 
 function useLiveStore<T>(
     factory: (signal: AbortSignal) => ReactiveStore<T>,
     deps: DependencyList,
 ): ReactiveStore<T> {
-    const storeRef = useRef<ReactiveStore<T>>();
-    const abortRef = useRef<AbortController>();
+    const abortRef = useRef<AbortController | null>(null);
 
-    useMemo(() => {
+    // The SSR branch lives inside the memo (not as an early return) so the
+    // hook sequence stays identical between server and client.
+    const store = useMemo(() => {
+        if (!__BROWSER__ && !__REACTNATIVE__) return nullLiveStore<T>();
         abortRef.current?.abort();
         const controller = new AbortController();
         abortRef.current = controller;
-        storeRef.current = factory(controller.signal);
+        return factory(controller.signal);
     }, deps);
 
     useEffect(() => () => abortRef.current?.abort(), []);
 
-    return storeRef.current!;
+    return store;
 }
 
 function useLiveQueryResult<T>(store: ReactiveStore<T>): LiveQueryResult<T> {
     const data = useSyncExternalStore(store.subscribe, store.getState);
     const error = useSyncExternalStore(store.subscribe, store.getError);
+    const disabled = (store as { [DISABLED]?: true })[DISABLED] === true;
 
     return useMemo(() => ({
         data: data?.value,
         error,
-        isLoading: data === undefined && error === undefined,
-    }), [data, error]);
+        isLoading: !disabled && data === undefined && error === undefined,
+        // Pulled from the same snapshot as `data` so the two always agree.
+        slot: data?.context.slot,
+    }), [data, error, disabled]);
 }
 ```
 
@@ -764,13 +831,13 @@ const { data: enabledLogs } = useSubscription(
 Wraps `client.sendTransaction()` and `client.sendTransactions()` (from the instruction-plan plugin) with React async state tracking. These are the primary way to send transactions in kit-react — they handle the full plan → sign → send → confirm lifecycle.
 
 ```typescript
-type ActionState<T> = {
+type ActionState<TArgs extends unknown[], TResult> = {
     /** The send function. Stable reference. */
-    send: (...args: any[]) => Promise<T>;
+    send: (...args: TArgs) => Promise<TResult>;
     /** Current status of the mutation. */
     status: 'idle' | 'running' | 'success' | 'error';
     /** The result on success, or undefined. */
-    data: T | undefined;
+    data: TResult | undefined;
     /** The error on failure, or undefined. */
     error: unknown;
     /** Reset state back to idle. Stable reference. */
@@ -782,13 +849,19 @@ type ActionState<T> = {
  * a transaction message, or a pre-built SingleTransactionPlan.
  * Asserts that the plan contains exactly one transaction.
  */
-function useSendTransaction(): ActionState<SuccessfulSingleTransactionPlanResult>;
+function useSendTransaction(): ActionState<
+    Parameters<ClientWithTransactionSending['sendTransaction']>,
+    SuccessfulSingleTransactionPlanResult
+>;
 
 /**
  * Send one or more transactions. Accepts instructions, an instruction plan,
  * a transaction message, or a pre-built TransactionPlan.
  */
-function useSendTransactions(): ActionState<TransactionPlanResult>;
+function useSendTransactions(): ActionState<
+    Parameters<ClientWithTransactionSending['sendTransactions']>,
+    TransactionPlanResult
+>;
 
 /**
  * Plan a single transaction without sending it. Same input shape as
@@ -796,14 +869,22 @@ function useSendTransactions(): ActionState<TransactionPlanResult>;
  * preview-then-send UX (confirmation modal showing fee / writable accounts).
  * The planned output feeds straight back into useSendTransaction.
  */
-function usePlanTransaction(): ActionState<SingleTransactionPlan['message']>;
+function usePlanTransaction(): ActionState<
+    Parameters<ClientWithTransactionPlanning['planTransaction']>,
+    SingleTransactionPlan['message']
+>;
 
 /**
  * Plan one or more transactions without sending them. Multi-transaction
  * variant of usePlanTransaction.
  */
-function usePlanTransactions(): ActionState<TransactionPlan>;
+function usePlanTransactions(): ActionState<
+    Parameters<ClientWithTransactionPlanning['planTransactions']>,
+    TransactionPlan
+>;
 ```
+
+`ActionState` is generic over both the argument tuple and the result so callers get full autocomplete on `send(...)` — the argument positions match whichever Kit method the hook wraps.
 
 Each hook asserts only the single capability it calls (`planTransaction`, `planTransactions`, `sendTransaction`, `sendTransactions`) so the React layer stays aligned with Kit's granular plugin model — a plugin that installs just `planTransaction` is enough to use `usePlanTransaction`.
 
@@ -839,9 +920,18 @@ function useSendTransaction() {
 // useAction implementation (abridged — see source for full details).
 function useAction<TArgs extends unknown[], TResult>(
     fn: (signal: AbortSignal, ...args: TArgs) => Promise<TResult>,
-): ActionState<TResult> {
+): ActionState<TArgs, TResult> {
     const [state, setState] = useState<{ status: string; data?: TResult; error?: unknown }>({ status: 'idle' });
     const currentControllerRef = useRef<AbortController | null>(null);
+
+    // Latest-ref keeps `send` stable across renders while always invoking the
+    // newest closure. The ref is updated in a post-commit effect (rather than
+    // during render) so a discarded concurrent render can't leave the ref
+    // pointing at a closure that captured never-committed props / context.
+    // `send` only runs from event handlers (post-commit), so the one-render
+    // lag is not observable in practice.
+    const fnRef = useRef(fn);
+    useEffect(() => { fnRef.current = fn; });
 
     const send = useCallback(async (...args: TArgs) => {
         // Abort any in-flight call — stale awaits reject with AbortError.
@@ -851,14 +941,14 @@ function useAction<TArgs extends unknown[], TResult>(
 
         setState({ status: 'running' });
         try {
-            const data = await getAbortablePromise(fn(controller.signal, ...args), controller.signal);
+            const data = await getAbortablePromise(fnRef.current(controller.signal, ...args), controller.signal);
             if (!controller.signal.aborted) setState({ status: 'success', data });
             return data;
         } catch (error) {
             if (!controller.signal.aborted) setState({ status: 'error', error });
             throw error;
         }
-    }, [fn]);
+    }, []); // stable — no `fn` dep thanks to the latest-ref above
 
     const reset = useCallback(() => {
         currentControllerRef.current?.abort();

@@ -1,8 +1,9 @@
-import type { Client, ClientWithPayer } from '@solana/kit';
+import type { Client } from '@solana/kit';
 import { litesvm } from '@solana/kit-plugin-litesvm';
 import { type ReactNode, useMemo } from 'react';
 
-import { ClientContext, useClient } from '../client-context';
+import { ClientContext } from '../client-context';
+import { useParentWithPayer } from '../internal/parent-assertions';
 
 /** Props for {@link LiteSvmProvider}. */
 export type LiteSvmProviderProps = {
@@ -31,12 +32,7 @@ export type LiteSvmProviderProps = {
  * ```
  */
 export function LiteSvmProvider({ children }: LiteSvmProviderProps) {
-    const parent = useClient();
-    if (!('payer' in parent)) {
-        throw new Error(
-            "LiteSvmProvider requires a payer. Wrap it in a WalletProvider (with role 'signer' or 'payer') or a PayerProvider.",
-        );
-    }
-    const client = useMemo(() => (parent as Client<ClientWithPayer>).use(litesvm()) as Client<object>, [parent]);
+    const parent = useParentWithPayer('LiteSvmProvider');
+    const client = useMemo(() => parent.use(litesvm()) as Client<object>, [parent]);
     return <ClientContext.Provider value={client}>{children}</ClientContext.Provider>;
 }

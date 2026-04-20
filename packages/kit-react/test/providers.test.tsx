@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
     IdentityProvider,
     KitClientProvider,
+    LiteSvmProvider,
     PayerProvider,
     PluginProvider,
     RpcProvider,
@@ -54,6 +55,23 @@ describe.skipIf(!__BROWSER__ && !__REACTNATIVE__)('providers', () => {
                     </RootWrap>,
                 ),
             ).toThrow(/RpcProvider requires a payer/);
+        } finally {
+            spy.mockRestore();
+        }
+    });
+
+    it('LiteSvmProvider throws when no payer is present', () => {
+        const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+            expect(() =>
+                render(
+                    <RootWrap>
+                        <LiteSvmProvider>
+                            <span>x</span>
+                        </LiteSvmProvider>
+                    </RootWrap>,
+                ),
+            ).toThrow(/LiteSvmProvider requires a payer/);
         } finally {
             spy.mockRestore();
         }

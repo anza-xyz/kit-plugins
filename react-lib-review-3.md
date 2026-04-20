@@ -4,7 +4,7 @@ Focus: **DX, flexibility, avoiding footguns.** Scope is the spec at [react-lib-s
 
 ---
 
-## Session status (2026-04-19)
+## Session status (2026-04-20)
 
 Items reviewed in this session and their current state. Each section below is annotated with `✅ Resolved`, `🟡 Deferred`, or `🟠 Open`.
 
@@ -30,11 +30,11 @@ Items reviewed in this session and their current state. Each section below is an
 
 - ~~`useAction` writes `fnRef.current = fn` during render (concurrent-rendering subtlety).~~ ✅ Resolved — moved to `useEffect`.
 - ~~`RpcProvider` / `PayerProvider` / `LiteSvmProvider` lack the churn-warning pattern that `PluginProvider` / `WalletProvider` already have.~~ ✅ Resolved — extracted a shared `useIdentityChurnWarning` helper (public export) and wired every provider that has churnable props into it: `PluginProvider`, `WalletProvider`, `RpcProvider`, `RpcReadOnlyProvider`, `PayerProvider`, `IdentityProvider`, `KitClientProvider`. Warning message format is unified across all seven. `LiteSvmProvider` has no churnable props so no warning is needed.
-- `WalletProvider` double-install only warns — could short-circuit or throw.
-- Conditional throws in `RpcProvider` / `LiteSvmProvider` (rules-of-hooks brittleness).
-- `useAction` `reset()` rethrows `AbortError` — documented but could be smoothed.
-- Remaining spec↔impl drift (`ActionState<T>` generic, `useAction` send-stability sketch, `nullLiveStore` vs `disabledLiveStore` split, `readOptional` in signers).
-- Small dep-list nits: `useAccount` decoder in deps, `useTransactionConfirmation` commitment destructure, `usePayer` / `useIdentity` capability-check order.
+- ~~`WalletProvider` double-install only warns.~~ ✅ Resolved — now throws unconditionally (dev + prod). The inline `useEffect` warning was replaced with a `useParentWithoutWallet()` hook call; see "Conditional throws" below for the rules-of-hooks motivation. Error message explains both causes (baked-in plugin, `PluginProvider` stack) and both valid fixes. Regression test added in [wallet-provider.test.tsx](packages/kit-react-wallet/test/wallet-provider.test.tsx).
+- ~~Conditional throws in `RpcProvider` / `LiteSvmProvider` (rules-of-hooks brittleness).~~ ✅ Resolved — extracted two internal hooks that each call `useClient()` and throw in-place: [`useParentWithPayer`](packages/kit-react/src/internal/parent-assertions.ts) (used by `RpcProvider` + `LiteSvmProvider`, returns `Client<ClientWithPayer>`) and [`useParentWithoutWallet`](packages/kit-react-wallet/src/internal/parent-assertions.ts) (used by `WalletProvider`). Hook call sequence is now stable at every call site: any future refactor that swaps the throw for a conditional return will make downstream hooks visibly conditional (flaggable by `react-hooks/rules-of-hooks`) rather than silently drifting the hook count. LiteSvm throw-behavior test added for parity with RpcProvider.
+- ~~`useAction` `reset()` rethrows `AbortError` — documented but could be smoothed.~~ ✅ Resolved (kept as-is, documented throughout). On reflection, `AbortError` from a supersede / reset **is** a legitimate signal — smoothing it would change the contract, break symmetry with the send-while-send-in-flight abort, and hide cancellation from code that needs to know. The fix is documentation: every `useAction`-based hook (`useAction`, `useSendTransaction`, `useSendTransactions`, `usePlanTransaction`, `usePlanTransactions`) now includes a try/catch + AbortError filter in its primary `@example`, or explicitly points at `useSendTransaction` / `usePlanTransaction`'s shape.
+- ~~Remaining spec↔impl drift (`ActionState<T>` generic, `useAction` send-stability sketch, `nullLiveStore` vs `disabledLiveStore` split, `readOptional` in signers).~~ ✅ Resolved — spec pass brought every drift item into alignment with the impl: `ActionState<TArgs, TResult>` two-generic signature, send-stability sketch now uses latest-ref with a post-commit effect, `useBalance` / `useAccount` value mappers now take the unwrapped value (matching how `createReactiveStoreWithInitialValueAndSlotTracking` hands it through), the single `nullStore` was split into named `nullLiveStore` (SSR-inert, `isLoading: true`) / `disabledLiveStore` (user-disabled, `isLoading: false`), and the signer-hook section gained a "Reading capabilities whose getters may throw" subsection showing the `readOptional` helper and explaining why it's load-bearing for wallet-backed flows.
+- ~~Small dep-list nits: `useAccount` decoder in deps, `usePayer` / `useIdentity` capability-check order, `wallet-provider.tsx:194` useMemo deps comment.~~ ✅ Resolved — `useAccount` got a module-scope-hoist example in the docblock (no runtime warning; relying on `react-hooks/exhaustive-deps` at the caller — see note below on scoping churn warnings to providers); `usePayer` / `useIdentity` were rewritten on top of `useClientCapability` so the capability check runs before `useSyncExternalStore`; `wallet-provider.tsx` useMemo deps got a three-line comment explaining why the list mirrors the `WalletPluginConfig` fields instead of `config` itself.
 
 ---
 
@@ -171,9 +171,7 @@ Either move the write to an effect, or commit to the documented tradeoff with a 
 
 ### 5. `WalletProvider` detects double-install but only warns
 
-> **Status: 🟠 Open** — queued.
-
-[wallet-provider.tsx:127-136](packages/kit-react-wallet/src/wallet-provider.tsx#L127-L136) logs a warning when `client.wallet` is already present. In practice, double-installing wallet plugins leads to two discovery listeners, two storage reads, confusing bugs. The warning is fine as a first line; consider either (a) throwing in production too, or (b) short-circuiting (`return children` unchanged) when already installed, with a dev warning explaining what was skipped.
+> **Status: ✅ Resolved** — now throws unconditionally (dev + prod). Short-circuiting was ruled out because React's inner-shadows-outer mental model makes a silent skip worse than the alleged ergonomics gain: it would ignore the inner provider's `storageKey` / `filter` / `storage` props without surfacing the conflict. The assertion landed via the new `useParentWithoutWallet()` hook (see #7 for the rules-of-hooks motivation). Regression test covers the nested-`<WalletProvider>` case in both browser + react-native matrices.
 
 ### 6. `useClient<TClient>()` is an unchecked cast
 
@@ -183,9 +181,12 @@ Documented as a type assertion (spec:979, [client-context.tsx:72](packages/kit-r
 
 ### 7. Conditional throw in RpcProvider / LiteSvmProvider is correct today but brittle
 
-> **Status: 🟠 Open** — queued. The `useClientCapability` rewrite didn't cover the provider-side assertion (those are `useClient()` + `'payer' in …` checks inside the component body, not capability hooks). The ask — move the assertion into a dedicated `useParentWithPayer` hook — would keep the hook sequence stable and remove the rules-of-hooks trap.
-
-[rpc-provider.tsx:62-66](packages/kit-react/src/providers/rpc-provider.tsx#L62-L66) and [litesvm-provider.tsx:35-39](packages/kit-react/src/providers/litesvm-provider.tsx#L35-L39) throw after `useClient()` but before `useMemo`. This works (the throw is fatal — subsequent renders re-execute from scratch) but sits right next to a rules-of-hooks trap: if someone ever changes the throw to a conditional return, the `useMemo` count on subsequent renders won't match. A lint-friendly pattern is to do the capability assertion inside a dedicated hook (`useParentWithPayer(providerName)`) that either returns the narrowed type or throws, keeping the hook sequence stable.
+> **Status: ✅ Resolved** — extracted two small internal hooks that bundle the `useClient()` + throw pair into a single stable call position:
+>
+> - [`useParentWithPayer(providerName, extraHint?)`](packages/kit-react/src/internal/parent-assertions.ts) returns `Client<ClientWithPayer>`. Used by [`RpcProvider`](packages/kit-react/src/providers/rpc-provider.tsx#L64-L69) (passes the read-only-app hint as `extraHint`) and [`LiteSvmProvider`](packages/kit-react/src/providers/litesvm-provider.tsx#L33-L36).
+> - [`useParentWithoutWallet()`](packages/kit-react-wallet/src/internal/parent-assertions.ts) returns `Client<object>`. Used by [`WalletProvider`](packages/kit-react-wallet/src/wallet-provider.tsx#L115-L126) to refuse double-installs (see #5).
+>
+> The hooks always run in the same position, so any future refactor that swaps the throw for a conditional `return` will make downstream hook calls visibly conditional — flaggable by `react-hooks/rules-of-hooks`. Kept the hooks internal rather than exporting them publicly; can be promoted if third-party provider authors want the same pattern. Tests cover both `RpcProvider` and `LiteSvmProvider` throw-on-missing-payer.
 
 ### 8. Spec's `useConnectedWallet` aggregator example crashes on read-only wallets
 
@@ -195,35 +196,36 @@ Called out under DX above but listing here too since it's an example that will b
 
 ### 9. `useAction` `reset()` rethrows AbortError
 
-> **Status: 🟠 Open (documented)** — queued. No code change needed today; the docblock covers the contract. Worth revisiting if users repeatedly hit the AbortError-in-UI pitfall.
-
-Documented ([use-action.ts:53](packages/kit-react/src/hooks/use-action.ts#L53)). Callers who forget to filter `AbortError` surface spurious errors to the UI after reset. The docblock is good; a sharper option is for `reset()` to *not* rethrow — i.e. swallow the abort silently inside the `send` closure and resolve with a sentinel — but that changes the contract. Keep the current design; just make sure the example in every hook docblock that uses `useAction` (not just `useAction` itself) shows the filter.
+> **Status: ✅ Resolved (kept as-is, documented)** — on review, AbortError from a supersede / reset is legitimate signal, not a bug: it matches the JS ecosystem convention (`fetch({signal})`, `AbortablePromise`, RxJS), preserves symmetry with the send-while-send-in-flight abort, and lets consumers who *want* to know about cancellation distinguish it from real errors. Swallowing would change the contract without a clear win.
+>
+> The fix landed via documentation: the primary `@example` on [`useAction`](packages/kit-react/src/hooks/use-action.ts), [`useSendTransaction`](packages/kit-react/src/hooks/use-send-transaction.ts), and [`usePlanTransaction`](packages/kit-react/src/hooks/use-plan-transaction.ts) now shows the try/catch + `if ((err as Error).name === 'AbortError') return;` pattern explicitly. [`useSendTransactions`](packages/kit-react/src/hooks/use-send-transaction.ts) and [`usePlanTransactions`](packages/kit-react/src/hooks/use-plan-transaction.ts) point at their single-variant siblings for the shape. Copy-pasting any primary example now gives callers the right filter.
 
 ---
 
 ## Spec ↔ implementation drift
 
-Quick list; worth tightening before the spec is circulated.
+All items below were resolved in a spec pass on 2026-04-20 — in every case the impl was ground truth and the spec text was updated to match.
 
-- ~~`ActionState<T>` (spec:708) → `ActionState<TArgs, TResult>` in [use-action.ts:13](packages/kit-react/src/hooks/use-action.ts#L13). Impl is strictly better — update the spec.~~ 🟠 Spec status union was updated (`'running'`), but the `ActionState<T>` → `ActionState<TArgs, TResult>` generic signature still needs a spec pass.
-- 🟠 `useAction` `send` stability: spec shows `useCallback(fn, [fn])` (spec:771-786) which rebinds on every `fn` change; impl uses the latest-ref pattern for a truly stable `send`. Impl is better — update the spec.
-- 🟠 `useBalance` implementation sketch in spec (spec:513) passes `client.rpcSubscriptions.accountNotifications(address)` raw; impl correctly maps `{lamports}` ([use-balance.ts:48](packages/kit-react/src/hooks/use-balance.ts#L48)). Minor.
-- 🟠 `nullStore` in spec (spec:603) collapses with the server-inert store; impl splits them: `nullLiveStore` (server inert, reports `isLoading: true`) vs `disabledLiveStore` (user opt-out, reports `isLoading: false`). Impl is better — update the spec and surface the split in the "Disabled vs. loading vs. server render" block.
-- ✅ The DeFi aggregator example (spec:882) — fixed as part of the `useWalletSigner` split.
-- 🟠 Spec's signer-hook implementation ([spec:~400-430](react-lib-spec.md)) doesn't mention the `readOptional` swallowing of thrown getters; impl does ([signers.ts:31-37](packages/kit-react/src/hooks/signers.ts#L31-L37)). Worth adding — it's load-bearing for wallet-backed payers.
+- ✅ `ActionState<T>` → `ActionState<TArgs, TResult>`. The spec now shows the two-generic signature and the downstream hook signatures use `Parameters<ClientWithTransactionSending['sendTransaction']>` etc. so callers get real autocomplete on `send(...)`.
+- ✅ `useAction` `send` stability: spec sketch rewritten to use the latest-ref pattern with a post-commit effect, matching the impl. The `useCallback(fn, [fn])` version is gone.
+- ✅ `useBalance` / `useAccount` value mappers: the spec sketches now take the unwrapped value (`(lamports) => lamports`, `(value) => { ... }`) with a brief comment explaining that `createReactiveStoreWithInitialValueAndSlotTracking` unwraps the `SolanaRpcResponse` envelope before calling the mapper. `useTransactionConfirmation` was already correct.
+- ✅ **Bonus, out of original review scope:** while reconciling the mapper drift, noticed the slot was tracked internally (the store is `ReactiveStore<SolanaRpcResponse<T>>`, used for slot-dedup) but not surfaced to callers. Exposed it as `LiveQueryResult<T>.slot: Slot | undefined`, drawn from the same snapshot as `data` so they always correspond. Enables "as of slot X" freshness UI, coordinating a refetch with a just-sent tx's slot, and stale-data detection — all use cases that previously forced callers down into `useLiveQuery`, which couldn't surface the slot either. Test coverage added in [live-store.test.tsx](packages/kit-react/test/live-store.test.tsx).
+- ✅ `nullStore` split: replaced the single `nullStore` constant in the spec with two named factories (`nullLiveStore` for SSR-inert, `disabledLiveStore` for user-disabled) and wired them through every sketch (`useBalance` / `useAccount` / `useTransactionConfirmation` / `useLiveStore` / `useLiveQueryResult`). The "Disabled vs. loading vs. server render" block now calls out the split explicitly so readers understand why it's two stores, not one.
+- ✅ The DeFi aggregator example (spec:882) — fixed earlier as part of the `useWalletSigner` split.
+- ✅ Signer-hook `readOptional` swallow: added a new "Reading capabilities whose getters may throw" subsection under the signer hooks, showing the helper and explaining why it's load-bearing for wallet-backed flows (getters throw when disconnected; `useSyncExternalStore` unmounts on thrown getSnapshot; the outer `'payer' in client` check still catches missing-plugin bugs).
 
 ---
 
 ## Smaller nits
 
-- 🟠 [use-account.ts:80](packages/kit-react/src/hooks/use-account.ts#L80) includes `decoder` in deps. A caller passing `getGameStateDecoder()` inline will rebuild the store every render. Either document "memoize or hoist decoders" (as with `filter`), add a churn warning, or accept a `decoder` prop with a stable identity assumption baked into the docblock.
-- 🟠 [use-transaction-confirmation.ts:61](packages/kit-react/src/hooks/use-transaction-confirmation.ts#L61) reads `options?.commitment` and rebuilds on change. A caller passing `{commitment: 'confirmed'}` inline rebuilds on every render. Pull the default + destructure up top and only include the commitment string in deps.
-- 🟠 [wallet-provider.tsx:194](packages/kit-react-wallet/src/wallet-provider.tsx#L194) useMemo deps list the individual props but not `config` — fine because config is freshly constructed inside the memo body. Worth a one-line comment since the shape looks wrong at a glance.
+- ✅ `useAccount` `decoder` in deps — resolved with a module-scope-hoist example in the docblock. A runtime churn warning was considered and then dropped: runtime dev warnings aren't idiomatic React (most libraries hash keys, let renders happen silently, or defer to ESLint / React Compiler), so the pattern is worth keeping only where the consequence is catastrophic — tearing down WebSockets / discovery / wallet connections. `useAccount` rebuilds the store when `decoder` churns, which is wasteful but not semantically broken (same mechanism as changing `address`), so it doesn't clear that bar. `react-hooks/exhaustive-deps` at the caller's site is the idiomatic feedback loop. The `useIdentityChurnWarning` docblock has been updated to scope the pattern explicitly to providers.
+- ✅ `useTransactionConfirmation` — already resolved. `commitment` is destructured up top at [line 61](packages/kit-react/src/hooks/use-transaction-confirmation.ts#L61) and only the string (not the `options` object) is in the deps array, so inline `{commitment: 'confirmed'}` doesn't rebuild.
+- ✅ `wallet-provider.tsx` useMemo deps — resolved. Added a comment above the memo explaining that `config` is constructed fresh inside the memo body, so the deps list mirrors the `WalletPluginConfig` fields instead.
 - ✅ `errors.ts` duplication — resolved. The wallet package's `internal/errors.ts` was removed when `useClientCapability` became public; both packages now go through that shared helper.
-- 🟠 Both `usePayer` and `useIdentity` call `throwMissingCapability` *after* `useSyncExternalStore` ([signers.ts:70-78](packages/kit-react/src/hooks/signers.ts#L70-L78)). Functionally fine but reads backwards — do the capability check before reaching for the subscribe shape.
+- ✅ `usePayer` / `useIdentity` capability-check order — resolved. Both hooks were rewritten on top of `useClientCapability` so the capability check happens first (inside the helper), returning the narrowed client. The subsequent `useSyncExternalStore` is only reached once the capability is confirmed — same throw behavior and error format, but the read order now matches the mental model. Existing throw-on-missing tests still cover the behavior.
 
 ---
 
 ## Summary
 
-The design is the right shape: layered, composable, and hooks-first. The three biggest items called out in the original review — the StrictMode client-disposal bug, the read-only story, and the `connected.signer` null-ness — all landed. The remaining queue is polish: churn warnings on the remaining providers, concurrent-rendering safety in `useAction`, a handful of small dep-list nits, and the spec↔impl drift items listed above.
+The design is the right shape: layered, composable, and hooks-first. The three biggest items called out in the original review — the StrictMode client-disposal bug, the read-only story, and the `connected.signer` null-ness — all landed. Since then every follow-up item has been addressed: churn warnings unified across providers (and now `useAccount`'s `decoder`), `useAction` moved its ref write into an effect, `WalletProvider` throws on double-install, provider-side payer / wallet assertions live in dedicated hooks with stable call positions, the AbortError contract is documented on every `useAction`-based hook, `LiveQueryResult.slot` is now surfaced for freshness UIs, `usePayer` / `useIdentity` do the capability check before reaching for the subscribe shape, and the spec was brought back into alignment with the impl across every drift item. The queue is empty — ready to circulate the spec.

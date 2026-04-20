@@ -62,3 +62,25 @@ describe.skipIf(!__BROWSER__ && !__REACTNATIVE__)('WalletProvider — prop-churn
         }
     });
 });
+
+describe.skipIf(!__BROWSER__ && !__REACTNATIVE__)('WalletProvider — double-install', () => {
+    it('throws when nested under another WalletProvider', () => {
+        // Silence React's error-boundary-less render noise.
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+            expect(() =>
+                render(
+                    <KitClientProvider chain="solana:devnet">
+                        <WalletProvider>
+                            <WalletProvider>
+                                <span>ok</span>
+                            </WalletProvider>
+                        </WalletProvider>
+                    </KitClientProvider>,
+                ),
+            ).toThrow(/wallet plugin is already installed/);
+        } finally {
+            error.mockRestore();
+        }
+    });
+});

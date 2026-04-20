@@ -1,18 +1,19 @@
-import type { Client, ClientWithPayer } from '@solana/kit';
+import type { Client } from '@solana/kit';
 import { solanaRpc, type SolanaRpcConfig } from '@solana/kit-plugin-rpc';
 import { type ReactNode, useMemo } from 'react';
 
-import { ClientContext, useClient } from '../client-context';
+import { ClientContext } from '../client-context';
 import { useIdentityChurnWarning } from '../dev-warnings';
+import { useParentWithPayer } from '../internal/parent-assertions';
 
 /**
  * Props for {@link RpcProvider}.
  *
  * Extends {@link SolanaRpcConfig} directly so that every option accepted by
  * the underlying `solanaRpc` plugin (`rpcUrl`, `rpcSubscriptionsUrl`,
- * `maxConcurrency`, `priorityFees`, `rpcConfig`, `rpcSubscriptionsConfig`,
- * `skipPreflight`) is available on the provider without duplication. Adding
- * new config on the plugin surfaces here automatically.
+ * `maxConcurrency`, `rpcConfig`, `rpcSubscriptionsConfig`, `skipPreflight`,
+ * `transactionConfig`) is available on the provider without duplication.
+ * Adding new config on the plugin surfaces here automatically.
  */
 export type RpcProviderProps = SolanaRpcConfig & {
     children?: ReactNode;
@@ -61,34 +62,31 @@ export type RpcProviderProps = SolanaRpcConfig & {
  * ```
  */
 export function RpcProvider({ children, ...config }: RpcProviderProps) {
-    const parent = useClient();
-    if (!('payer' in parent)) {
-        throw new Error(
-            "RpcProvider requires a payer. Wrap it in a WalletProvider (with role 'signer' or 'payer') or a PayerProvider. " +
-                'For read-only apps that only need RPC reads, skip RpcProvider and use PluginProvider with ' +
-                'solanaRpcConnection + solanaRpcSubscriptionsConnection instead.',
-        );
-    }
+    const parent = useParentWithPayer(
+        'RpcProvider',
+        'For read-only apps that only need RPC reads, skip RpcProvider and use PluginProvider with ' +
+            'solanaRpcConnection + solanaRpcSubscriptionsConnection instead.',
+    );
     const {
         maxConcurrency,
-        priorityFees,
         rpcConfig,
         rpcSubscriptionsConfig,
         rpcSubscriptionsUrl,
         rpcUrl,
         skipPreflight,
+        transactionConfig,
     } = config;
     const client = useMemo(
         () =>
-            (parent as Client<ClientWithPayer>).use(
+            parent.use(
                 solanaRpc({
                     maxConcurrency,
-                    priorityFees,
                     rpcConfig,
                     rpcSubscriptionsConfig,
                     rpcSubscriptionsUrl,
                     rpcUrl,
                     skipPreflight,
+                    transactionConfig,
                 }),
             ) as Client<object>,
         [
@@ -96,20 +94,20 @@ export function RpcProvider({ children, ...config }: RpcProviderProps) {
             rpcUrl,
             rpcSubscriptionsUrl,
             maxConcurrency,
-            priorityFees,
             skipPreflight,
             rpcConfig,
             rpcSubscriptionsConfig,
+            transactionConfig,
         ],
     );
-    // Dev-only: warn when the two object-valued config props churn identity
-    // across renders. A rebuilt plugin tears down the RPC subscription
-    // connection and any in-flight transactions. Primitive props (URLs,
-    // numbers, bigints) are stable by value so they're not tracked.
+    // Dev-only: warn when object-valued config props churn identity across
+    // renders. A rebuilt plugin tears down the RPC subscription connection
+    // and any in-flight transactions. Primitive props (URLs, numbers, bigints)
+    // are stable by value so they're not tracked.
     useIdentityChurnWarning({
         consequence:
             'the RPC plugin chain is rebuilt on every render, tearing down the subscriptions connection and any in-flight transactions.',
-        props: { rpcConfig, rpcSubscriptionsConfig },
+        props: { rpcConfig, rpcSubscriptionsConfig, transactionConfig },
         providerName: '<RpcProvider>',
     });
     return <ClientContext.Provider value={client}>{children}</ClientContext.Provider>;

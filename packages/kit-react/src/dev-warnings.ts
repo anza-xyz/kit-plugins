@@ -40,6 +40,16 @@ export type UseIdentityChurnWarningOptions = {
  * across consecutive renders — the canonical signal that the caller forgot
  * to memoize an inline value.
  *
+ * **Scoped to providers.** This pattern is intentionally reserved for
+ * provider components where a rebuild has a catastrophic consequence
+ * (tearing down WebSocket subscriptions, wallet discovery, the active
+ * connection) and the symptom doesn't look anything like the cause. For
+ * hook arguments, rely on `react-hooks/exhaustive-deps` at the caller's
+ * site — it flags unstable references in the caller's deps list, which is
+ * the idiomatic React feedback loop. Runtime churn warnings elsewhere in
+ * the ecosystem are rare, so we keep the unusual pattern where the severity
+ * actually justifies it.
+ *
  * All providers in this package use it to surface the same class of footgun
  * with a consistent error format. Third-party plugin authors shipping custom
  * providers can use it the same way, so the "I wrote an inline object and

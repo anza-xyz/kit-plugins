@@ -1,4 +1,4 @@
-import type { SolanaRpcResponse } from '@solana/kit';
+import type { Slot, SolanaRpcResponse } from '@solana/kit';
 import { type DependencyList, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 
 /**
@@ -24,6 +24,16 @@ export type LiveQueryResult<T> = {
     readonly error: unknown;
     /** `true` when no value and no error have arrived. */
     readonly isLoading: boolean;
+    /**
+     * The slot the current `data` was observed at. `undefined` while loading,
+     * disabled, on server render, or when the only signal so far is an error.
+     *
+     * Useful for "as of slot X" UI freshness indicators, coordinating a refetch
+     * with a just-sent transaction's slot, and stale-data detection. Drawn from
+     * the same snapshot as `data`, so the two always correspond — a later
+     * subscription notification that lands at a higher slot updates both.
+     */
+    readonly slot: Slot | undefined;
 };
 
 /**
@@ -149,6 +159,7 @@ export function useLiveQueryResult<T>(store: LiveStore<T>): LiveQueryResult<T> {
             data: state?.value,
             error,
             isLoading: !disabled && state === undefined && error === undefined,
+            slot: state?.context.slot,
         }),
         [state, error, disabled],
     );

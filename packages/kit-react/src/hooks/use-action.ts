@@ -82,12 +82,22 @@ const IDLE: InternalState<never> = { data: undefined, error: undefined, status: 
  * `send` stable while always calling the latest closure, so capturing fresh
  * values from render (e.g. `client`) is safe.
  *
- * @example Using the signal for true cancellation
+ * @example Using the signal for true cancellation (with AbortError filter)
  * ```tsx
  * const { send, status, error } = useAction((signal, query: string) =>
  *     fetch(`/api/search?q=${query}`, { signal }).then(r => r.json()),
  * );
- * await send('hello');
+ *
+ * async function onSubmit(query: string) {
+ *     try {
+ *         await send(query);
+ *     } catch (err) {
+ *         // Superseded by another send() or reset() — the hook's reactive
+ *         // state already reflects the new action; don't surface a stale error.
+ *         if ((err as Error).name === 'AbortError') return;
+ *         toast.error(String(err));
+ *     }
+ * }
  * ```
  *
  * @example Ignoring the signal
