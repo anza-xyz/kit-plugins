@@ -120,6 +120,97 @@ _See `solanaRpc` for available features, plus:_
     await client.airdrop(address('HQVxiMVDoV9jzG4tpoxmDZsNfWvaHXm8DGGv93Gka75v'), lamports(1_000_000_000n));
     ```
 
+## `solanaRpcReadOnly` plugin
+
+The `solanaRpcReadOnly` plugin sets up a read-only Solana RPC client in a single call. It installs an RPC connection, RPC Subscriptions, and minimum balance computation on the client, but does not install transaction planning or transaction sending.
+
+Unlike `solanaRpc`, this plugin does not require a `payer` on the client, making it ideal for dashboards, explorers, on-chain watchers, and other read-only flows.
+
+### Installation
+
+```ts
+import { createClient } from '@solana/kit';
+import { solanaRpcReadOnly } from '@solana/kit-plugin-rpc';
+
+const client = createClient().use(solanaRpcReadOnly({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
+```
+
+### Options
+
+All options are provided via a `SolanaRpcReadOnlyConfig` object:
+
+- `rpcUrl` **(required)**: URL of the Solana RPC endpoint.
+- `rpcSubscriptionsUrl`: URL of the RPC Subscriptions endpoint. Defaults to the `rpcUrl` with the protocol changed from `http` to `ws`.
+- `rpcConfig`: Optional configuration forwarded to `createSolanaRpc`.
+- `rpcSubscriptionsConfig`: Optional configuration forwarded to `createSolanaRpcSubscriptions`.
+
+### Features
+
+- `rpc`: Call any Solana RPC method.
+- `rpcSubscriptions`: Subscribe to Solana RPC notifications.
+- `getMinimumBalance`: Compute minimum lamports for rent exemption.
+
+## `solanaMainnetRpcReadOnly` plugin
+
+A convenience wrapper around `solanaRpcReadOnly` that types the connection as a mainnet URL, preventing accidental use of devnet-only features such as airdrops.
+
+### Installation
+
+```ts
+import { createClient } from '@solana/kit';
+import { solanaMainnetRpcReadOnly } from '@solana/kit-plugin-rpc';
+
+const client = createClient().use(solanaMainnetRpcReadOnly({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
+```
+
+### Features
+
+_See `solanaRpcReadOnly` for available features._
+
+## `solanaDevnetRpcReadOnly` plugin
+
+A convenience wrapper around `solanaRpcReadOnly` that defaults to the public devnet endpoint (`https://api.devnet.solana.com`) and includes airdrop support for requesting SOL from the faucet.
+
+### Installation
+
+```ts
+import { createClient } from '@solana/kit';
+import { solanaDevnetRpcReadOnly } from '@solana/kit-plugin-rpc';
+
+const client = createClient().use(solanaDevnetRpcReadOnly());
+```
+
+### Features
+
+_See `solanaRpcReadOnly` for available features, plus:_
+
+- `airdrop`: Request SOL from the devnet faucet.
+    ```ts
+    await client.airdrop(address('HQVxiMVDoV9jzG4tpoxmDZsNfWvaHXm8DGGv93Gka75v'), lamports(1_000_000_000n));
+    ```
+
+## `solanaLocalRpcReadOnly` plugin
+
+A convenience wrapper around `solanaRpcReadOnly` that defaults to `http://127.0.0.1:8899` for the RPC and `ws://127.0.0.1:8900` for subscriptions, and includes airdrop support.
+
+### Installation
+
+```ts
+import { createClient } from '@solana/kit';
+import { solanaLocalRpcReadOnly } from '@solana/kit-plugin-rpc';
+
+const client = createClient().use(solanaLocalRpcReadOnly());
+```
+
+### Features
+
+_See `solanaRpcReadOnly` for available features, plus:_
+
+- `airdrop`: Request SOL from the local validator faucet.
+    ```ts
+    await client.airdrop(address('HQVxiMVDoV9jzG4tpoxmDZsNfWvaHXm8DGGv93Gka75v'), lamports(1_000_000_000n));
+    ```
+
 ## `rpcConnection` plugin
 
 The `rpcConnection` plugin sets a provided `Rpc` instance on the client. This is the generic variant that works with any RPC API.

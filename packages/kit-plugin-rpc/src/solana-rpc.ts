@@ -22,23 +22,12 @@ import { rpcTransactionPlanner, TransactionPlannerConfig } from './transaction-p
  *
  * @typeParam TClusterUrl - The type of the RPC endpoint URL.
  */
-export type SolanaRpcConfig<TClusterUrl extends ClusterUrl = ClusterUrl> = {
+export type SolanaRpcConfig<TClusterUrl extends ClusterUrl = ClusterUrl> = SolanaRpcReadOnlyConfig<TClusterUrl> & {
     /**
      * The maximum number of concurrent transaction executions allowed.
      * Defaults to 10.
      */
     maxConcurrency?: number;
-    /** Optional configuration forwarded to {@link createSolanaRpc}. */
-    rpcConfig?: Parameters<typeof createSolanaRpc>[1];
-    /** Optional configuration forwarded to {@link createSolanaRpcSubscriptions}. */
-    rpcSubscriptionsConfig?: Parameters<typeof createSolanaRpcSubscriptions>[1];
-    /**
-     * URL of the Solana RPC Subscriptions endpoint.
-     * Defaults to the `rpcUrl` with the protocol changed from `http` to `ws`.
-     */
-    rpcSubscriptionsUrl?: TClusterUrl;
-    /** URL of the Solana RPC endpoint. */
-    rpcUrl: TClusterUrl;
     /**
      * Whether to skip the preflight simulation when sending transactions.
      *
@@ -89,12 +78,7 @@ export function solanaRpc<TClusterUrl extends ClusterUrl>(config: SolanaRpcConfi
     return <T extends ClientWithPayer>(client: T) =>
         pipe(
             client,
-            solanaRpcConnection<TClusterUrl>(config.rpcUrl, config.rpcConfig),
-            solanaRpcSubscriptionsConnection<TClusterUrl>(
-                config.rpcSubscriptionsUrl ?? (config.rpcUrl.replace(/^http/, 'ws') as TClusterUrl),
-                config.rpcSubscriptionsConfig,
-            ),
-            rpcGetMinimumBalance(),
+            solanaRpcReadOnly<TClusterUrl>(config),
             rpcTransactionPlanner(config.transactionConfig),
             rpcTransactionPlanExecutor({ maxConcurrency: config.maxConcurrency, skipPreflight: config.skipPreflight }),
             planAndSendTransactions(),
@@ -202,6 +186,171 @@ export function solanaLocalRpc(config?: Partial<SolanaRpcConfig<string>>) {
         pipe(
             client,
             solanaRpc({
+                ...config,
+                rpcSubscriptionsUrl: config?.rpcSubscriptionsUrl ?? 'ws://127.0.0.1:8900',
+                rpcUrl: config?.rpcUrl ?? 'http://127.0.0.1:8899',
+            }),
+            rpcAirdrop(),
+        );
+}
+
+/**
+ * Configuration for the read-only Solana RPC setup.
+ *
+ * A strict subset of {@link SolanaRpcConfig} that excludes every field only
+ * relevant to transaction sending (`maxConcurrency`, `skipPreflight`,
+ * `transactionConfig`) since {@link solanaRpcReadOnly} never installs the
+ * transaction-planning or transaction-sending halves.
+ *
+ * @typeParam TClusterUrl - The type of the RPC endpoint URL.
+ */
+export type SolanaRpcReadOnlyConfig<TClusterUrl extends ClusterUrl = ClusterUrl> = {
+    /** Optional configuration forwarded to {@link createSolanaRpc}. */
+    rpcConfig?: Parameters<typeof createSolanaRpc>[1];
+    /** Optional configuration forwarded to {@link createSolanaRpcSubscriptions}. */
+    rpcSubscriptionsConfig?: Parameters<typeof createSolanaRpcSubscriptions>[1];
+    /**
+     * URL of the Solana RPC Subscriptions endpoint.
+     * Defaults to the `rpcUrl` with the protocol changed from `http` to `ws`.
+     */
+    rpcSubscriptionsUrl?: TClusterUrl;
+    /** URL of the Solana RPC endpoint. */
+    rpcUrl: TClusterUrl;
+};
+
+/**
+ * Enhances a client with a read-only Solana RPC setup: the RPC connection,
+ * RPC Subscriptions, and minimum-balance computation. Unlike {@link solanaRpc},
+ * this plugin does *not* install transaction planning or transaction sending,
+ * so it has no `payer` prerequisite.
+ *
+ * Use this for dashboards, explorers, on-chain watchers, and other flows
+ * that only read from the chain.
+ *
+ * @param config - Configuration for the Solana RPC connection.
+ * @return A plugin that adds `client.rpc`, `client.rpcSubscriptions`, and
+ * `client.getMinimumBalance`.
+ *
+ * @example
+ * ```ts
+ * import { createClient } from '@solana/kit';
+ * import { solanaRpcReadOnly } from '@solana/kit-plugin-rpc';
+ *
+ * const client = createClient().use(solanaRpcReadOnly({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
+ * const { value: balance } = await client.rpc.getBalance(address).send();
+ * ```
+ *
+ * @see {@link solanaRpc}
+ * @see {@link solanaRpcConnection}
+ * @see {@link solanaRpcSubscriptionsConnection}
+ */
+export function solanaRpcReadOnly<TClusterUrl extends ClusterUrl>(config: SolanaRpcReadOnlyConfig<TClusterUrl>) {
+    return <T extends object>(client: T) =>
+        pipe(
+            client,
+            solanaRpcConnection<TClusterUrl>(config.rpcUrl, config.rpcConfig),
+            solanaRpcSubscriptionsConnection<TClusterUrl>(
+                config.rpcSubscriptionsUrl ?? (config.rpcUrl.replace(/^http/, 'ws') as TClusterUrl),
+                config.rpcSubscriptionsConfig,
+            ),
+            rpcGetMinimumBalance(),
+        );
+}
+
+/**
+ * Enhances a client with a read-only Solana mainnet RPC setup.
+ *
+ * Convenience wrapper around {@link solanaRpcReadOnly} that types the
+ * connection as a mainnet URL, preventing accidental use of devnet-only
+ * features such as airdrops.
+ *
+ * @param config - Configuration for the Solana RPC connection.
+ * @return A plugin that applies {@link solanaRpcReadOnly} with a mainnet URL type.
+ *
+ * @example
+ * ```ts
+ * import { createClient } from '@solana/kit';
+ * import { solanaMainnetRpcReadOnly } from '@solana/kit-plugin-rpc';
+ *
+ * const client = createClient()
+ *     .use(solanaMainnetRpcReadOnly({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
+ * ```
+ *
+ * @see {@link solanaRpcReadOnly}
+ * @see {@link solanaDevnetRpcReadOnly}
+ * @see {@link solanaLocalRpcReadOnly}
+ */
+export function solanaMainnetRpcReadOnly(config: SolanaRpcReadOnlyConfig<string>) {
+    return <T extends object>(client: T) =>
+        pipe(client, solanaRpcReadOnly<MainnetUrl>(config as SolanaRpcReadOnlyConfig<MainnetUrl>));
+}
+
+/**
+ * Enhances a client with a read-only Solana devnet RPC setup.
+ *
+ * Convenience wrapper around {@link solanaRpcReadOnly} that defaults to the
+ * public devnet endpoint and includes {@link rpcAirdrop} to request SOL from
+ * the faucet.
+ *
+ * @param config - Optional configuration overrides. Defaults `rpcUrl` to
+ * `https://api.devnet.solana.com`.
+ * @return A plugin that applies {@link solanaRpcReadOnly} with a devnet URL
+ * type and airdrop support.
+ *
+ * @example
+ * ```ts
+ * import { createClient } from '@solana/kit';
+ * import { solanaDevnetRpcReadOnly } from '@solana/kit-plugin-rpc';
+ *
+ * const client = createClient().use(solanaDevnetRpcReadOnly());
+ * await client.airdrop(myAddress, lamports(1_000_000_000n));
+ * ```
+ *
+ * @see {@link solanaRpcReadOnly}
+ * @see {@link solanaMainnetRpcReadOnly}
+ * @see {@link solanaLocalRpcReadOnly}
+ */
+export function solanaDevnetRpcReadOnly(config?: Partial<SolanaRpcReadOnlyConfig<string>>) {
+    return <T extends object>(client: T) =>
+        pipe(
+            client,
+            solanaRpcReadOnly<DevnetUrl>({
+                ...config,
+                rpcUrl: config?.rpcUrl ?? 'https://api.devnet.solana.com',
+            } as SolanaRpcReadOnlyConfig<DevnetUrl>),
+            rpcAirdrop(),
+        );
+}
+
+/**
+ * Enhances a client with a read-only Solana local validator RPC setup.
+ *
+ * Convenience wrapper around {@link solanaRpcReadOnly} that defaults to
+ * `http://127.0.0.1:8899` for the RPC and `ws://127.0.0.1:8900` for
+ * subscriptions, and includes {@link rpcAirdrop} for requesting SOL from
+ * the local faucet.
+ *
+ * @param config - Optional configuration overrides.
+ * @return A plugin that applies {@link solanaRpcReadOnly} with localhost
+ * defaults and airdrop support.
+ *
+ * @example
+ * ```ts
+ * import { createClient } from '@solana/kit';
+ * import { solanaLocalRpcReadOnly } from '@solana/kit-plugin-rpc';
+ *
+ * const client = createClient().use(solanaLocalRpcReadOnly());
+ * ```
+ *
+ * @see {@link solanaRpcReadOnly}
+ * @see {@link solanaMainnetRpcReadOnly}
+ * @see {@link solanaDevnetRpcReadOnly}
+ */
+export function solanaLocalRpcReadOnly(config?: Partial<SolanaRpcReadOnlyConfig<string>>) {
+    return <T extends object>(client: T) =>
+        pipe(
+            client,
+            solanaRpcReadOnly({
                 ...config,
                 rpcSubscriptionsUrl: config?.rpcSubscriptionsUrl ?? 'ws://127.0.0.1:8900',
                 rpcUrl: config?.rpcUrl ?? 'http://127.0.0.1:8899',
