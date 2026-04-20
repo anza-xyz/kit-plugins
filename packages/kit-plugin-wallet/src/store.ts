@@ -55,7 +55,7 @@ type WalletStoreState = {
 export function createWalletStore(config: WalletPluginConfig): WalletStore {
     // -- SSR guard: on the server, return an inert stub ---------------------
 
-    if (!__BROWSER__) {
+    if (!__BROWSER__ || __REACTNATIVE__) {
         const ssrSnapshot: WalletState = Object.freeze({
             connected: null,
             status: 'pending' as const,
@@ -120,7 +120,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
 
     let snapshot: WalletState = deriveSnapshot(state);
 
-    function setState(updates: Partial<WalletStoreState>): void {
+    function updateState(updates: Partial<WalletStoreState>): void {
         const prev = state;
         state = { ...state, ...updates };
 
@@ -160,6 +160,9 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
 
     // -- Wallet discovery --------------------------------------------------
 
+    // `getWallets()` is a wallet-standard function that returns the `Wallets` API
+    // This includes a `get()` function to get the current list of wallets, and
+    // an `on()` function to subscribe to wallet registration/unregistration events.
     const registry = getWallets();
 
     function filterWallet(uiWallet: UiWallet): boolean {
@@ -178,11 +181,11 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         );
     }
 
-    setState({ wallets: buildWalletList() });
+    updateState({ wallets: buildWalletList() });
 
     // Listen for new wallets being registered
     const unsubRegister = registry.on('register', () => {
-        setState({ wallets: buildWalletList() });
+        updateState({ wallets: buildWalletList() });
     });
 
     // Listen for wallets being unregistered — if the connected wallet is removed, disconnect
@@ -201,7 +204,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             void storage?.removeItem(storageKey);
         }
 
-        setState(updates);
+        updateState(updates);
     });
 
     // -- Wallet-initiated events -------------------------------------------
@@ -219,7 +222,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
     function setConnected(account: UiWalletAccount, wallet: UiWallet, options?: { persist?: boolean }): void {
         const signer = tryCreateSigner(account);
         resubscribeToWalletEvents(wallet);
-        setState({ account, connectedWallet: wallet, signer, status: 'connected' });
+        updateState({ account, connectedWallet: wallet, signer, status: 'connected' });
         if (options?.persist !== false) {
             persistAccount(account, wallet);
         }
@@ -267,7 +270,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
                 updates = { ...updates, ...handleFeaturesChanged() };
             }
 
-            setState(updates);
+            updateState(updates);
 
             if (updates.account) {
                 persistAccount(updates.account, refreshed);
@@ -306,7 +309,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         userHasSelected = true;
         cancelReconnect();
         const generation = ++connectGeneration;
-        setState({ status: 'connecting' });
+        updateState({ status: 'connecting' });
 
         try {
             const connectFeature = getWalletFeature(
@@ -351,7 +354,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
 
         const currentWallet = state.connectedWallet;
         const generation = connectGeneration;
-        setState({ status: 'disconnecting' });
+        updateState({ status: 'disconnecting' });
 
         try {
             if (currentWallet.features.includes(StandardDisconnect)) {
@@ -373,7 +376,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         walletEventsCleanup?.();
         walletEventsCleanup = null;
 
-        setState({
+        updateState({
             account: null,
             connectedWallet: null,
             signer: null,
@@ -393,7 +396,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         }
         userHasSelected = true;
         const signer = tryCreateSigner(account);
-        setState({ account, signer });
+        updateState({ account, signer });
         persistAccount(account, state.connectedWallet);
     }
 
@@ -423,7 +426,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         userHasSelected = true;
         cancelReconnect();
         const generation = ++connectGeneration;
-        setState({ status: 'connecting' });
+        updateState({ status: 'connecting' });
 
         try {
             // getWalletFeature throws WalletStandardError if not supported.
@@ -469,14 +472,14 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             if (userHasSelected) return;
 
             if (!savedKey) {
-                setState({ status: 'disconnected' });
+                updateState({ status: 'disconnected' });
                 return;
             }
 
             const separatorIndex = savedKey.lastIndexOf(':');
             if (separatorIndex === -1) {
                 // Malformed saved key.
-                setState({ status: 'disconnected' });
+                updateState({ status: 'disconnected' });
                 await storage.removeItem(storageKey);
                 return;
             }
@@ -494,18 +497,18 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
                 })
             ) {
                 // Wallet registered but doesn't pass the filter.
-                setState({ status: 'disconnected' });
+                updateState({ status: 'disconnected' });
                 await storage.removeItem(storageKey);
             } else {
                 // Wallet not registered yet — wait for it to appear.
-                setState({ status: 'reconnecting' });
+                updateState({ status: 'reconnecting' });
 
                 // Change state to disconnected after 3s
                 // Note that the listener stays alive until reconnect is cancelled, so this is
                 // just affecting how long the UI shows reconnecting
                 const statusTimeout = setTimeout(() => {
                     if (!userHasSelected && state.status === 'reconnecting') {
-                        setState({ status: 'disconnected' });
+                        updateState({ status: 'disconnected' });
                     }
                 }, 3000);
 
@@ -535,12 +538,12 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
                                 clearTimeout(statusTimeout);
                                 unsubRegisterForReconnect();
                                 reconnectCleanup = null;
-                                setState({ status: 'disconnected' });
+                                updateState({ status: 'disconnected' });
                                 await storage.removeItem(storageKey);
                             }
                         })().catch(() => {
                             // Reconnect failed — fall back to disconnected.
-                            setState({ status: 'disconnected' });
+                            updateState({ status: 'disconnected' });
                         }),
                 );
 
@@ -552,17 +555,17 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         })().catch(() => {
             // Storage read failed — fall back to disconnected.
             if (!userHasSelected) {
-                setState({ status: 'disconnected' });
+                updateState({ status: 'disconnected' });
             }
         });
     } else {
         // No auto-connect: immediately transition from 'pending' to 'disconnected'.
-        setState({ status: 'disconnected' });
+        updateState({ status: 'disconnected' });
     }
 
     async function attemptSilentReconnect(savedAddress: string, uiWallet: UiWallet): Promise<void> {
         const generation = ++connectGeneration;
-        setState({ status: 'reconnecting' });
+        updateState({ status: 'reconnecting' });
 
         try {
             const connectFeature = getWalletFeature(
@@ -578,7 +581,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             const allAccounts = refreshedWallet.accounts;
 
             if (allAccounts.length === 0) {
-                setState({ status: 'disconnected' });
+                updateState({ status: 'disconnected' });
                 await storage?.removeItem(storageKey);
                 return;
             }
@@ -589,7 +592,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             setConnected(activeAccount, refreshedWallet, { persist: false });
         } catch {
             if (generation === connectGeneration) {
-                setState({ status: 'disconnected' });
+                updateState({ status: 'disconnected' });
                 await storage?.removeItem(storageKey);
             }
         }
