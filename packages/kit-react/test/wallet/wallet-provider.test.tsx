@@ -1,9 +1,9 @@
-import { KitClientProvider } from '@solana/kit-react';
 import { render } from '@testing-library/react';
 import type { UiWallet } from '@wallet-standard/ui';
 import { describe, expect, it, vi } from 'vitest';
 
-import { WalletProvider } from '../src';
+import { KitClientProvider } from '../../src';
+import { WalletProvider } from '../../src/wallet';
 
 // Hoisted to module scope — stable identity across renders.
 const stableFilter = (_w: UiWallet) => true;

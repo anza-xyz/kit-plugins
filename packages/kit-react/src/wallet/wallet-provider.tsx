@@ -1,5 +1,17 @@
-import { type WalletPluginConfig } from '@solana/kit-plugin-wallet';
-import { type ReactNode } from 'react';
+import {
+    walletIdentity,
+    walletPayer,
+    type WalletPluginConfig,
+    walletSigner,
+    walletWithoutSigner,
+} from '@solana/kit-plugin-wallet';
+import { type ReactNode, useMemo } from 'react';
+
+import { useChain } from '../client-context';
+import { useIdentityChurnWarning } from '../dev-warnings';
+import { PluginProvider } from '../providers/plugin-provider';
+import { useParentWithoutWallet } from './internal/parent-assertions';
+
 /**
  * The role the connected wallet plays on the client.
  *
@@ -12,6 +24,7 @@ import { type ReactNode } from 'react';
  *   is set; manual signer access via {@link useConnectedWallet}.
  */
 export type WalletRole = 'identity' | 'none' | 'payer' | 'signer';
+
 /**
  * Props for {@link WalletProvider}.
  *
@@ -30,6 +43,7 @@ export type WalletProviderProps = Omit<WalletPluginConfig, 'chain'> & {
      */
     role?: WalletRole;
 };
+
 /**
  * Installs one of the wallet plugins ({@link walletSigner},
  * {@link walletPayer}, {@link walletIdentity}, {@link walletWithoutSigner})
@@ -92,5 +106,56 @@ export type WalletProviderProps = Omit<WalletPluginConfig, 'chain'> & {
  * </KitClientProvider>
  * ```
  */
-export declare function WalletProvider({ autoConnect, children, filter, role, storage, storageKey, }: WalletProviderProps): import("react/jsx-runtime").JSX.Element;
-//# sourceMappingURL=wallet-provider.d.ts.map
+export function WalletProvider({
+    autoConnect,
+    children,
+    filter,
+    role = 'signer',
+    storage,
+    storageKey,
+}: WalletProviderProps) {
+    const chain = useChain();
+    // Refuse to double-install. Common cause: a pre-built client passed to
+    // `KitClientProvider` already has `walletSigner()` (or similar) baked in,
+    // and then `<WalletProvider>` is also mounted below — two plugin
+    // instances would compete for the same `client.wallet` namespace (two
+    // discovery listeners, two storage reads, inconsistent state). Also
+    // catches `<PluginProvider plugin={walletSigner(...)}>` stacks with
+    // `<WalletProvider>` nested underneath. Throwing (vs short-circuiting)
+    // keeps React's normal "inner provider shadows outer" mental model — a
+    // silent skip would ignore the inner's `storageKey` / `filter` / `storage`
+    // without warning.
+    useParentWithoutWallet();
+
+    // Dev-only: warn when `filter` / `storage` / `storageKey` prop identity
+    // changes across renders. Any of these churning rebuilds the plugin,
+    // which re-creates the wallet store (tearing down discovery + the active
+    // connection) on every render. One render's change is noise; sustained
+    // churn (common cause: inline `filter={(w) => …}`) is almost always a
+    // missing `useMemo` or a function literal that should be hoisted.
+    useIdentityChurnWarning({
+        consequence:
+            'the wallet plugin is rebuilt on every render, which re-creates the wallet store and tears down discovery / the active connection.',
+        props: { filter, storage, storageKey },
+        providerName: '<WalletProvider>',
+    });
+
+    // Deps list the five individual props that feed `config` rather than
+    // `config` itself — `config` is constructed fresh inside the memo body on
+    // every render, so including it would defeat the memoization. Keep the
+    // deps array in sync with the `WalletPluginConfig` fields above.
+    const plugin = useMemo(() => {
+        const config: WalletPluginConfig = { autoConnect, chain, filter, storage, storageKey };
+        switch (role) {
+            case 'identity':
+                return walletIdentity(config);
+            case 'none':
+                return walletWithoutSigner(config);
+            case 'payer':
+                return walletPayer(config);
+            case 'signer':
+                return walletSigner(config);
+        }
+    }, [role, chain, autoConnect, storage, storageKey, filter]);
+    return <PluginProvider plugin={plugin}>{children}</PluginProvider>;
+}

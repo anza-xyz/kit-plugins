@@ -5,9 +5,9 @@
 
 ## Summary
 
-A React library for building Solana dApps using Kit. The library is structured in layers: a wallet-agnostic core (`@solana/kit-react`) for client, chain, RPC, signer, and live-data plumbing, and a companion wallet package (`@solana/kit-react-wallet`) for the `WalletProvider` and wallet hooks. Optional SWR and TanStack Query adapters sit on top.
+A React library for building Solana dApps using Kit. The library ships as a single package (`@solana/kit-react`) with a wallet-agnostic core entry and three optional subpaths: `@solana/kit-react/wallet` for the `WalletProvider` and wallet hooks, `@solana/kit-react/swr` and `@solana/kit-react/query` for cache-library adapters. Each subpath declares its runtime peer dependency as optional, so apps that don't use wallet (or SWR, or TanStack Query) don't pull those packages in.
 
-Core covers live on-chain data, transaction sending, and signer access. `kit-react-wallet` adds wallet discovery, connection lifecycle, and wallet-specific hooks. One-shot RPC reads are delegated to the consumer's choice of cache library (SWR, TanStack Query, or plain `fetch` + `useEffect`).
+Core covers live on-chain data, transaction sending, and signer access. The wallet subpath adds wallet discovery, connection lifecycle, and wallet-specific hooks. One-shot RPC reads are delegated to the consumer's choice of cache library (SWR, TanStack Query, or plain `fetch` + `useEffect`).
 
 The Kit client is an implementation detail — consumers interact with providers and hooks, not plugins and clients directly. Power users can access the client for imperative use.
 
@@ -15,14 +15,14 @@ The Kit client is an implementation detail — consumers interact with providers
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│  @solana/kit-react/swr          (optional adapter)   │
-│  @solana/kit-react/query        (optional adapter)   │
+│  @solana/kit-react/swr          (optional subpath)   │
+│  @solana/kit-react/query        (optional subpath)   │
 │  Generic bridges + mutation hooks                    │
 ├──────────────────────────────────────────────────────┤
-│  @solana/kit-react-wallet       (wallet bindings)    │
+│  @solana/kit-react/wallet       (optional subpath)   │
 │  WalletProvider, wallet hooks                        │
 ├──────────────────────────────────────────────────────┤
-│  @solana/kit-react              (core)               │
+│  @solana/kit-react              (core entry)         │
 │  KitClientProvider, RPC / payer / identity providers │
 │  Signer hooks, live data hooks, action hooks         │
 │  useSyncExternalStore for all reactive state         │
@@ -33,7 +33,9 @@ The Kit client is an implementation detail — consumers interact with providers
 └──────────────────────────────────────────────────────┘
 ```
 
-The split keeps the core wallet-agnostic: apps that don't use a user wallet (read-only dashboards, keypair-driven bots, server flows) can depend on `kit-react` alone without pulling in wallet-standard transitively. Wallet adapters (MWA, WalletConnect, privy, …) peer-depend on `kit-react-wallet`, not core, so the dependency graph matches reality: `adapter → wallet → core`. Signer hooks (`usePayer`, `useIdentity`) live in core and stay reactive against wallet-installed signers via the [`subscribeTo<Capability>` convention](#subscribetocapability-convention) — no type-level dependency on the wallet package.
+Subpaths keep the core wallet-agnostic: apps that don't use a user wallet (read-only dashboards, keypair-driven bots, server flows) can depend on `@solana/kit-react` alone without installing `@solana/kit-plugin-wallet` — the subpath's peer dependency is declared optional, tree-shaking keeps the wallet code out of the core bundle, and the TypeScript surface only surfaces wallet names to code that imports from `/wallet`. Signer hooks (`usePayer`, `useIdentity`) live in core and stay reactive against wallet-installed signers via the [`subscribeTo<Capability>` convention](#subscribetocapability-convention) — no type-level dependency on the wallet subpath.
+
+A single-package layout (rather than a sibling `@solana/kit-react-wallet` package) is intentional. React bindings share a `ClientContext`, a React peer dep, and a shared type surface (`LiveQueryResult`, `ActionState`, `ChainIdentifier`) — splitting them across packages multiplies the "two copies of the same lib in the dep tree" failure mode without corresponding benefit. Kit's runtime plugins split cleanly because they don't share mutable singletons; React bindings don't, so they follow the ecosystem norm (wagmi, TanStack, Redux, Apollo) and consolidate with subpath exports.
 
 ### Principles
 
@@ -56,25 +58,18 @@ The split keeps the core wallet-agnostic: apps that don't use a user wallet (rea
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
     "@solana/kit": "^6.x",
-    "@solana/kit-plugin-instruction-plan": "^1.x"
-  }
-}
-```
-
-No dependency on `@solana/kit-plugin-wallet` or wallet-standard — apps without a user wallet can depend on core alone. `@solana/kit-plugin-instruction-plan` provides the `client.sendTransaction()` / `client.planTransaction()` methods used by `useSendTransaction` and `useAction` flows — the actual implementation comes from whichever RPC plugin is installed (`kit-plugin-rpc`, `kit-plugin-litesvm`, etc.).
-
-Apps that need wallet connection also depend on the companion wallet package:
-
-```json
-{
-  "peerDependencies": {
-    "@solana/kit-react-wallet": "^1.x",
+    "@solana/kit-plugin-instruction-plan": "^1.x",
     "@solana/kit-plugin-wallet": "^1.x"
+  },
+  "peerDependenciesMeta": {
+    "@solana/kit-plugin-wallet": { "optional": true }
   }
 }
 ```
 
-See the [wallet package](#wallet-package-solanakit-react-wallet) section for its API.
+`@solana/kit-plugin-wallet` is an **optional** peer dependency — required only if you import from `@solana/kit-react/wallet`. Apps that don't use wallet (read-only dashboards, bots, server flows) install the other peers and skip it. `@solana/kit-plugin-instruction-plan` provides the `client.sendTransaction()` / `client.planTransaction()` methods used by `useSendTransaction` and `useAction` flows — the actual implementation comes from whichever RPC plugin is installed (`kit-plugin-rpc`, `kit-plugin-litesvm`, etc.).
+
+The SWR and TanStack Query adapters follow the same pattern: `swr` and `@tanstack/react-query` are declared as optional peer dependencies, pulled in only when their respective subpath is imported.
 
 > **Note:** `@solana/kit-plugin-wallet` is currently under development and not yet released. It provides the `walletWithoutSigner`, `walletPayer`, `walletIdentity`, and `walletSigner` plugins that `WalletProvider` installs.
 
@@ -86,7 +81,7 @@ See the [wallet package](#wallet-package-solanakit-react-wallet) section for its
 
 ```tsx
 import { KitClientProvider, RpcProvider } from '@solana/kit-react';
-import { WalletProvider } from '@solana/kit-react-wallet';
+import { WalletProvider } from '@solana/kit-react/wallet';
 
 function App() {
     return (
@@ -139,11 +134,11 @@ const client = createClient()
 
 Ownership switches with the prop: when omitted, `KitClientProvider` calls `client[Symbol.dispose]()` on unmount; when provided, the caller owns disposal. Pre-built clients with baked-in plugins should not also mount the matching React provider (e.g. a client built with `walletSigner()` shouldn't have `<WalletProvider>` below it) — in development, the double-installing provider emits a `console.warn`.
 
-**`WalletProvider`** *(from `@solana/kit-react-wallet`)* — wraps one of the wallet plugins. Reads the chain from the enclosing `KitClientProvider` via context. Accepts an optional `role` prop that defaults to `"signer"` — the common case where the wallet both pays for and signs transactions. Other roles are available for advanced setups: `"payer"` (wallet pays fees only), `"identity"` (wallet signs but a relayer pays), or `"none"` (wallet UI only, manual signer access via `useConnectedWallet()`). These map to the `walletSigner`, `walletPayer`, `walletIdentity`, and `walletWithoutSigner` plugins respectively. Also accepts `autoConnect`, `storage`, `storageKey`, and `filter` props, forwarded to the underlying wallet plugin.
+**`WalletProvider`** *(from `@solana/kit-react/wallet`)* — wraps one of the wallet plugins. Reads the chain from the enclosing `KitClientProvider` via context. Accepts an optional `role` prop that defaults to `"signer"` — the common case where the wallet both pays for and signs transactions. Other roles are available for advanced setups: `"payer"` (wallet pays fees only), `"identity"` (wallet signs but a relayer pays), or `"none"` (wallet UI only, manual signer access via `useConnectedWallet()`). These map to the `walletSigner`, `walletPayer`, `walletIdentity`, and `walletWithoutSigner` plugins respectively. Also accepts `autoConnect`, `storage`, `storageKey`, and `filter` props, forwarded to the underlying wallet plugin.
 
 **`PayerProvider`** and **`IdentityProvider`** — set `client.payer` and `client.identity` respectively from an explicit signer. Use these when the payer or identity is not the connected wallet (e.g. a backend relayer, a different keypair).
 
-**`RpcProvider`** — wraps `solanaRpc` (the full RPC chain: RPC, subscriptions, transaction planning, execution). Its props extend `SolanaRpcConfig` from `@solana/kit-plugin-rpc` directly (`rpcUrl`, `rpcSubscriptionsUrl`, `priorityFees`, `maxConcurrency`, `rpcConfig`, `rpcSubscriptionsConfig`, `skipPreflight`) so the provider surface stays zero-drift with the plugin. Asserts that `"payer" in client` at render time — if no ancestor provider has set a payer, it throws a message that also points at the read-only escape path below.
+**`RpcProvider`** — wraps `solanaRpc` (the full RPC chain: RPC, subscriptions, transaction planning, execution). Its props extend `SolanaRpcConfig` from `@solana/kit-plugin-rpc` directly (`rpcUrl`, `rpcSubscriptionsUrl`, `maxConcurrency`, `rpcConfig`, `rpcSubscriptionsConfig`, `skipPreflight`, `transactionConfig`) so the provider surface stays zero-drift with the plugin. Asserts that `"payer" in client` at render time — if no ancestor provider has set a payer, it throws a message that also points at the read-only escape path below.
 
 *Read-only apps* that don't send transactions (explorers, dashboards, watchers, server-side scripts) should use `RpcReadOnlyProvider` instead of `RpcProvider`. It wraps `solanaRpcReadOnly` — `client.rpc`, `client.rpcSubscriptions`, and `client.getMinimumBalance` — without the transaction-planning / sending halves, so no `WalletProvider` / `PayerProvider` is required:
 
@@ -181,7 +176,7 @@ Internally applies each plugin via `client.use()`. This means any Kit plugin is 
 
 ```tsx
 import { KitClientProvider, PayerProvider, RpcProvider } from '@solana/kit-react';
-import { WalletProvider } from '@solana/kit-react-wallet';
+import { WalletProvider } from '@solana/kit-react/wallet';
 
 // Wallet is identity, relayer pays
 <KitClientProvider chain="solana:mainnet">
@@ -232,12 +227,12 @@ Hooks in this library fall into four return-shape categories. Knowing which cate
 | --------------- | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Live data       | `{ data, error, isLoading }` (reactive, read-only) | `useBalance`, `useAccount`, `useTransactionConfirmation`, `useLiveQuery`                                                                                                                           |
 | Tracked action  | `{ send, status, data, error, reset }` (async)     | `useSendTransaction`, `useSendTransactions`, `useAction`                                                                                                                                           |
-| Bare callback   | `(args) => Promise<result>` (stable fn)            | `useConnectWallet`, `useDisconnectWallet`, `useSelectAccount`, `useSignMessage`, `useSignIn` (all from `@solana/kit-react-wallet`)                                                                 |
+| Bare callback   | `(args) => Promise<result>` (stable fn)            | `useConnectWallet`, `useDisconnectWallet`, `useSelectAccount`, `useSignMessage`, `useSignIn` (all from `@solana/kit-react/wallet`)                                                                 |
 | Reactive value  | Raw value (reactive, read-only)                    | `useClient`, `useChain`, `usePayer`, `useIdentity`, `useWallets`, `useWalletStatus`, `useConnectedWallet`, `useWalletSigner`, `useWalletState`                                                     |
 
 The variance is intentional — each shape matches a distinct semantic class. Live-data hooks return `isLoading` because they fetch. Tracked actions return `status` because they model an async lifecycle with state. Bare callbacks return a function because they're fire-and-forget (callers can wrap them in `useAction` when they want status tracking). Reactive-value hooks return the value directly because the null vs available case is the only state worth exposing.
 
-> **Looking for wallet hooks?** `useWallets`, `useWalletStatus`, `useConnectedWallet`, `useWalletSigner`, `useWalletState`, `useConnectWallet`, `useDisconnectWallet`, `useSelectAccount`, `useSignMessage`, and `useSignIn` live in `@solana/kit-react-wallet`. Import them from there.
+> **Looking for wallet hooks?** `useWallets`, `useWalletStatus`, `useConnectedWallet`, `useWalletSigner`, `useWalletState`, `useConnectWallet`, `useDisconnectWallet`, `useSelectAccount`, `useSignMessage`, and `useSignIn` live at the `@solana/kit-react/wallet` subpath. Import them from there.
 
 #### Client access
 
@@ -279,7 +274,7 @@ function useChain<T extends IdentifierString = SolanaChain>(): T;
 
 #### Wallet
 
-*All wallet hooks are exported from `@solana/kit-react-wallet`, not `@solana/kit-react`.*
+*All wallet hooks are exported from the `@solana/kit-react/wallet` subpath, not the core `@solana/kit-react` entry.*
 
 ##### State hooks
 

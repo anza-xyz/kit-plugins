@@ -1,5 +1,6 @@
 import type { Client } from '@solana/kit';
-import { useClient } from '@solana/kit-react';
+
+import { useClient } from '../../client-context';
 
 /**
  * @internal

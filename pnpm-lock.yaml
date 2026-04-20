@@ -262,10 +262,19 @@ importers:
       '@solana/wallet-standard-chains':
         specifier: ^1.1.1
         version: 1.1.1
+      '@solana/wallet-standard-features':
+        specifier: ^1.3.0
+        version: 1.3.0
       '@wallet-standard/base':
         specifier: ^1.1.0
         version: 1.1.0
+      '@wallet-standard/ui':
+        specifier: ^1.0.1
+        version: 1.0.1
     devDependencies:
+      '@solana/kit-plugin-wallet':
+        specifier: workspace:*
+        version: link:../kit-plugin-wallet
       '@testing-library/react':
         specifier: ^16.1.0
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -275,37 +284,6 @@ importers:
       '@types/react-dom':
         specifier: ^19.0.0
         version: 19.2.3(@types/react@19.2.14)
-      react:
-        specifier: ^19.0.0
-        version: 19.2.5
-      react-dom:
-        specifier: ^19.0.0
-        version: 19.2.5(react@19.2.5)
-
-  packages/kit-react-wallet:
-    dependencies:
-      '@solana/kit':
-        specifier: ^6.8.0
-        version: 6.8.0(typescript@5.9.3)
-      '@solana/kit-plugin-wallet':
-        specifier: workspace:*
-        version: link:../kit-plugin-wallet
-      '@solana/kit-react':
-        specifier: workspace:*
-        version: link:../kit-react
-      '@solana/wallet-standard-features':
-        specifier: ^1.3.0
-        version: 1.3.0
-      '@wallet-standard/ui':
-        specifier: ^1.0.1
-        version: 1.0.1
-    devDependencies:
-      '@testing-library/react':
-        specifier: ^16.1.0
-        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      '@types/react':
-        specifier: ^19.0.0
-        version: 19.2.14
       react:
         specifier: ^19.0.0
         version: 19.2.5

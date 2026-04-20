@@ -1,9 +1,9 @@
-import { ClientContext } from '@solana/kit-react';
 import { act, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { describe, expect, it } from 'vitest';
 
-import { useConnectedWallet, useWallets, useWalletSigner, useWalletState, useWalletStatus } from '../src';
+import { ClientContext } from '../../src';
+import { useConnectedWallet, useWallets, useWalletSigner, useWalletState, useWalletStatus } from '../../src/wallet';
 import { createClientWithWallet, createFakeWallet } from './_setup';
 
 function wrap(client: object): (props: { children: ReactNode }) => ReactNode {

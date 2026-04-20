@@ -6,7 +6,7 @@ export default defineConfig([
     { ignores: ['**/dist/**', '**/tsup.config.ts'] },
     { files: ['**/*.{ts,tsx}', '**/*.(c|m)?js'], extends: [solanaConfig] },
     {
-        files: ['packages/kit-react/**/*.{ts,tsx}', 'packages/kit-react-wallet/**/*.{ts,tsx}'],
+        files: ['packages/kit-react/**/*.{ts,tsx}'],
         extends: [reactConfig],
         rules: {
             // Tell `exhaustive-deps` to inspect our custom hook factories.

@@ -1,5 +1,6 @@
 import type { ClientWithWallet } from '@solana/kit-plugin-wallet';
-import { useClientCapability } from '@solana/kit-react';
+
+import { useClientCapability } from '../../client-capability';
 
 /**
  * @internal

@@ -139,7 +139,7 @@ export type KitClientProviderProps = {
      *
      * **Warning.** If the provided client already has plugins baked in (e.g.
      * `walletSigner`), do not also mount the matching provider below
-     * (`<WalletProvider>` from `@solana/kit-react-wallet`), or the plugin will
+     * (`<WalletProvider>` from `@solana/kit-react/wallet`), or the plugin will
      * be installed twice — a dev-mode warning flags this in the provider that
      * double-installs. The
      * `chain` prop only sets context for `useChain`; it does not reconfigure
@@ -162,7 +162,7 @@ export type KitClientProviderProps = {
  * `createClient()`; power users can pass their own via the `client` prop for
  * SSR, custom factories, or shared clients across trees. Every other provider
  * in the library ({@link PayerProvider}, {@link RpcProvider},
- * `<WalletProvider>` from `@solana/kit-react-wallet`, …) composes on top of
+ * `<WalletProvider>` from `@solana/kit-react/wallet`, …) composes on top of
  * this one via `.use()`, so every app must mount a `KitClientProvider` at the
  * top of its tree.
  *

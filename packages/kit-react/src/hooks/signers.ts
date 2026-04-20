@@ -54,7 +54,7 @@ function readOptional<T>(read: () => T): NonNullable<T> | null {
  * ```
  *
  * @see {@link useIdentity}
- * @see `useConnectedWallet` (from `@solana/kit-react-wallet`) — returns the
+ * @see `useConnectedWallet` (from `@solana/kit-react/wallet`) — returns the
  *   wallet signer directly for flows where you want to gate rendering on the
  *   full wallet connection.
  */

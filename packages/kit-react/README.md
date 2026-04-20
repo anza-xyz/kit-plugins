@@ -1,26 +1,29 @@
 # `@solana/kit-react`
 
-React bindings for [Solana Kit](https://github.com/anza-xyz/kit): providers, signer hooks, and live on-chain data hooks.
+React bindings for [Solana Kit](https://github.com/anza-xyz/kit): providers, signer hooks, wallet hooks, and live on-chain data hooks.
 
 `@solana/kit-react` is a thin layer over the framework-agnostic Kit plugins. You compose providers that mirror the plugin chain, and consume state via focused hooks (`useBalance`, `usePayer`, `useSendTransaction`, …) — no manual `useSyncExternalStore`, `AbortController`, or subscription plumbing.
 
-Wallet connection (`<WalletProvider>`, `useWallets`, `useConnectedWallet`, …) lives in the companion package [`@solana/kit-react-wallet`](../kit-react-wallet/README.md). Apps that don't need a user wallet can depend on `kit-react` alone.
+The package exposes two entry points:
+
+- `@solana/kit-react` — core providers and hooks (RPC, signer, live-data, transactions). Wallet-agnostic: read-only dashboards, keypair-driven bots, and server-side flows can depend on core alone.
+- `@solana/kit-react/wallet` — `<WalletProvider>` and wallet hooks for apps that connect to a user wallet. Peer-depends on `@solana/kit-plugin-wallet` (declared optional, so apps that don't use wallet don't pull it in).
 
 ## Install
 
 ```sh
-# Core
+# Core — enough for read-only apps, bots, and server flows.
 pnpm add @solana/kit-react @solana/kit @solana/kit-plugin-instruction-plan react
 
-# Plus the wallet bindings if your app connects to a user wallet
-pnpm add @solana/kit-react-wallet @solana/kit-plugin-wallet
+# Add the wallet plugin if your app connects to a user wallet.
+pnpm add @solana/kit-plugin-wallet
 ```
 
 ## Quickstart
 
 ```tsx
 import { KitClientProvider, RpcProvider, useBalance } from '@solana/kit-react';
-import { WalletProvider, useConnectedWallet } from '@solana/kit-react-wallet';
+import { useConnectedWallet, useConnectWallet, useWallets, WalletProvider } from '@solana/kit-react/wallet';
 
 function App() {
     return (
@@ -41,6 +44,16 @@ function Dashboard() {
     if (!connected) return <ConnectButton />;
     if (isLoading) return <span>Loading balance…</span>;
     return <span>Balance: {balance?.toString()} lamports</span>;
+}
+
+function ConnectButton() {
+    const wallets = useWallets();
+    const connect = useConnectWallet();
+    return wallets.map(w => (
+        <button key={w.name} onClick={() => connect(w)}>
+            Connect {w.name}
+        </button>
+    ));
 }
 ```
 
@@ -76,7 +89,7 @@ Don't mount a downstream provider whose plugin is already baked into the supplie
 
 ### `RpcProvider` / `LiteSvmProvider`
 
-`RpcProvider` installs `solanaRpc` (the full RPC plugin chain: RPC, subscriptions, transaction planning, execution). Props extend `SolanaRpcConfig` from [`@solana/kit-plugin-rpc`](../kit-plugin-rpc/README.md) directly, so any option the plugin accepts (`rpcUrl`, `rpcSubscriptionsUrl`, `priorityFees`, `maxConcurrency`, `rpcConfig`, `rpcSubscriptionsConfig`, `skipPreflight`) is available as a prop. Requires `client.payer` to be set by an ancestor — throws at render otherwise.
+`RpcProvider` installs `solanaRpc` (the full RPC plugin chain: RPC, subscriptions, transaction planning, execution). Props extend `SolanaRpcConfig` from [`@solana/kit-plugin-rpc`](../kit-plugin-rpc/README.md) directly, so any option the plugin accepts (`rpcUrl`, `rpcSubscriptionsUrl`, `maxConcurrency`, `rpcConfig`, `rpcSubscriptionsConfig`, `skipPreflight`, `transactionConfig`) is available as a prop. Requires `client.payer` to be set by an ancestor — throws at render otherwise.
 
 ```tsx
 <RpcProvider rpcUrl="https://api.mainnet-beta.solana.com" rpcSubscriptionsUrl="wss://api.mainnet-beta.solana.com" />
@@ -134,13 +147,30 @@ Installs any Kit plugin without needing a plugin-specific React wrapper.
 
 Plugin identity must be stable across renders — memoize it in the caller.
 
-### Wallet connection
+### `<WalletProvider>`
 
-`<WalletProvider>` and wallet-specific hooks ship in [`@solana/kit-react-wallet`](../kit-react-wallet/README.md). Mount it anywhere under `KitClientProvider` to install one of the wallet plugins and expose wallet state / actions to children.
+Ships under the `@solana/kit-react/wallet` entry. Installs a wallet plugin under the enclosing `<KitClientProvider>`; the `role` prop selects which plugin variant is installed:
+
+| `role`                 | Plugin                | Sets `client.payer` | Sets `client.identity` |
+| ---------------------- | --------------------- | ------------------- | ---------------------- |
+| `"signer"` _(default)_ | `walletSigner`        | ✅                  | ✅                     |
+| `"payer"`              | `walletPayer`         | ✅                  | —                      |
+| `"identity"`           | `walletIdentity`      | —                   | ✅                     |
+| `"none"`               | `walletWithoutSigner` | —                   | —                      |
+
+Props: `role`, `autoConnect`, `storage`, `storageKey`, `filter` — all forwarded to the underlying plugin.
+
+```tsx
+import { WalletProvider } from '@solana/kit-react/wallet';
+
+<WalletProvider autoConnect role="signer">
+    <App />
+</WalletProvider>;
+```
+
+See the [wallet section](#wallet-bindings) below for state / action hooks and the gotchas around `filter` / `storage` identity.
 
 ## Hooks
-
-> **Looking for wallet hooks?** `useWallets`, `useWalletStatus`, `useConnectedWallet`, `useWalletSigner`, `useWalletState`, `useConnectWallet`, `useDisconnectWallet`, `useSelectAccount`, `useSignMessage`, and `useSignIn` live in [`@solana/kit-react-wallet`](../kit-react-wallet/README.md).
 
 ### Client access
 
@@ -160,7 +190,7 @@ const payer = usePayer(); // TransactionSigner | null
 if (!payer) return <ConnectButton />;
 ```
 
-For direct access to the connected wallet's signer (gated on wallet connection), use `useWalletSigner()` from `@solana/kit-react-wallet`.
+For direct access to the connected wallet's signer (gated on wallet connection), use `useWalletSigner()` from `@solana/kit-react/wallet`.
 
 #### `subscribeTo<Capability>` convention
 
@@ -277,6 +307,146 @@ const { data } = useQuery({
 });
 ```
 
+## Wallet bindings
+
+Imported from `@solana/kit-react/wallet`. Peer-depends on `@solana/kit-plugin-wallet`; the peer dependency is declared optional, so apps that don't use wallet don't pull it in.
+
+### State hooks
+
+Granular hooks that each subscribe to a single slice of wallet state:
+
+- `useWallets()` — all discovered wallets.
+- `useWalletStatus()` — `'pending' | 'disconnected' | 'connecting' | 'connected' | 'disconnecting' | 'reconnecting'`.
+- `useConnectedWallet()` — the active `{ account, wallet }` or `null`.
+- `useWalletSigner()` — the connected signer, or `null` for read-only wallets / when disconnected.
+- `useWalletState()` — the full snapshot.
+
+**Prefer the focused hooks** in components that only care about one slice. A wallet-discovery event won't re-render a component that only reads `useWalletStatus()`, and vice versa. Reach for `useWalletState()` when you genuinely want the one-object shape (debug panels, dev tools, components that need everything at once) — it re-renders on every state change, same as the focused hooks combined.
+
+#### `useConnectedWallet` and `useWalletSigner` are deliberately separate
+
+A connected wallet is not necessarily a signing wallet. Read-only (watch-only) wallets, or wallets that don't support the configured chain, surface as `useConnectedWallet() !== null && useWalletSigner() === null`. Splitting them keeps that contract in the types — a single combined `{ account, signer, wallet }` shape tempts callers into writing `connected.signer.signTransactions(...)` without a null check, which crashes silently on read-only wallets.
+
+```tsx
+function SendButton() {
+    const connected = useConnectedWallet();
+    const signer = useWalletSigner();
+
+    if (!connected) return <ConnectButton />;
+    if (!signer) return <span>This wallet is read-only — connect a signing wallet to send.</span>;
+    // ... safe to call signer.signTransactions(...)
+}
+```
+
+### Action hooks
+
+Verb-first hooks that return stable function references:
+
+- `useConnectWallet()` — `(wallet) => Promise<accounts>`.
+- `useDisconnectWallet()` — `() => Promise<void>`.
+- `useSelectAccount()` — `(account) => void`.
+- `useSignMessage()` — `(message) => Promise<SignatureBytes>`.
+- `useSignIn()` — `(wallet, input?) => Promise<SolanaSignInOutput>` (Sign In With Solana).
+
+### Signer access
+
+`usePayer` / `useIdentity` live in core (`@solana/kit-react`); they stay reactive against wallet changes via the `subscribeToPayer` / `subscribeToIdentity` convention that `@solana/kit-plugin-wallet` implements.
+
+For flows that specifically need the connected wallet's signer (independent of the payer/identity roles), use `useWalletSigner()`.
+
+### Signing transactions separately from sending
+
+For the common end-to-end flow, reach for `useSendTransaction` from core — it routes through whichever signing capability the connected wallet supports (`solana:signAndSendTransaction` or `solana:signTransaction` + submit-to-RPC) without the caller having to care.
+
+Some flows genuinely need a sign-only step — DeFi aggregators that submit the signed bytes to their own API, multi-sig coordination, transactions that go through a relayer. There's no named hook for this, by design; compose `useAction` with the relevant Kit signing function and guard on `useWalletSigner()`:
+
+```tsx
+import { useAction } from '@solana/kit-react';
+import { useWalletSigner } from '@solana/kit-react/wallet';
+import { signTransactionMessageWithSigners } from '@solana/kit';
+
+function SignAndSubmit() {
+    const signer = useWalletSigner();
+    const {
+        send: sign,
+        status,
+        error,
+    } = useAction(async (signal, message: TransactionMessageWithFeePayerAndBlockhashLifetime) => {
+        if (!signer) throw new Error('No signing wallet connected.');
+        const signed = await signTransactionMessageWithSigners(message);
+        return submitToAggregator(signed, { signal });
+    });
+    // …
+}
+```
+
+Kit's signing functions cover the four input/output combinations (`signTransactionMessageWithSigners` / `partiallySignTransactionMessageWithSigners` / `signTransaction` / `partiallySignTransaction`) — use whichever fits the flow.
+
+#### Wallet-feature caveat
+
+**Sign-only is not portable across all wallets.** Some wallets — notably some mobile / MWA-style wallets and some hardware setups — only implement `solana:signAndSendTransaction` and refuse to hand back a signed transaction at all. Calling a sign-only Kit function against such a wallet's signer will throw.
+
+If your flow genuinely requires sign-only, gate UI on the connected wallet's features:
+
+```tsx
+const connected = useConnectedWallet();
+const canSignOnly = connected?.wallet.features.includes('solana:signTransaction') ?? false;
+
+if (!canSignOnly) {
+    return (
+        <span>
+            This wallet only supports sign-and-send. Connect a wallet that supports separate signing to continue.
+        </span>
+    );
+}
+```
+
+Or filter such wallets out at `<WalletProvider filter={…}>` so they never reach the picker in the first place:
+
+```tsx
+const requireSeparateSigning = (w: UiWallet) => w.features.includes('solana:signTransaction');
+
+<WalletProvider filter={requireSeparateSigning}>…</WalletProvider>;
+```
+
+Prefer the filter-at-the-top approach for apps that fundamentally require sign-only — it keeps the rest of the app from handling the degraded case.
+
+### Gotchas
+
+#### Keep `filter`, `storage`, and `storageKey` identity stable
+
+`<WalletProvider>` rebuilds the underlying wallet plugin when any of `filter`, `storage`, or `storageKey` change identity. Rebuilding re-creates the wallet store, which tears down discovery and drops the active connection. For `filter` in particular — it's a function — inline-declaring it with `filter={(w) => …}` means a fresh identity on every render, which means _the wallet disconnects on every render_.
+
+A dev-mode warning fires after two consecutive renders of identity churn on any of these props. To stay stable, either hoist to module scope or memoize:
+
+```tsx
+// ✅ Hoist to module scope (cleanest — identity is stable forever)
+const requireSignAndSend = (w: UiWallet) => w.features.includes('solana:signAndSendTransaction');
+
+function App() {
+    return (
+        <WalletProvider filter={requireSignAndSend}>
+            <AppContent />
+        </WalletProvider>
+    );
+}
+
+// ✅ useMemo when the filter depends on render-time values
+function App({ allowedNames }: { allowedNames: readonly string[] }) {
+    const filter = useMemo(() => (w: UiWallet) => allowedNames.includes(w.name), [allowedNames]);
+    return <WalletProvider filter={filter}>…</WalletProvider>;
+}
+
+// ❌ Inline arrow — fresh identity every render, wallet rebuilds constantly
+<WalletProvider filter={w => w.features.includes('solana:signAndSendTransaction')}>…</WalletProvider>;
+```
+
+The same rule applies to `storage` (custom storage adapters) and `storageKey` if you compute it dynamically.
+
+#### Don't mount `<WalletProvider>` on a client that already has a wallet plugin
+
+If you passed a pre-built client to `<KitClientProvider client={…}>` that already calls `walletSigner()` / `walletPayer()` / etc., don't also mount `<WalletProvider>` below — the plugin gets installed twice and the two instances compete for `client.wallet`. The provider throws in both dev and prod when it detects a double-install; the fix is to drop either the bundled plugin or the provider.
+
 ## Third-party extensions
 
 Any Kit plugin works with `kit-react` out of the box via `PluginProvider`. A plugin author can optionally ship typed convenience hooks, either with the bare `useClient<T>()` cast or — recommended — with `useClientCapability<T>()` which adds a runtime-checked narrowing so missing providers fail loudly at mount with a consistent error message:
@@ -302,7 +472,7 @@ export function useAsset(address: Address) {
 
 `@solana/kit-react` is SSR-safe by default. You can mount every provider and call every hook during server render without firing network traffic or producing hydration mismatches.
 
-- **Providers render cleanly on the server** — `KitClientProvider`, `RpcProvider`, etc. all render without throwing. No side effects run until client-side hydration. `<WalletProvider>` from `@solana/kit-react-wallet` follows the same rules.
+- **Providers render cleanly on the server** — `KitClientProvider`, `RpcProvider`, `WalletProvider`, etc. all render without throwing. No side effects run until client-side hydration.
 - **Live-data hooks are inert on the server.** `useBalance`, `useAccount`, `useTransactionConfirmation`, `useLiveQuery`, and `useSubscription` return `{ data: undefined, isLoading: true }` during SSR without issuing HTTP or opening WebSockets. The real fetch + subscription kicks in on the client. Design components for the loading state; hydration then swaps in real data as it arrives (just like any client-only fetch).
 
 ### Per-request clients
@@ -327,7 +497,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
 ## See also
 
-- [`@solana/kit-react-wallet`](../kit-react-wallet/README.md) — `<WalletProvider>` and wallet hooks.
 - [`@solana/kit-plugin-wallet`](../kit-plugin-wallet/README.md)
 - [`@solana/kit-plugin-rpc`](../kit-plugin-rpc/README.md)
 - [`@solana/kit-plugin-instruction-plan`](../kit-plugin-instruction-plan/README.md)
