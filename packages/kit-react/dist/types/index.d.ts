@@ -2,12 +2,16 @@ export { ChainContext, ClientContext, KitClientProvider, useChain, useClient } f
 export type { ChainIdentifier, KitClientProviderProps } from './client-context';
 export { useClientCapability } from './client-capability';
 export type { UseClientCapabilityOptions } from './client-capability';
+export { useIdentityChurnWarning } from './dev-warnings';
+export type { UseIdentityChurnWarningOptions } from './dev-warnings';
 export { PluginProvider } from './providers/plugin-provider';
 export type { PluginProviderProps } from './providers/plugin-provider';
 export { IdentityProvider, PayerProvider } from './providers/payer-provider';
 export type { IdentityProviderProps, PayerProviderProps } from './providers/payer-provider';
 export { RpcProvider } from './providers/rpc-provider';
 export type { RpcProviderProps } from './providers/rpc-provider';
+export { RpcReadOnlyProvider } from './providers/rpc-read-only-provider';
+export type { RpcReadOnlyProviderProps } from './providers/rpc-read-only-provider';
 export { LiteSvmProvider } from './providers/litesvm-provider';
 export type { LiteSvmProviderProps } from './providers/litesvm-provider';
 export { useIdentity, usePayer } from './hooks/signers';

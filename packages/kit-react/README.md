@@ -86,25 +86,21 @@ Don't mount a downstream provider whose plugin is already baked into the supplie
 
 #### Read-only apps
 
-If your app doesn't send transactions — explorers, dashboards, on-chain watchers, server-side scripts — skip `RpcProvider` and install just the RPC + subscriptions plugins via `PluginProvider`. This drops the payer requirement entirely: no `WalletProvider`, no `PayerProvider` needed.
+If your app doesn't send transactions — explorers, dashboards, on-chain watchers, server-side scripts — use `RpcReadOnlyProvider` instead of `RpcProvider`. It installs `client.rpc`, `client.rpcSubscriptions`, and `client.getMinimumBalance` without the transaction-planning / sending halves, so no `WalletProvider` or `PayerProvider` is needed upstream.
 
 ```tsx
-import { KitClientProvider, PluginProvider } from '@solana/kit-react';
-import { solanaRpcConnection, solanaRpcSubscriptionsConnection } from '@solana/kit-plugin-rpc';
+import { KitClientProvider, RpcReadOnlyProvider } from '@solana/kit-react';
 
 <KitClientProvider chain="solana:mainnet">
-    <PluginProvider
-        plugins={[
-            solanaRpcConnection('https://api.mainnet-beta.solana.com'),
-            solanaRpcSubscriptionsConnection('wss://api.mainnet-beta.solana.com'),
-        ]}
-    >
+    <RpcReadOnlyProvider rpcUrl="https://api.mainnet-beta.solana.com">
         <Dashboard />
-    </PluginProvider>
+    </RpcReadOnlyProvider>
 </KitClientProvider>;
 ```
 
-`useBalance`, `useAccount`, `useTransactionConfirmation`, `useLiveQuery`, and `useSubscription` all work against this lighter stack — only the transaction-sending hooks (`useSendTransaction`, `useSendTransactions`) need the full `RpcProvider`.
+`useBalance`, `useAccount`, `useTransactionConfirmation`, `useLiveQuery`, and `useSubscription` all work against this lighter stack; only the transaction hooks (`useSendTransaction`, `useSendTransactions`, `usePlanTransaction`, `usePlanTransactions`) require the full `RpcProvider`.
+
+For more fine-grained read-only stacks (e.g. `client.rpc` only, no subscriptions), compose the individual plugins via `PluginProvider` and `solanaRpcConnection` / `solanaRpcSubscriptionsConnection` from [`@solana/kit-plugin-rpc`](../kit-plugin-rpc/README.md).
 
 ### `PayerProvider` / `IdentityProvider`
 

@@ -102,6 +102,69 @@ export function solanaRpc<TClusterUrl extends ClusterUrl>(config: SolanaRpcConfi
 }
 
 /**
+ * Configuration for the read-only Solana RPC setup.
+ *
+ * A strict subset of {@link SolanaRpcConfig} — excludes every field that
+ * only matters for transaction sending (`maxConcurrency`, `priorityFees`,
+ * `skipPreflight`) since {@link solanaRpcReadOnly} never installs the
+ * transaction-planning or transaction-sending halves.
+ *
+ * @typeParam TClusterUrl - The type of the RPC endpoint URL.
+ */
+export type SolanaRpcReadOnlyConfig<TClusterUrl extends ClusterUrl = ClusterUrl> = {
+    /** Optional configuration forwarded to {@link createSolanaRpc}. */
+    rpcConfig?: Parameters<typeof createSolanaRpc>[1];
+    /** Optional configuration forwarded to {@link createSolanaRpcSubscriptions}. */
+    rpcSubscriptionsConfig?: Parameters<typeof createSolanaRpcSubscriptions>[1];
+    /**
+     * URL of the Solana RPC Subscriptions endpoint.
+     * Defaults to the `rpcUrl` with the protocol changed from `http` to `ws`.
+     */
+    rpcSubscriptionsUrl?: TClusterUrl;
+    /** URL of the Solana RPC endpoint. */
+    rpcUrl: TClusterUrl;
+};
+
+/**
+ * Enhances a client with a read-only Solana RPC setup: the RPC connection,
+ * RPC Subscriptions, and minimum-balance computation. Unlike {@link solanaRpc},
+ * this plugin does *not* install transaction planning or transaction sending,
+ * so it has no `payer` prerequisite.
+ *
+ * Use this for dashboards, explorers, on-chain watchers, and other flows
+ * that only read from the chain.
+ *
+ * @param config - Configuration for the Solana RPC connection.
+ * @return A plugin that adds `client.rpc`, `client.rpcSubscriptions`, and
+ *   `client.getMinimumBalance`.
+ *
+ * @example
+ * ```ts
+ * import { createClient } from '@solana/kit';
+ * import { solanaRpcReadOnly } from '@solana/kit-plugin-rpc';
+ *
+ * const client = createClient().use(solanaRpcReadOnly({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
+ * const balance = await client.rpc.getBalance(address).send();
+ * ```
+ *
+ * @see {@link solanaRpc}
+ * @see {@link solanaRpcConnection}
+ * @see {@link solanaRpcSubscriptionsConnection}
+ */
+export function solanaRpcReadOnly<TClusterUrl extends ClusterUrl>(config: SolanaRpcReadOnlyConfig<TClusterUrl>) {
+    return <T extends object>(client: T) =>
+        pipe(
+            client,
+            solanaRpcConnection<TClusterUrl>(config.rpcUrl, config.rpcConfig),
+            solanaRpcSubscriptionsConnection<TClusterUrl>(
+                config.rpcSubscriptionsUrl ?? (config.rpcUrl.replace(/^http/, 'ws') as TClusterUrl),
+                config.rpcSubscriptionsConfig,
+            ),
+            rpcGetMinimumBalance(),
+        );
+}
+
+/**
  * Enhances a client with a full Solana mainnet RPC setup.
  *
  * This is a convenience wrapper around {@link solanaRpc} that types the

@@ -5,11 +5,8 @@ import {
     walletSigner,
     walletWithoutSigner,
 } from '@solana/kit-plugin-wallet';
-import { PluginProvider, useChain, useClient } from '@solana/kit-react';
-import { type ReactNode, useEffect, useMemo, useRef } from 'react';
-
-/** @internal Threshold for the dev-only prop-churn warning (matches `PluginProvider`). */
-const CHURN_WARNING_THRESHOLD = 2;
+import { PluginProvider, useChain, useClient, useIdentityChurnWarning } from '@solana/kit-react';
+import { type ReactNode, useEffect, useMemo } from 'react';
 
 /**
  * The role the connected wallet plays on the client.
@@ -141,42 +138,11 @@ export function WalletProvider({
     // connection) on every render. One render's change is noise; sustained
     // churn (common cause: inline `filter={(w) => …}`) is almost always a
     // missing `useMemo` or a function literal that should be hoisted.
-    // Matches `PluginProvider`'s pattern so one render of legitimate change
-    // doesn't trigger a false positive.
-    const previousPropsRef = useRef<{
-        filter?: WalletPluginConfig['filter'];
-        storage?: WalletPluginConfig['storage'];
-        storageKey?: WalletPluginConfig['storageKey'];
-    } | null>(null);
-    const churnCountRef = useRef(0);
-    const warnedRef = useRef(false);
-    useEffect(() => {
-        if (process.env.NODE_ENV === 'production') return;
-        const previous = previousPropsRef.current;
-        previousPropsRef.current = { filter, storage, storageKey };
-        if (previous === null) return;
-
-        const changed: string[] = [];
-        if (previous.filter !== filter) changed.push('filter');
-        if (previous.storage !== storage) changed.push('storage');
-        if (previous.storageKey !== storageKey) changed.push('storageKey');
-
-        if (changed.length === 0) {
-            churnCountRef.current = 0;
-            return;
-        }
-
-        churnCountRef.current++;
-        if (churnCountRef.current >= CHURN_WARNING_THRESHOLD && !warnedRef.current) {
-            warnedRef.current = true;
-            const label = changed.map(p => `\`${p}\``).join(', ');
-            console.warn(
-                `<WalletProvider>: prop ${changed.length === 1 ? 'identity for' : 'identities for'} ${label} ` +
-                    'is changing across renders. Wrap in useMemo or hoist to module scope — otherwise the ' +
-                    'wallet plugin is rebuilt on every render, which re-creates the wallet store and tears ' +
-                    'down discovery / the active connection.',
-            );
-        }
+    useIdentityChurnWarning({
+        consequence:
+            'the wallet plugin is rebuilt on every render, which re-creates the wallet store and tears down discovery / the active connection.',
+        props: { filter, storage, storageKey },
+        providerName: '<WalletProvider>',
     });
 
     const plugin = useMemo(() => {

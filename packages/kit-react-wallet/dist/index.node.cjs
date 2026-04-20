@@ -6,7 +6,6 @@ var react = require('react');
 var jsxRuntime = require('react/jsx-runtime');
 
 // src/wallet-provider.tsx
-var CHURN_WARNING_THRESHOLD = 2;
 function WalletProvider({
   autoConnect,
   children,
@@ -25,30 +24,10 @@ function WalletProvider({
       );
     }
   }, [hasWallet]);
-  const previousPropsRef = react.useRef(null);
-  const churnCountRef = react.useRef(0);
-  const warnedRef = react.useRef(false);
-  react.useEffect(() => {
-    if (process.env.NODE_ENV === "production") return;
-    const previous = previousPropsRef.current;
-    previousPropsRef.current = { filter, storage, storageKey };
-    if (previous === null) return;
-    const changed = [];
-    if (previous.filter !== filter) changed.push("filter");
-    if (previous.storage !== storage) changed.push("storage");
-    if (previous.storageKey !== storageKey) changed.push("storageKey");
-    if (changed.length === 0) {
-      churnCountRef.current = 0;
-      return;
-    }
-    churnCountRef.current++;
-    if (churnCountRef.current >= CHURN_WARNING_THRESHOLD && !warnedRef.current) {
-      warnedRef.current = true;
-      const label = changed.map((p) => `\`${p}\``).join(", ");
-      console.warn(
-        `<WalletProvider>: prop ${changed.length === 1 ? "identity for" : "identities for"} ${label} is changing across renders. Wrap in useMemo or hoist to module scope \u2014 otherwise the wallet plugin is rebuilt on every render, which re-creates the wallet store and tears down discovery / the active connection.`
-      );
-    }
+  kitReact.useIdentityChurnWarning({
+    consequence: "the wallet plugin is rebuilt on every render, which re-creates the wallet store and tears down discovery / the active connection.",
+    props: { filter, storage, storageKey },
+    providerName: "<WalletProvider>"
   });
   const plugin = react.useMemo(() => {
     const config = { autoConnect, chain, filter, storage, storageKey };

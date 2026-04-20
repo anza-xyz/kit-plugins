@@ -2,6 +2,7 @@ import type { TransactionSigner } from '@solana/kit';
 import { identity, payer } from '@solana/kit-plugin-signer';
 import { type ReactNode, useMemo } from 'react';
 
+import { useIdentityChurnWarning } from '../dev-warnings';
 import { PluginProvider } from './plugin-provider';
 
 /** Props for {@link PayerProvider}. */
@@ -35,6 +36,11 @@ export type PayerProviderProps = {
  */
 export function PayerProvider({ children, signer }: PayerProviderProps) {
     const plugin = useMemo(() => payer(signer), [signer]);
+    useIdentityChurnWarning({
+        consequence: 'the payer plugin is rebuilt every render, replacing `client.payer` on each render.',
+        props: { signer },
+        providerName: '<PayerProvider>',
+    });
     return <PluginProvider plugin={plugin}>{children}</PluginProvider>;
 }
 
@@ -55,5 +61,10 @@ export type IdentityProviderProps = {
  */
 export function IdentityProvider({ children, signer }: IdentityProviderProps) {
     const plugin = useMemo(() => identity(signer), [signer]);
+    useIdentityChurnWarning({
+        consequence: 'the identity plugin is rebuilt every render, replacing `client.identity` on each render.',
+        props: { signer },
+        providerName: '<IdentityProvider>',
+    });
     return <PluginProvider plugin={plugin}>{children}</PluginProvider>;
 }

@@ -3,6 +3,7 @@ import { solanaRpc, type SolanaRpcConfig } from '@solana/kit-plugin-rpc';
 import { type ReactNode, useMemo } from 'react';
 
 import { ClientContext, useClient } from '../client-context';
+import { useIdentityChurnWarning } from '../dev-warnings';
 
 /**
  * Props for {@link RpcProvider}.
@@ -101,5 +102,15 @@ export function RpcProvider({ children, ...config }: RpcProviderProps) {
             rpcSubscriptionsConfig,
         ],
     );
+    // Dev-only: warn when the two object-valued config props churn identity
+    // across renders. A rebuilt plugin tears down the RPC subscription
+    // connection and any in-flight transactions. Primitive props (URLs,
+    // numbers, bigints) are stable by value so they're not tracked.
+    useIdentityChurnWarning({
+        consequence:
+            'the RPC plugin chain is rebuilt on every render, tearing down the subscriptions connection and any in-flight transactions.',
+        props: { rpcConfig, rpcSubscriptionsConfig },
+        providerName: '<RpcProvider>',
+    });
     return <ClientContext.Provider value={client}>{children}</ClientContext.Provider>;
 }

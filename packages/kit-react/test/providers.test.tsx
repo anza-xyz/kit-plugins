@@ -2,7 +2,15 @@ import { type TransactionSigner } from '@solana/kit';
 import { render, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { IdentityProvider, KitClientProvider, PayerProvider, PluginProvider, RpcProvider, useClient } from '../src';
+import {
+    IdentityProvider,
+    KitClientProvider,
+    PayerProvider,
+    PluginProvider,
+    RpcProvider,
+    RpcReadOnlyProvider,
+    useClient,
+} from '../src';
 
 const fakeSigner = { address: '11111111111111111111111111111111' } as unknown as TransactionSigner;
 
@@ -49,6 +57,24 @@ describe.skipIf(!__BROWSER__ && !__REACTNATIVE__)('providers', () => {
         } finally {
             spy.mockRestore();
         }
+    });
+
+    it('RpcReadOnlyProvider installs rpc + rpcSubscriptions without a payer', () => {
+        const { result } = renderHook(
+            () => useClient<{ getMinimumBalance: unknown; rpc: unknown; rpcSubscriptions: unknown }>(),
+            {
+                wrapper: ({ children }) => (
+                    <RootWrap>
+                        <RpcReadOnlyProvider rpcUrl="https://api.devnet.solana.com">{children}</RpcReadOnlyProvider>
+                    </RootWrap>
+                ),
+            },
+        );
+        expect(result.current).toHaveProperty('rpc');
+        expect(result.current).toHaveProperty('rpcSubscriptions');
+        expect(result.current).toHaveProperty('getMinimumBalance');
+        expect(result.current).not.toHaveProperty('sendTransaction');
+        expect(result.current).not.toHaveProperty('sendTransactions');
     });
 
     it('PluginProvider applies a plugin', () => {
@@ -99,7 +125,7 @@ describe.skipIf(!__BROWSER__ && !__REACTNATIVE__)('providers', () => {
                 );
             }
             expect(warn).toHaveBeenCalledTimes(1);
-            expect(warn.mock.calls[0]?.[0]).toMatch(/plugin identity is changing/);
+            expect(warn.mock.calls[0]?.[0]).toMatch(/prop identity for `plugins` is changing/);
         } finally {
             warn.mockRestore();
         }

@@ -9,6 +9,7 @@ import {
     solanaMainnetRpc,
     solanaRpc,
     solanaRpcConnection,
+    solanaRpcReadOnly,
     solanaRpcSubscriptionsConnection,
 } from '../src';
 
@@ -82,6 +83,35 @@ describe('solanaRpc', () => {
                     rpcUrl: 'https://api.mainnet-beta.solana.com',
                 }),
             );
+        expect(client).toHaveProperty('rpcSubscriptions');
+    });
+});
+
+describe('solanaRpcReadOnly', () => {
+    it('sets up rpc, rpcSubscriptions, and getMinimumBalance without a payer', () => {
+        const client = createClient().use(solanaRpcReadOnly({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
+        expect(client).toHaveProperty('rpc');
+        expect(client).toHaveProperty('rpcSubscriptions');
+        expect(client).toHaveProperty('getMinimumBalance');
+    });
+
+    it('does not install transaction planning or sending', () => {
+        const client = createClient().use(solanaRpcReadOnly({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
+        expect(client).not.toHaveProperty('sendTransaction');
+        expect(client).not.toHaveProperty('sendTransactions');
+        expect(client).not.toHaveProperty('planTransaction');
+        expect(client).not.toHaveProperty('planTransactions');
+        expect(client).not.toHaveProperty('transactionPlanner');
+        expect(client).not.toHaveProperty('transactionPlanExecutor');
+    });
+
+    it('accepts an explicit rpcSubscriptionsUrl', () => {
+        const client = createClient().use(
+            solanaRpcReadOnly({
+                rpcSubscriptionsUrl: 'wss://custom-ws.solana.com',
+                rpcUrl: 'https://api.mainnet-beta.solana.com',
+            }),
+        );
         expect(client).toHaveProperty('rpcSubscriptions');
     });
 });

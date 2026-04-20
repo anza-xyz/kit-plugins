@@ -1,12 +1,10 @@
 import type { Client, ClientPlugin } from '@solana/kit';
-import { type ReactNode, useEffect, useMemo, useRef } from 'react';
+import { type ReactNode, useMemo } from 'react';
 
 import { ClientContext, useClient } from '../client-context';
+import { useIdentityChurnWarning } from '../dev-warnings';
 
 type AnyPlugin = ClientPlugin<object, object>;
-
-/** @internal Threshold for the dev-only churn warning. */
-const CHURN_WARNING_THRESHOLD = 2;
 
 /** Props for {@link PluginProvider} — accepts a single plugin or an array. */
 export type PluginProviderProps =
@@ -58,43 +56,17 @@ export function PluginProvider({ children, plugin, plugins }: PluginProviderProp
         [parent, ...list],
     );
 
-    // Dev-only: warn when the plugin reference churns across renders, which
+    // Dev-only: warn when the plugin reference(s) churn across renders, which
     // almost always means the caller forgot to memoize. Each churn rebuilds
     // the client from scratch, losing any subscriptions or cached state
-    // installed by downstream plugins. Legitimate changes (e.g. a dynamic
-    // plugin via `useMemo` with changing deps) register as a single identity
-    // change before stabilising, so they don't reach the warning threshold.
-    const previousListRef = useRef<readonly AnyPlugin[] | null>(null);
-    const churnCountRef = useRef(0);
-    const warnedRef = useRef(false);
-    useEffect(() => {
-        if (process.env.NODE_ENV === 'production') return;
-        const previous = previousListRef.current;
-        previousListRef.current = list;
-        if (previous === null) return;
-        if (sameIdentities(previous, list)) {
-            churnCountRef.current = 0;
-            return;
-        }
-        churnCountRef.current++;
-        if (churnCountRef.current >= CHURN_WARNING_THRESHOLD && !warnedRef.current) {
-            warnedRef.current = true;
-            console.warn(
-                '<PluginProvider>: plugin identity is changing across renders. ' +
-                    'Wrap the plugin prop in `useMemo` or hoist it to module scope — ' +
-                    'otherwise a fresh client is rebuilt on every render, dropping subscriptions and cached state.',
-            );
-        }
+    // installed by downstream plugins. Arrays are element-wise compared so
+    // `plugins={[a, b]}` inline doesn't register as churn as long as the
+    // elements themselves are stable.
+    useIdentityChurnWarning({
+        consequence: 'a fresh client is rebuilt on every render, dropping subscriptions and cached state.',
+        props: { plugins: list },
+        providerName: '<PluginProvider>',
     });
 
     return <ClientContext.Provider value={extended}>{children}</ClientContext.Provider>;
-}
-
-/** @internal */
-function sameIdentities(a: readonly AnyPlugin[], b: readonly AnyPlugin[]): boolean {
-    if (a.length !== b.length) return false;
-    for (let i = 0; i < a.length; i++) {
-        if (a[i] !== b[i]) return false;
-    }
-    return true;
 }

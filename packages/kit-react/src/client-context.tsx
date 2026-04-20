@@ -3,6 +3,7 @@ import type { SolanaChain } from '@solana/wallet-standard-chains';
 import type { IdentifierString } from '@wallet-standard/base';
 import { createContext, type ReactNode, useContext, useEffect, useMemo } from 'react';
 
+import { useIdentityChurnWarning } from './dev-warnings';
 import { disposeClient } from './internal/dispose';
 import { throwMissingProvider } from './internal/errors';
 
@@ -223,6 +224,20 @@ export function KitClientProvider({ chain, children, client: providedClient }: K
         if (owned === null) return;
         return () => disposeClient(owned);
     }, [owned]);
+
+    // Dev-only: warn when the `client` prop churns identity across renders.
+    // A sustained fresh identity each render (e.g. inline
+    // `client={createClient()}`) means every downstream hook sees a new
+    // client and tears down its subscriptions — almost always a missing
+    // useMemo. A one-off transition (undefined → provided, or swapping to a
+    // different long-lived client) registers as a single change and doesn't
+    // trip the warning.
+    useIdentityChurnWarning({
+        consequence:
+            'every downstream hook receives a new client on each render, tearing down subscriptions and in-flight work.',
+        props: { client: providedClient },
+        providerName: '<KitClientProvider>',
+    });
 
     return (
         <ChainContext.Provider value={chain}>

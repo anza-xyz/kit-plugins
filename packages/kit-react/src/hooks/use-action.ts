@@ -1,5 +1,5 @@
 import { getAbortablePromise } from '@solana/promises';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 /** Discrete lifecycle status for an async action. */
 export type ActionStatus = 'error' | 'idle' | 'running' | 'success';
@@ -101,12 +101,17 @@ export function useAction<TArgs extends unknown[], TResult>(
     fn: (signal: AbortSignal, ...args: TArgs) => Promise<TResult>,
 ): ActionState<TArgs, TResult> {
     const [state, setState] = useState<InternalState<TResult>>(IDLE);
-    const fnRef = useRef(fn);
     // Latest-ref pattern: keep `send` stable while always calling the newest
-    // closure. Safe during render because fnRef.current is only read from
-    // inside `send`, which runs after render.
-    // eslint-disable-next-line react-hooks/refs
-    fnRef.current = fn;
+    // closure. The ref is updated in an effect (post-commit) rather than during
+    // render so that a discarded concurrent render — e.g. a transition
+    // interrupted by a higher-priority update — can't leave the ref pointing at
+    // a closure that captured never-committed props / context. `send` is only
+    // ever invoked from event handlers (which fire after commit), so the
+    // one-render lag is never observable in practice.
+    const fnRef = useRef(fn);
+    useEffect(() => {
+        fnRef.current = fn;
+    });
     const currentControllerRef = useRef<AbortController | null>(null);
 
     const send = useCallback(async (...args: TArgs) => {

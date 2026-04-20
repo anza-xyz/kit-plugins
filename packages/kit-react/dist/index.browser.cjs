@@ -9,6 +9,51 @@ var kitPluginLitesvm = require('@solana/kit-plugin-litesvm');
 var promises = require('@solana/promises');
 
 // src/client-context.tsx
+var CHURN_WARNING_THRESHOLD = 2;
+function useIdentityChurnWarning({ consequence, providerName, props }) {
+  const previousPropsRef = react.useRef(null);
+  const churnCountRef = react.useRef(0);
+  const warnedRef = react.useRef(false);
+  react.useEffect(() => {
+    if (process.env.NODE_ENV === "production") return;
+    const previous = previousPropsRef.current;
+    previousPropsRef.current = props;
+    if (previous === null) return;
+    const changed = diffIdentity(previous, props);
+    if (changed.length === 0) {
+      churnCountRef.current = 0;
+      return;
+    }
+    churnCountRef.current++;
+    if (churnCountRef.current >= CHURN_WARNING_THRESHOLD && !warnedRef.current) {
+      warnedRef.current = true;
+      const label = changed.map((p) => `\`${p}\``).join(", ");
+      const subject = changed.length === 1 ? `prop identity for ${label} is` : `prop identities for ${label} are`;
+      console.warn(
+        `${providerName}: ${subject} changing across renders. Wrap in useMemo or hoist to module scope \u2014 otherwise ` + consequence
+      );
+    }
+  });
+}
+function diffIdentity(prev, next) {
+  const changed = [];
+  for (const key of Object.keys(next)) {
+    if (!valueIsIdentical(prev[key], next[key])) {
+      changed.push(key);
+    }
+  }
+  return changed;
+}
+function valueIsIdentical(prev, next) {
+  if (Array.isArray(prev) && Array.isArray(next)) {
+    if (prev.length !== next.length) return false;
+    for (let i = 0; i < prev.length; i++) {
+      if (!Object.is(prev[i], next[i])) return false;
+    }
+    return true;
+  }
+  return Object.is(prev, next);
+}
 
 // src/internal/dispose.ts
 var DISPOSED = /* @__PURE__ */ new WeakSet();
@@ -54,6 +99,11 @@ function KitClientProvider({ chain, children, client: providedClient }) {
     if (owned === null) return;
     return () => disposeClient(owned);
   }, [owned]);
+  useIdentityChurnWarning({
+    consequence: "every downstream hook receives a new client on each render, tearing down subscriptions and in-flight work.",
+    props: { client: providedClient },
+    providerName: "<KitClientProvider>"
+  });
   return /* @__PURE__ */ jsxRuntime.jsx(ChainContext.Provider, { value: chain, children: /* @__PURE__ */ jsxRuntime.jsx(ClientContext.Provider, { value: client, children }) });
 }
 
@@ -78,7 +128,6 @@ function formatCapabilityLabel(keys) {
   if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
   return `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`;
 }
-var CHURN_WARNING_THRESHOLD = 2;
 function PluginProvider({ children, plugin, plugins }) {
   const parent = useClient();
   const list = plugin ? [plugin] : plugins;
@@ -88,41 +137,29 @@ function PluginProvider({ children, plugin, plugins }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [parent, ...list]
   );
-  const previousListRef = react.useRef(null);
-  const churnCountRef = react.useRef(0);
-  const warnedRef = react.useRef(false);
-  react.useEffect(() => {
-    if (process.env.NODE_ENV === "production") return;
-    const previous = previousListRef.current;
-    previousListRef.current = list;
-    if (previous === null) return;
-    if (sameIdentities(previous, list)) {
-      churnCountRef.current = 0;
-      return;
-    }
-    churnCountRef.current++;
-    if (churnCountRef.current >= CHURN_WARNING_THRESHOLD && !warnedRef.current) {
-      warnedRef.current = true;
-      console.warn(
-        "<PluginProvider>: plugin identity is changing across renders. Wrap the plugin prop in `useMemo` or hoist it to module scope \u2014 otherwise a fresh client is rebuilt on every render, dropping subscriptions and cached state."
-      );
-    }
+  useIdentityChurnWarning({
+    consequence: "a fresh client is rebuilt on every render, dropping subscriptions and cached state.",
+    props: { plugins: list },
+    providerName: "<PluginProvider>"
   });
   return /* @__PURE__ */ jsxRuntime.jsx(ClientContext.Provider, { value: extended, children });
 }
-function sameIdentities(a, b) {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) return false;
-  }
-  return true;
-}
 function PayerProvider({ children, signer }) {
   const plugin = react.useMemo(() => kitPluginSigner.payer(signer), [signer]);
+  useIdentityChurnWarning({
+    consequence: "the payer plugin is rebuilt every render, replacing `client.payer` on each render.",
+    props: { signer },
+    providerName: "<PayerProvider>"
+  });
   return /* @__PURE__ */ jsxRuntime.jsx(PluginProvider, { plugin, children });
 }
 function IdentityProvider({ children, signer }) {
   const plugin = react.useMemo(() => kitPluginSigner.identity(signer), [signer]);
+  useIdentityChurnWarning({
+    consequence: "the identity plugin is rebuilt every render, replacing `client.identity` on each render.",
+    props: { signer },
+    providerName: "<IdentityProvider>"
+  });
   return /* @__PURE__ */ jsxRuntime.jsx(PluginProvider, { plugin, children });
 }
 function RpcProvider({ children, ...config }) {
@@ -164,6 +201,32 @@ function RpcProvider({ children, ...config }) {
       rpcSubscriptionsConfig
     ]
   );
+  useIdentityChurnWarning({
+    consequence: "the RPC plugin chain is rebuilt on every render, tearing down the subscriptions connection and any in-flight transactions.",
+    props: { rpcConfig, rpcSubscriptionsConfig },
+    providerName: "<RpcProvider>"
+  });
+  return /* @__PURE__ */ jsxRuntime.jsx(ClientContext.Provider, { value: client, children });
+}
+function RpcReadOnlyProvider({ children, ...config }) {
+  const parent = useClient();
+  const { rpcConfig, rpcSubscriptionsConfig, rpcSubscriptionsUrl, rpcUrl } = config;
+  const client = react.useMemo(
+    () => parent.use(
+      kitPluginRpc.solanaRpcReadOnly({
+        rpcConfig,
+        rpcSubscriptionsConfig,
+        rpcSubscriptionsUrl,
+        rpcUrl
+      })
+    ),
+    [parent, rpcUrl, rpcSubscriptionsUrl, rpcConfig, rpcSubscriptionsConfig]
+  );
+  useIdentityChurnWarning({
+    consequence: "the read-only RPC plugin chain is rebuilt on every render, tearing down the subscriptions connection.",
+    props: { rpcConfig, rpcSubscriptionsConfig },
+    providerName: "<RpcReadOnlyProvider>"
+  });
   return /* @__PURE__ */ jsxRuntime.jsx(ClientContext.Provider, { value: client, children });
 }
 function LiteSvmProvider({ children }) {
@@ -390,7 +453,9 @@ var IDLE = { data: void 0, error: void 0, status: "idle" };
 function useAction(fn) {
   const [state, setState] = react.useState(IDLE);
   const fnRef = react.useRef(fn);
-  fnRef.current = fn;
+  react.useEffect(() => {
+    fnRef.current = fn;
+  });
   const currentControllerRef = react.useRef(null);
   const send = react.useCallback(async (...args) => {
     currentControllerRef.current?.abort();
@@ -496,6 +561,7 @@ exports.LiteSvmProvider = LiteSvmProvider;
 exports.PayerProvider = PayerProvider;
 exports.PluginProvider = PluginProvider;
 exports.RpcProvider = RpcProvider;
+exports.RpcReadOnlyProvider = RpcReadOnlyProvider;
 exports.useAccount = useAccount;
 exports.useAction = useAction;
 exports.useBalance = useBalance;
@@ -503,6 +569,7 @@ exports.useChain = useChain;
 exports.useClient = useClient;
 exports.useClientCapability = useClientCapability;
 exports.useIdentity = useIdentity;
+exports.useIdentityChurnWarning = useIdentityChurnWarning;
 exports.useLiveQuery = useLiveQuery;
 exports.usePayer = usePayer;
 exports.usePlanTransaction = usePlanTransaction;

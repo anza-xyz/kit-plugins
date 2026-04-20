@@ -103,6 +103,63 @@ Verb-first hooks that return stable function references:
 
 For flows that specifically need the connected wallet's signer (independent of the payer/identity roles), use `useWalletSigner()`.
 
+### Signing transactions separately from sending
+
+For the common end-to-end flow, reach for `useSendTransaction` from [`@solana/kit-react`](../kit-react) — it routes through whichever signing capability the connected wallet supports (`solana:signAndSendTransaction` or `solana:signTransaction` + submit-to-RPC) without the caller having to care.
+
+Some flows genuinely need a sign-only step — DeFi aggregators that submit the signed bytes to their own API, multi-sig coordination, transactions that go through a relayer. There's no named hook for this, by design; compose `useAction` with the relevant Kit signing function and guard on `useWalletSigner()`:
+
+```tsx
+import { useAction } from '@solana/kit-react';
+import { useWalletSigner } from '@solana/kit-react-wallet';
+import { signTransactionMessageWithSigners } from '@solana/kit';
+
+function SignAndSubmit() {
+    const signer = useWalletSigner();
+    const {
+        send: sign,
+        status,
+        error,
+    } = useAction(async (signal, message: TransactionMessageWithFeePayerAndBlockhashLifetime) => {
+        if (!signer) throw new Error('No signing wallet connected.');
+        const signed = await signTransactionMessageWithSigners(message);
+        return submitToAggregator(signed, { signal });
+    });
+    // …
+}
+```
+
+Kit's signing functions cover the four input/output combinations (`signTransactionMessageWithSigners` / `partiallySignTransactionMessageWithSigners` / `signTransaction` / `partiallySignTransaction`) — use whichever fits the flow. The reason `@solana/kit-react-wallet` doesn't wrap these in named hooks is the caveat below.
+
+#### Wallet-feature caveat
+
+**Sign-only is not portable across all wallets.** Some wallets — notably some mobile / MWA-style wallets and some hardware setups — only implement `solana:signAndSendTransaction` and refuse to hand back a signed transaction at all. Calling a sign-only Kit function against such a wallet's signer will throw.
+
+If your flow genuinely requires sign-only, gate UI on the connected wallet's features:
+
+```tsx
+const connected = useConnectedWallet();
+const canSignOnly = connected?.wallet.features.includes('solana:signTransaction') ?? false;
+
+if (!canSignOnly) {
+    return (
+        <span>
+            This wallet only supports sign-and-send. Connect a wallet that supports separate signing to continue.
+        </span>
+    );
+}
+```
+
+Or filter such wallets out at `<WalletProvider filter={…}>` so they never reach the picker in the first place:
+
+```tsx
+const requireSeparateSigning = (w: UiWallet) => w.features.includes('solana:signTransaction');
+
+<WalletProvider filter={requireSeparateSigning}>…</WalletProvider>;
+```
+
+Prefer the filter-at-the-top approach for apps that fundamentally require sign-only — it keeps the rest of the app from handling the degraded case.
+
 ## Gotchas
 
 ### Keep `filter`, `storage`, and `storageKey` identity stable

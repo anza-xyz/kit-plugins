@@ -145,23 +145,19 @@ Ownership switches with the prop: when omitted, `KitClientProvider` calls `clien
 
 **`RpcProvider`** — wraps `solanaRpc` (the full RPC chain: RPC, subscriptions, transaction planning, execution). Its props extend `SolanaRpcConfig` from `@solana/kit-plugin-rpc` directly (`rpcUrl`, `rpcSubscriptionsUrl`, `priorityFees`, `maxConcurrency`, `rpcConfig`, `rpcSubscriptionsConfig`, `skipPreflight`) so the provider surface stays zero-drift with the plugin. Asserts that `"payer" in client` at render time — if no ancestor provider has set a payer, it throws a message that also points at the read-only escape path below.
 
-*Read-only apps* that don't send transactions (explorers, dashboards, watchers, server-side scripts) should skip `RpcProvider` entirely and install just the RPC + subscriptions plugins via `PluginProvider`. This drops the payer requirement — no `WalletProvider` / `PayerProvider` needed:
+*Read-only apps* that don't send transactions (explorers, dashboards, watchers, server-side scripts) should use `RpcReadOnlyProvider` instead of `RpcProvider`. It wraps `solanaRpcReadOnly` — `client.rpc`, `client.rpcSubscriptions`, and `client.getMinimumBalance` — without the transaction-planning / sending halves, so no `WalletProvider` / `PayerProvider` is required:
 
 ```tsx
-import { KitClientProvider, PluginProvider } from '@solana/kit-react';
-import { solanaRpcConnection, solanaRpcSubscriptionsConnection } from '@solana/kit-plugin-rpc';
+import { KitClientProvider, RpcReadOnlyProvider } from '@solana/kit-react';
 
 <KitClientProvider chain="solana:mainnet">
-    <PluginProvider plugins={[
-        solanaRpcConnection('https://api.mainnet-beta.solana.com'),
-        solanaRpcSubscriptionsConnection('wss://api.mainnet-beta.solana.com'),
-    ]}>
+    <RpcReadOnlyProvider rpcUrl="https://api.mainnet-beta.solana.com">
         <Dashboard />
-    </PluginProvider>
+    </RpcReadOnlyProvider>
 </KitClientProvider>;
 ```
 
-`useBalance`, `useAccount`, `useTransactionConfirmation`, `useLiveQuery`, and `useSubscription` all work against this lighter stack; only the transaction-sending hooks need the full `RpcProvider`.
+`useBalance`, `useAccount`, `useTransactionConfirmation`, `useLiveQuery`, and `useSubscription` all work against this lighter stack; only the transaction-sending and transaction-planning hooks need the full `RpcProvider`. For more granular stacks (e.g. RPC only, no subscriptions) drop to `PluginProvider` + `solanaRpcConnection` / `solanaRpcSubscriptionsConnection`.
 
 **`LiteSvmProvider`** — wraps `litesvm`. Drop-in replacement for `RpcProvider` in test/dev environments. Provides the same client capabilities (RPC, transaction planning, execution) backed by a local LiteSVM instance instead of a remote RPC node.
 
