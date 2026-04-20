@@ -32,6 +32,30 @@ In many cases both roles are filled by the same keypair. Every plugin in this pa
 
 For instance, `signer(mySigner)` is a shorthand for using both `payer(mySigner)` and `identity(mySigner)`.
 
+## Reactive `payer` / `identity` convention
+
+Some plugins set `client.payer` or `client.identity` reactively — the connected wallet may change, an account may be swapped, or a signer may be cleared on disconnect. Plugins that participate in this pattern advertise it by installing a sibling `subscribeTo<Capability>` function on the client:
+
+| Type                            | Sibling function      | Advertises that…                       |
+| ------------------------------- | --------------------- | -------------------------------------- |
+| `ClientWithSubscribeToPayer`    | `subscribeToPayer`    | `client.payer` may change over time    |
+| `ClientWithSubscribeToIdentity` | `subscribeToIdentity` | `client.identity` may change over time |
+
+Reactive consumers (framework hooks, stores, effects) can then observe changes without having to know which plugin installed the capability — they duck-type on the subscribe function:
+
+```ts
+import type { ClientWithPayer } from '@solana/kit';
+import type { ClientWithSubscribeToPayer } from '@solana/kit-plugin-signer';
+
+function observePayer(client: ClientWithPayer & ClientWithSubscribeToPayer) {
+    return client.subscribeToPayer(() => {
+        console.log('payer is now', client.payer);
+    });
+}
+```
+
+The static plugins in this package (`signer`, `payer`, `identity`, and their `generated*` / `*FromFile` variants) all leave the signer fixed for the lifetime of the client, so they do **not** install these hooks — there is nothing to subscribe to. The convention is meant for plugins like `@solana/kit-plugin-wallet`, which reassigns `client.payer` / `client.identity` as the user connects, switches accounts, or disconnects.
+
 ## `signer` / `payer` / `identity` plugins
 
 These plugins accept an existing `TransactionSigner` and install it on the client.
