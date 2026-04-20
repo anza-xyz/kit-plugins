@@ -51,6 +51,7 @@
         "@solana/kit": "^6.6.0"
     },
     "dependencies": {
+        "@solana/kit-plugin-signer": "workspace:*",
         "@solana/wallet-account-signer": "^6.6.0",
         "@solana/wallet-standard-chains": "^1.1.1",
         "@solana/wallet-standard-features": "^1.3.0",

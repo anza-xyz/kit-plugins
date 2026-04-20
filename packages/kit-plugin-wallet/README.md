@@ -161,6 +161,25 @@ All wallet state is accessed via `client.wallet.getState()`, which returns a ref
 
 The plugin exposes `subscribe` and `getState` for binding wallet state to any UI framework.
 
+### Observing reactive `payer` / `identity`
+
+Because the connected wallet's signer is synced to `client.payer` and/or `client.identity` (depending on the variant), these capabilities change over time. To let reactive consumers observe those changes without naming this plugin directly, the wallet plugins follow the [reactive signer convention](../kit-plugin-signer/README.md#reactive-payer--identity-convention) from `@solana/kit-plugin-signer`:
+
+| Plugin                | `subscribeToPayer` | `subscribeToIdentity` |
+| --------------------- | ------------------ | --------------------- |
+| `walletSigner`        | ✅                 | ✅                    |
+| `walletPayer`         | ✅                 | —                     |
+| `walletIdentity`      | —                  | ✅                    |
+| `walletWithoutSigner` | —                  | —                     |
+
+Each is a `(listener: () => void) => () => void` that fires when the underlying signer identity changes (connect, disconnect, switch account). Unrelated wallet state changes such as wallet discovery do **not** trigger the listener — the plugin filters at the source.
+
+```ts
+const unsubscribe = client.subscribeToPayer(() => {
+    console.log('payer is now', client.payer);
+});
+```
+
 **React** — use `useSyncExternalStore` for concurrent-mode-safe rendering:
 
 ```tsx
