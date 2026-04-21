@@ -31,28 +31,39 @@ export type UseSendTransactionsState = ActionState<
  * Calling `send` again while a previous transaction is in flight aborts the
  * prior call — the hook-managed `AbortSignal` is threaded into
  * `client.sendTransaction`'s config so the underlying RPC request is
- * cancelled, not just the outer await. `reset()` has the same effect. Callers
- * that `await send(...)` should filter `AbortError` so a supersede doesn't
- * surface as a user-visible error (see {@link useAction} for full abort
- * semantics).
+ * cancelled, not just the outer await. Fire-and-forget callers don't need
+ * to handle AbortError; only flows that `await send(...)` to read the
+ * resolved signature need to filter with {@link isAbortError}. See
+ * {@link useAction} for full abort semantics.
  *
  * Requires an ancestor provider that installs `client.sendTransaction`
  * (e.g. {@link RpcProvider} or {@link LiteSvmProvider}).
  *
  * @throws If no ancestor provider installs `client.sendTransaction`.
  *
- * @example
+ * @example Fire-and-forget — read state from render
  * ```tsx
- * const { send, status, data, error } = useSendTransaction();
+ * const { send, isRunning, data, error } = useSendTransaction();
  *
+ * return (
+ *     <button
+ *         onClick={() => send(getTransferInstruction({ source, destination, amount }))}
+ *         disabled={isRunning}
+ *     >
+ *         {isRunning ? 'Sending…' : 'Send'}
+ *         {error && <span>{String(error)}</span>}
+ *     </button>
+ * );
+ * ```
+ *
+ * @example Awaiting the resolved signature (advanced)
+ * ```tsx
  * async function onClick() {
  *     try {
  *         const result = await send(getTransferInstruction({ source, destination, amount }));
  *         navigate(`/tx/${result.signature}`);
  *     } catch (err) {
- *         // Superseded by another send() or a reset() — the hook's reactive
- *         // state already reflects the new action; don't show a stale error.
- *         if ((err as Error).name === 'AbortError') return;
+ *         if (isAbortError(err)) return; // superseded — state reflects the newer call
  *         toast.error(String(err));
  *     }
  * }
@@ -62,6 +73,7 @@ export type UseSendTransactionsState = ActionState<
  * @see {@link usePlanTransaction} — pairs with `useSendTransaction` for
  *   preview-then-send UX.
  * @see {@link useAction}
+ * @see {@link isAbortError}
  */
 export function useSendTransaction(): UseSendTransactionState {
     const client = useClientWithSendTransaction('useSendTransaction');
@@ -87,8 +99,9 @@ export function useSendTransaction(): UseSendTransactionState {
  * The hook-managed `AbortSignal` is threaded into
  * `client.sendTransactions`'s config, so calling `send` again while the
  * prior batch is in flight cancels the underlying work. `reset()` has the
- * same effect. Callers that `await send(...)` should filter `AbortError` —
- * see {@link useSendTransaction}'s example for the idiomatic shape, and
+ * same effect. Fire-and-forget callers read state from render — only flows
+ * that `await send(...)` need the {@link isAbortError} filter; see
+ * {@link useSendTransaction}'s example for the idiomatic shape, and
  * {@link useAction} for full abort semantics.
  *
  * @throws If no ancestor provider installs `client.sendTransactions`.

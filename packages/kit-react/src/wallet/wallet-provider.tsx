@@ -120,7 +120,7 @@ export function WalletProvider({
     // and then `<WalletProvider>` is also mounted below — two plugin
     // instances would compete for the same `client.wallet` namespace (two
     // discovery listeners, two storage reads, inconsistent state). Also
-    // catches `<PluginProvider plugin={walletSigner(...)}>` stacks with
+    // catches `<PluginProvider plugins={[walletSigner(...)]}>` stacks with
     // `<WalletProvider>` nested underneath. Throwing (vs short-circuiting)
     // keeps React's normal "inner provider shadows outer" mental model — a
     // silent skip would ignore the inner's `storageKey` / `filter` / `storage`
@@ -144,18 +144,18 @@ export function WalletProvider({
     // `config` itself — `config` is constructed fresh inside the memo body on
     // every render, so including it would defeat the memoization. Keep the
     // deps array in sync with the `WalletPluginConfig` fields above.
-    const plugin = useMemo(() => {
+    const plugins = useMemo(() => {
         const config: WalletPluginConfig = { autoConnect, chain, filter, storage, storageKey };
         switch (role) {
             case 'identity':
-                return walletIdentity(config);
+                return [walletIdentity(config)];
             case 'none':
-                return walletWithoutSigner(config);
+                return [walletWithoutSigner(config)];
             case 'payer':
-                return walletPayer(config);
+                return [walletPayer(config)];
             case 'signer':
-                return walletSigner(config);
+                return [walletSigner(config)];
         }
     }, [role, chain, autoConnect, storage, storageKey, filter]);
-    return <PluginProvider plugin={plugin}>{children}</PluginProvider>;
+    return <PluginProvider plugins={plugins}>{children}</PluginProvider>;
 }

@@ -28,8 +28,12 @@ import { useRpcClient } from '../internal/rpc-client';
  *
  * @example
  * ```tsx
+ * // Prefer optional-chaining to `null` over early-return before the hook.
+ * // Rules of hooks forbids conditional hook calls; the `?? null` pattern lets
+ * // the hook always run, disabled until the address is available.
  * const connected = useConnectedWallet();
  * const { data: balance, isLoading } = useBalance(connected?.account.address ?? null);
+ * if (!connected) return <ConnectButton />;
  * ```
  *
  * @see {@link useAccount}

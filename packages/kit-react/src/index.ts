@@ -40,7 +40,7 @@ export type { UseSubscriptionResult } from './hooks/use-subscription';
 export type { LiveQueryResult } from './internal/live-store';
 
 // Action / transaction hooks
-export { useAction } from './hooks/use-action';
+export { isAbortError, useAction } from './hooks/use-action';
 export type { ActionState, ActionStatus } from './hooks/use-action';
 export { useSendTransaction, useSendTransactions } from './hooks/use-send-transaction';
 export type { UseSendTransactionState, UseSendTransactionsState } from './hooks/use-send-transaction';

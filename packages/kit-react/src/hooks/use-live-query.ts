@@ -33,17 +33,24 @@ export type UseLiveQueryConfig<TRpcValue, TSubscriptionValue, TItem> = {
  * Solana-specific mapping logic. Reach for `useLiveQuery` for custom program
  * accounts or other RPC/subscription pairs the named hooks don't cover.
  *
- * `factory` is called when `deps` change (or on mount) to build a fresh
- * {@link UseLiveQueryConfig}. Using a function (rather than a plain config
- * object) lets ESLint's `react-hooks/exhaustive-deps` rule trace which values
- * the config closes over and warn when any are missing from `deps`. Add
- * `'useLiveQuery'` to your project's `react-hooks/exhaustive-deps`
- * `additionalHooks` setting to opt in.
+ * `factory` is called when `deps` change (or on mount) with a fresh
+ * {@link AbortSignal} and must return a {@link UseLiveQueryConfig}. Using a
+ * function (rather than a plain config object) lets ESLint's
+ * `react-hooks/exhaustive-deps` rule trace which values the config closes
+ * over and warn when any are missing from `deps`. Add `'useLiveQuery'` to
+ * your project's `react-hooks/exhaustive-deps` `additionalHooks` setting to
+ * opt in.
+ *
+ * The `signal` argument is the same `AbortSignal` that gets threaded into the
+ * underlying reactive store — it fires on the next dep change and on unmount.
+ * Ignore it (`_signal`) if your factory doesn't need it; thread it into
+ * auxiliary work (an additional `fetch`, a WASM decoder warmup, etc.) that
+ * should be cancelled alongside the store.
  *
  * @example
  * ```tsx
  * const { data: gameState } = useLiveQuery(
- *     () => ({
+ *     _signal => ({
  *         rpcRequest: client.rpc.getAccountInfo(gameAddress, { encoding: 'base64' }),
  *         rpcSubscriptionRequest: client.rpcSubscriptions.accountNotifications(gameAddress, { encoding: 'base64' }),
  *         rpcValueMapper: (v) => (v ? parseGameState(parseBase64RpcAccount(gameAddress, v)) : null),
@@ -52,13 +59,30 @@ export type UseLiveQueryConfig<TRpcValue, TSubscriptionValue, TItem> = {
  *     [client, gameAddress],
  * );
  * ```
+ *
+ * @example Threading the signal into auxiliary work
+ * ```tsx
+ * const { data } = useLiveQuery(
+ *     signal => {
+ *         // Kick off a side-effect that should be cancelled if deps change.
+ *         void enrichFromExternalApi(gameAddress, { signal });
+ *         return {
+ *             rpcRequest: client.rpc.getAccountInfo(gameAddress, { encoding: 'base64' }),
+ *             rpcSubscriptionRequest: client.rpcSubscriptions.accountNotifications(gameAddress, { encoding: 'base64' }),
+ *             rpcValueMapper: v => (v ? parseGameState(parseBase64RpcAccount(gameAddress, v)) : null),
+ *             rpcSubscriptionValueMapper: v => (v ? parseGameState(parseBase64RpcAccount(gameAddress, v)) : null),
+ *         };
+ *     },
+ *     [client, gameAddress],
+ * );
+ * ```
  */
 export function useLiveQuery<TRpcValue, TSubscriptionValue, TItem>(
-    factory: () => UseLiveQueryConfig<TRpcValue, TSubscriptionValue, TItem>,
+    factory: (signal: AbortSignal) => UseLiveQueryConfig<TRpcValue, TSubscriptionValue, TItem>,
     deps: DependencyList,
 ): LiveQueryResult<TItem> {
     const store = useLiveStore<LiveStore<TItem>>(
-        signal => createReactiveStoreWithInitialValueAndSlotTracking({ ...factory(), abortSignal: signal }),
+        signal => createReactiveStoreWithInitialValueAndSlotTracking({ ...factory(signal), abortSignal: signal }),
         // eslint-disable-next-line react-hooks/exhaustive-deps -- library passthrough: `factory` is caller-controlled; deps list is the contract.
         deps,
     );

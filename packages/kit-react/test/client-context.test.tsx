@@ -29,6 +29,15 @@ describe.skipIf(!__BROWSER__ && !__REACTNATIVE__)('KitClientProvider + useClient
         expect(result.current).toBe('l2:mainnet');
     });
 
+    it('useChain<T>() widens the return type via the generic parameter', () => {
+        // The generic is a type assertion — this test documents the pattern and
+        // verifies runtime behavior still matches the provided string.
+        const { result } = renderHook(() => useChain<'l2:mainnet' | 'solana:mainnet'>(), {
+            wrapper: ({ children }) => <KitClientProvider chain="l2:mainnet">{children}</KitClientProvider>,
+        });
+        expect(result.current).toBe('l2:mainnet');
+    });
+
     it('KitClientProvider seeds a Kit client with a working `use` method', () => {
         const { result } = renderHook(() => useClient(), {
             wrapper: ({ children }) => <KitClientProvider chain="solana:devnet">{children}</KitClientProvider>,

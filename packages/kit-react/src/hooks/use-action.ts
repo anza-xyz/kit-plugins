@@ -5,6 +5,30 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 export type ActionStatus = 'error' | 'idle' | 'running' | 'success';
 
 /**
+ * Returns `true` if `err` is an `AbortError` — the specific rejection
+ * produced when a {@link useAction} `send` is superseded by a later call
+ * or cancelled by `reset()`.
+ *
+ * Use this in `try`/`catch` around `await send(...)` to skip supersede
+ * rejections. The hook's reactive state already reflects the newer call,
+ * so the stale branch has nothing useful to do.
+ *
+ * @example
+ * ```tsx
+ * try {
+ *     const result = await send(ix);
+ *     navigate(`/tx/${result.signature}`);
+ * } catch (err) {
+ *     if (isAbortError(err)) return; // superseded — reactive state wins
+ *     toast.error(String(err));
+ * }
+ * ```
+ */
+export function isAbortError(err: unknown): boolean {
+    return err instanceof Error && err.name === 'AbortError';
+}
+
+/**
  * Reactive state and controls for an async action tracked by {@link useAction}.
  *
  * @typeParam TArgs - The argument tuple accepted by the wrapped function.
@@ -15,6 +39,14 @@ export type ActionState<TArgs extends unknown[], TResult> = {
     readonly data: TResult | undefined;
     /** The error thrown by the last failed call, or `undefined`. */
     readonly error: unknown;
+    /** `true` when {@link status} is `'error'`. Derived; provided for `{isError && …}` rendering. */
+    readonly isError: boolean;
+    /** `true` when {@link status} is `'idle'` — no send has run yet, or `reset()` just cleared state. */
+    readonly isIdle: boolean;
+    /** `true` when {@link status} is `'running'` — a send is in flight. */
+    readonly isRunning: boolean;
+    /** `true` when {@link status} is `'success'`. */
+    readonly isSuccess: boolean;
     /** Reset `status`, `data`, and `error` back to their initial values. Stable. */
     readonly reset: () => void;
     /**
@@ -22,12 +54,20 @@ export type ActionState<TArgs extends unknown[], TResult> = {
      *
      * Calling `send` while a previous call is in flight aborts the prior
      * call: its `await` rejects with an `AbortError`, and its outcome is
-     * never written to state. Callers that `await send(...)` should handle
-     * `AbortError` (e.g. `if ((err as Error).name === 'AbortError') return`)
-     * to avoid surfacing stale errors to users.
+     * never written to state. The hook's reactive state tracks the newest
+     * call — so in the common case, fire-and-forget (`send(...)` with no
+     * await, read `status` / `data` / `error` from render) needs no
+     * AbortError handling at all. Callers that do `await send(...)` should
+     * filter with {@link isAbortError} to skip the stale branch — see the
+     * examples on {@link useAction}.
      */
     readonly send: (...args: TArgs) => Promise<TResult>;
-    /** The current lifecycle status. */
+    /**
+     * The current lifecycle status as a discriminated string. Matches the
+     * shape used by TanStack Query / SWR mutations. The `isIdle`/`isRunning`/
+     * `isSuccess`/`isError` booleans are derived from this — pick whichever
+     * reads better at the call site.
+     */
     readonly status: ActionStatus;
 };
 
@@ -42,62 +82,36 @@ const IDLE: InternalState<never> = { data: undefined, error: undefined, status: 
  * Track the lifecycle of an async, user-triggered action.
  *
  * Wraps an async function with status / data / error tracking, and returns a
- * stable `send` function plus reactive state. The returned `send` rethrows
- * on failure so callers can `try/catch` or `.catch()` — the hook just also
- * exposes the error reactively for UI rendering.
- *
- * **Abort semantics.** Every call to `send` creates a fresh `AbortController`.
- * If `send` is called again (or `reset()` runs) before the in-flight call
- * resolves, the prior controller is aborted: its `await` rejects with an
- * `AbortError`, and its outcome is never written to state. Stale callers
- * should catch the abort:
- *
- * ```tsx
- * try {
- *     await send(...);
- * } catch (err) {
- *     if ((err as Error).name === 'AbortError') return; // superseded
- *     // real error
- * }
- * ```
- *
- * The signal is passed as the *first argument* to the wrapped function —
- * threading it into your `fetch`, RPC, or plugin options provides true
- * cancellation of the underlying work. Ignore it (e.g. `_signal`) if the
- * wrapped function doesn't support cancellation; the outer await still
- * rejects on abort.
+ * stable `send` function plus reactive state. The common case is
+ * fire-and-forget: call `send(...)` from an event handler, render from
+ * `status` / `data` / `error`. No `await`, no AbortError handling.
  *
  * This is the building block behind {@link useSendTransaction} and is exported
- * so you can wire up custom async flows (sign-then-send, partial signing,
- * external submission endpoints).
+ * for custom async flows (sign-then-send, partial signing, external submission
+ * endpoints).
  *
  * @typeParam TArgs - The argument tuple accepted by the wrapped function.
  * @typeParam TResult - The resolved value type of the wrapped function.
  * @param fn - The async function to wrap. Receives an `AbortSignal` followed
- *   by the user-supplied args. A stable reference is preferred; changes to
- *   `fn` update the closure inside the returned `send`.
+ *   by the user-supplied args. The wrapped function does not need to be
+ *   memoized — an internal ref keeps `send` stable while always calling the
+ *   latest closure, so capturing fresh values from render (e.g. `client`) is
+ *   safe.
  * @returns Reactive state and controls ({@link ActionState}).
  *
- * The wrapped function does not need to be memoized — an internal ref keeps
- * `send` stable while always calling the latest closure, so capturing fresh
- * values from render (e.g. `client`) is safe.
- *
- * @example Using the signal for true cancellation (with AbortError filter)
+ * @example Fire-and-forget — read state from render
  * ```tsx
- * const { send, status, error } = useAction((signal, query: string) =>
+ * const { send, isRunning, error } = useAction((signal, query: string) =>
  *     fetch(`/api/search?q=${query}`, { signal }).then(r => r.json()),
  * );
  *
- * async function onSubmit(query: string) {
- *     try {
- *         await send(query);
- *     } catch (err) {
- *         // Superseded by another send() or reset() — the hook's reactive
- *         // state already reflects the new action; don't surface a stale error.
- *         if ((err as Error).name === 'AbortError') return;
- *         toast.error(String(err));
- *     }
- * }
+ * return (
+ *     <form onSubmit={e => { e.preventDefault(); send(query); }}>
+ *         <input value={query} onChange={…} />
+ *         {isRunning && <Spinner />}
+ *         {error && <span>{String(error)}</span>}
+ *     </form>
+ * );
  * ```
  *
  * @example Ignoring the signal
@@ -105,6 +119,34 @@ const IDLE: InternalState<never> = { data: undefined, error: undefined, status: 
  * const { send } = useAction((_signal, to: Address, amount: Lamports) =>
  *     client.sendTransaction(getTransferInstruction({ source, destination: to, amount })),
  * );
+ * ```
+ *
+ * ### Abort semantics
+ *
+ * Every call to `send` creates a fresh `AbortController`. If `send` is
+ * called again (or `reset()` runs) before the in-flight call resolves, the
+ * prior controller is aborted: its `await` rejects with an `AbortError`,
+ * and its outcome is never written to state. The signal is passed as the
+ * *first argument* to the wrapped function — threading it into your
+ * `fetch` / RPC / plugin options provides true cancellation of the
+ * underlying work.
+ *
+ * Fire-and-forget callers don't need to do anything here — the reactive
+ * state tracks the newest call and the superseded promise rejection is
+ * never observed. Only flows that `await send(...)` to branch on the
+ * resolved value need the filter:
+ *
+ * @example Detecting supersede (advanced)
+ * ```tsx
+ * async function onSubmit(query: string) {
+ *     try {
+ *         const result = await send(query);
+ *         navigate(`/results/${result.id}`);
+ *     } catch (err) {
+ *         if (isAbortError(err)) return; // superseded — state reflects the newer call
+ *         toast.error(String(err));
+ *     }
+ * }
  * ```
  */
 export function useAction<TArgs extends unknown[], TResult>(
@@ -162,7 +204,17 @@ export function useAction<TArgs extends unknown[], TResult>(
     }, []);
 
     return useMemo(
-        () => ({ data: state.data, error: state.error, reset, send, status: state.status }),
+        () => ({
+            data: state.data,
+            error: state.error,
+            isError: state.status === 'error',
+            isIdle: state.status === 'idle',
+            isRunning: state.status === 'running',
+            isSuccess: state.status === 'success',
+            reset,
+            send,
+            status: state.status,
+        }),
         [state, reset, send],
     );
 }

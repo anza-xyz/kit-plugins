@@ -30,41 +30,36 @@ export type UsePlanTransactionsState = ActionState<
  *
  * The hook-managed `AbortSignal` is threaded into `client.planTransaction`'s
  * config, so calling `send` again or calling `reset()` cancels any pending
- * planning work. Callers that `await send(...)` should filter `AbortError`
- * so a supersede doesn't surface as a user-visible error (see
- * {@link useAction} for full abort semantics).
+ * planning work. Fire-and-forget callers read the planned message from
+ * `data` on the next render — only flows that `await send(...)` need to
+ * filter with {@link isAbortError}. See {@link useAction} for full abort
+ * semantics.
  *
  * @throws If no ancestor provider installs `client.planTransaction`.
  *
- * @example Preview then send
+ * @example Preview then send — read state from render
  * ```tsx
- * const { send: plan, data: planned } = usePlanTransaction();
- * const { send: execute } = useSendTransaction();
+ * const { send: plan, data: planned, isRunning: isPlanning } = usePlanTransaction();
+ * const { send: execute, isSuccess: didSend } = useSendTransaction();
  *
- * async function onReview() {
- *     try {
- *         await plan(getTransferInstruction({ source, destination, amount }));
- *         // `planned` is now in state — render the confirmation modal.
- *     } catch (err) {
- *         if ((err as Error).name === 'AbortError') return;
- *         toast.error(String(err));
- *     }
- * }
- *
- * async function onConfirm() {
- *     if (!planned) return;
- *     try {
- *         await execute(planned); // SingleTransactionPlan feeds straight into sendTransaction
- *     } catch (err) {
- *         if ((err as Error).name === 'AbortError') return;
- *         toast.error(String(err));
- *     }
- * }
+ * return (
+ *     <>
+ *         <button onClick={() => plan(getTransferInstruction({ source, destination, amount }))}>
+ *             Preview
+ *         </button>
+ *         {isPlanning && <Spinner />}
+ *         {planned && (
+ *             <ConfirmModal plan={planned} onConfirm={() => execute(planned)} />
+ *         )}
+ *         {didSend && <span>Sent!</span>}
+ *     </>
+ * );
  * ```
  *
  * @see {@link usePlanTransactions} — multi-transaction variant.
  * @see {@link useSendTransaction} — pairs with this hook to execute the plan.
  * @see {@link useAction}
+ * @see {@link isAbortError}
  */
 export function usePlanTransaction(): UsePlanTransactionState {
     const client = useClientWithPlanTransaction('usePlanTransaction');
@@ -86,9 +81,10 @@ export function usePlanTransaction(): UsePlanTransactionState {
  * callers can preview splitting / ordering before executing.
  *
  * Calling `send` again while planning is in flight aborts the prior call;
- * `reset()` does the same. Callers that `await send(...)` should filter
- * `AbortError` — see {@link usePlanTransaction}'s example for the idiomatic
- * shape, and {@link useAction} for full abort semantics.
+ * `reset()` does the same. Fire-and-forget callers read state from render —
+ * only flows that `await send(...)` need the {@link isAbortError} filter;
+ * see {@link usePlanTransaction}'s example for the idiomatic shape, and
+ * {@link useAction} for full abort semantics.
  *
  * @throws If no ancestor provider installs `client.planTransactions`.
  *

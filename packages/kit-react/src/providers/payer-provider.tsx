@@ -35,13 +35,13 @@ export type PayerProviderProps = {
  * @see {@link IdentityProvider}
  */
 export function PayerProvider({ children, signer }: PayerProviderProps) {
-    const plugin = useMemo(() => payer(signer), [signer]);
+    const plugins = useMemo(() => [payer(signer)], [signer]);
     useIdentityChurnWarning({
         consequence: 'the payer plugin is rebuilt every render, replacing `client.payer` on each render.',
         props: { signer },
         providerName: '<PayerProvider>',
     });
-    return <PluginProvider plugin={plugin}>{children}</PluginProvider>;
+    return <PluginProvider plugins={plugins}>{children}</PluginProvider>;
 }
 
 /** Props for {@link IdentityProvider}. */
@@ -60,11 +60,11 @@ export type IdentityProviderProps = {
  * @see {@link PayerProvider}
  */
 export function IdentityProvider({ children, signer }: IdentityProviderProps) {
-    const plugin = useMemo(() => identity(signer), [signer]);
+    const plugins = useMemo(() => [identity(signer)], [signer]);
     useIdentityChurnWarning({
         consequence: 'the identity plugin is rebuilt every render, replacing `client.identity` on each render.',
         props: { signer },
         providerName: '<IdentityProvider>',
     });
-    return <PluginProvider plugin={plugin}>{children}</PluginProvider>;
+    return <PluginProvider plugins={plugins}>{children}</PluginProvider>;
 }

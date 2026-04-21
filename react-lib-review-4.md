@@ -7,6 +7,48 @@ This is a fresh pass — reviews 1–3 landed the big structural items (read-onl
 
 ---
 
+## Session status (2026-04-20)
+
+Sections below are annotated with `✅ Resolved` / `⏸ Withdrawn` / `🟡 Deferred` / `🟠 Open` after a triage pass in conversation.
+
+**Resolved (landed in code + docs):**
+
+- Consolidated `kit-react-wallet` into `@solana/kit-react/wallet` subpath (single package with subpath exports for core, wallet, and the future SWR / TanStack adapters). `@solana/kit-plugin-wallet` is declared as an optional peer dep, so read-only apps skip it. Spec + README updated with a "why subpath-in-one-package not sibling packages" decision.
+- `priorityFees` doc drift fixed — README + spec now list `transactionConfig` (matches `SolanaRpcConfig`).
+- `ConnectButton` inlined in the quickstart (folded into the subpath rewrite).
+- `useBalance(null)` — new "Gating on upstream data" section in README showing ✅ `?? null` vs ❌ early-return; `useBalance` docblock reordered accordingly.
+- First-render loading state — new "Rendering the three branches" snippet in README (`isLoading / error / data`). New design decision in the spec explaining why `{data, error, isLoading}` rather than Suspense / Error Boundaries.
+- `isAbortError` helper exported; all `useAction`-based docblocks (`useAction`, `useSendTransaction`, `useSendTransactions`, `usePlanTransaction`, `usePlanTransactions`) restructured to lead with fire-and-forget examples and relegate `await + isAbortError` to an advanced section. README + spec updated.
+- `useAction` status booleans — added `isIdle` / `isRunning` / `isSuccess` / `isError` derived from `status`, matching TanStack Query / wagmi mutation conventions. Tests added; docs + spec updated. `status` kept alongside for `switch`/exhaustiveness use cases.
+- `useLiveQuery` factory now receives an `AbortSignal` (consistency with `useSubscription`; unlocks auxiliary-work cancellation inside the factory). Additive change — `_signal` in existing callers.
+- `useSelectAccount` documented as "synchronous by design" in code + README + spec. Return type stays `void`; no `Promise.resolve()` normalization.
+- Wallet action hooks (`useConnectWallet`, `useDisconnectWallet`, `useSignMessage`, `useSignIn`) now return the full `ActionState` shape (`send`, `isRunning`, `isSuccess`, `isError`, `data`, `error`, `reset`) — matches `useSendTransaction` / `useMutation` ecosystem conventions and gives callers loading / error state without wrapping in `useAction`. `useSelectAccount` stays a bare callback. Five new smoke tests added. Audit confirmed the remaining hooks (reactive reads, infra) are correctly classified.
+- `PluginProvider` prop shape simplified to a single `plugins: readonly ClientPlugin[]` (the discriminated-union `plugin` xor `plugins` form is gone). One-plugin callers pass `[plugin]`. Internal callers + tests migrated.
+- Hook-level test coverage filled in for all previously-untested live-data, transaction, wallet-action, capability, and chain hooks — 66 new tests (now 193 total) across 7 new files plus a shared RPC stub helper.
+- `dist/` gitignore bug — 76 previously-tracked build artifacts untracked via `git rm --cached`; `.gitignore` now takes effect.
+
+**Withdrawn:**
+
+- `useSubscription` missing `slot` — withdrawn. Asymmetry is principled: `useLiveQuery` owns a `ReactiveStore<SolanaRpcResponse<T>>` internally (slot is load-bearing for dedup) so surfacing it is free; `useSubscription` is a passthrough, so slot lives wherever Kit's type for the subscription already puts it (`data?.context.slot` for `SolanaRpcResponse<T>` subscriptions; `data.slot` for `slotNotifications`; absent for slot-less notifications). Flattening would lose type fidelity.
+- `useSendAndConfirmTransaction` composed hook — withdrawn. Misread of the executor: `useSendTransaction` already *is* send-and-confirm (awaits `sendAndConfirmTransaction` at `commitment: 'confirmed'`), so `data.signature` is already confirmed by the time it surfaces. A composed hook would be redundant.
+- `useLiveQuery` three-generic reorder — withdrawn. Upstream uses the same `<TRpcValue, TSubscriptionValue, TItem>` order; reordering would create a Kit↔kit-react divergence. All three generics infer from the factory in practice; the explicit-generic case is rare and better solved at the mapper site.
+- `useConnectedWallet` ref-mutation-during-render — withdrawn. Explored the reviewer's suggested `useMemo` + closure pattern; it fails `react-hooks/immutability` (React Compiler rule) because `let`-in-closure reassignment is exactly what the rule flags, whereas `ref.current =` is the blessed escape hatch. Neither pattern actually fixes the underlying concurrency concern (discarded-render residue persists either way) — only a post-commit-effect setup would, and that breaks first-render caching. The existing ref-based projection is the most idiomatic form; leaving as-is per the reviewer's own "not critical" downgrade.
+
+**Deferred (fine to revisit if a concrete use case surfaces):**
+
+- `useReactiveCapability<K, V>` third-party helper for the `subscribeTo<Capability>` convention. Purely additive, easy to add later. Waiting on a concrete third-party consumer (relayer plugin with rotating `client.payer`, custom-chain plugin with reactive `client.foo`, etc.) before introducing the API surface.
+
+**Still open (queue for a future pass):**
+
+- `useSubscription` missing `isLoading` discriminator + first-render data-reset flash.
+- `useLiveQuery` factory missing `AbortSignal` (consistency with `useSubscription`).
+- `useIdentityChurnWarning` third-party callout in the README (it's exported but not discoverable).
+- `ActionState` discriminated-union public type (narrow on `status` without non-null assertions on `data` — would pair naturally with the new booleans).
+- SWR / TanStack adapter questions (shared hook name, `useLiveQuery` collision with TanStack bridge, subpath-export wiring). Re-open when adapter implementation starts.
+- Spec drift: `useLiveStore`'s `abortRef` (spec) vs `controllerRef` (impl). Trivial fix on next spec pass.
+
+---
+
 ## TL;DR
 
 - The library is shaping up well — layered, hooks-first, the error messages are good, and the wallet / read-only / test stacks are all expressible without abstraction cliffs. Nothing here is structural.
@@ -20,6 +62,8 @@ This is a fresh pass — reviews 1–3 landed the big structural items (read-onl
 ## Beginner developer experience
 
 ### Entry point is confusingly split between two packages
+
+> **Status: ✅ Resolved** — addressed structurally. `kit-react-wallet` is now the `@solana/kit-react/wallet` subpath of a single package (optional peer dep on `@solana/kit-plugin-wallet`), so beginners `pnpm add @solana/kit-react` once and discover wallet via subpath. Avoids both the peer-dep-pollution cost of an umbrella re-export and the "two copies of the same lib in the dep tree" risk of sibling packages. Spec + README updated with the design rationale.
 
 The quickstart pattern for an app with a user wallet is:
 
@@ -50,6 +94,8 @@ The `@solana/kit` ecosystem is pitched as beginner-friendlier than wallet-adapte
 
 ### The quickstart assumes components you haven't defined yet
 
+> **Status: ✅ Resolved** — `ConnectButton` is now inlined in the kit-react quickstart (folded into the subpath rewrite). Copy-paste gives a runnable snippet.
+
 [kit-react/README.md:42](packages/kit-react/README.md#L42):
 
 ```tsx
@@ -62,6 +108,8 @@ Minor enough to fix once; noted here because the quickstart is the first impress
 
 ### `useBalance(null)` is clever but surprising
 
+> **Status: ✅ Resolved** — new "Gating on upstream data" section in the README with ✅ (`addr ?? null`) / ❌ (early-return) examples; `useBalance` docblock reordered so the hook call comes before the early return with a one-line comment on why. The `react-hooks/rules-of-hooks` ESLint rule remains the automatic backstop for the naïve form.
+
 Passing `null` to disable is consistent with react-query / SWR and is explained in the docblock — but a beginner coming from wallet-adapter (`useConnection()` + `connection.getBalance(pubkey)`) is more likely to write:
 
 ```tsx
@@ -73,9 +121,13 @@ const { data } = useBalance(connected.account.address);
 
 ### The first-render loading state isn't discussed end-to-end
 
+> **Status: ✅ Resolved** — new "Rendering the three branches" README snippet shows the canonical `if (isLoading) / if (error) / return <data>` pattern plus a one-line note on how the render collapses once `data` arrives. Also added a design decision to the spec explaining why `{data, error, isLoading}` rather than Suspense or Error Boundaries (Suspense's one-shot promise model doesn't fit live subscriptions; Error Boundaries can't replace reactive `error` for expected failures).
+
 `useBalance`, `useAccount`, `useTransactionConfirmation`, `useLiveQuery`, and `useSubscription` all distinguish three cases (disabled / active-loading / server-render). That's a nice invariant, but the beginner DX asks the reverse question: "what does my UI show during the transition from `isLoading: true` → `data: X`?". The docblocks explain the invariant but don't walk through a `{isLoading && <Spinner/>} {data && <View data={data}/>}` pattern. A single three-line snippet in the README under "Live data" would save every beginner from discovering the shape empirically.
 
 ### `useAction` examples are intimidating
+
+> **Status: ✅ Resolved** — docblocks for all five `useAction`-based hooks (`useAction`, `useSendTransaction`, `useSendTransactions`, `usePlanTransaction`, `usePlanTransactions`) restructured to lead with a fire-and-forget example (no `await`, state from render) and relegate the `await + isAbortError` form to an "advanced" section. README Transactions section follows the same shape. Spec abort paragraph updated to match. See the next item for the helper.
 
 Every `useAction`-using docblock now shows:
 
@@ -95,6 +147,8 @@ For a newcomer trying to send their first transaction, the boilerplate reads lik
 ## General DX
 
 ### Unchecked `err as Error` cast in every AbortError filter
+
+> **Status: ✅ Resolved** — `isAbortError(err: unknown): boolean` exported from `@solana/kit-react`. All docs, spec, and README snippets migrated to use it. Kept the throw-on-supersede contract because (a) it matches the JS ecosystem convention (`fetch({signal})` etc.), (b) advanced flows like sign-then-submit-to-API genuinely need to know when they've been superseded, and (c) fire-and-forget callers never observe the rejection anyway.
 
 All five `useAction`-based hooks (`useAction`, `useSendTransaction`, `useSendTransactions`, `usePlanTransaction`, `usePlanTransactions`) show the `if ((err as Error).name === 'AbortError') return;` pattern in their primary example. That's:
 
@@ -127,11 +181,15 @@ Much friendlier for beginners and removes the unchecked cast. Non-breaking; the 
 
 ### `useAction`'s `status` leaks to user conditionals
 
+> **Status: ✅ Resolved** — added `isIdle` / `isRunning` / `isSuccess` / `isError` booleans derived from `status`, matching TanStack Query / wagmi mutation conventions. `status` kept alongside for `switch`-exhaustiveness patterns — docblock on `status` and a README line now make clear that both shapes are exposed, use whichever reads better. Six new tests cover boolean↔status correspondence and the `isAbortError` helper's error-shape detection.
+
 The four-value union `'idle' | 'running' | 'success' | 'error'` is correct, but most call sites want booleans (`isRunning`, `isError`). That's 4× checks vs 1× check. Both SWR (`isLoading`, `isValidating`, `error`) and TanStack (`isPending`, `isError`, `isSuccess`) lean on booleans for this reason.
 
 Additive derived fields (`isIdle`, `isRunning`, `isSuccess`, `isError`) cost one `useMemo` entry and would make the common `{isRunning && <Spinner/>}` pattern idiomatic. The existing `status` string stays for anyone who prefers pattern-matching. Non-breaking.
 
 ### `useSubscription` is the only live hook without `slot`
+
+> **Status: ⏸ Withdrawn** — asymmetry is principled. `useLiveQuery` owns a `ReactiveStore<SolanaRpcResponse<T>>` internally (slot is load-bearing for dedup) so surfacing `slot` is free; `useSubscription` is a passthrough and `T` is whatever Kit types the subscription as — `data?.context.slot` works for `SolanaRpcResponse<T>` subscriptions (`accountNotifications`, `signatureNotifications`, `logsNotifications`), `data.slot` works for `slotNotifications`, and slot-less notifications don't have one. Flattening would either lose type fidelity (unwrap the envelope) or require per-subscription special-casing.
 
 `LiveQueryResult<T>` now surfaces `slot` (good!). `useSubscription` returns `{ data, error }` without it. For subscription-only data where the notification carries a slot (most of them do — `slotNotifications`, `blockNotifications`, `rootNotifications`), callers can't pull the slot through without building a bespoke tuple inside `rpcSubscriptionValueMapper`. Either:
 
@@ -140,7 +198,11 @@ Additive derived fields (`isIdle`, `isRunning`, `isSuccess`, `isError`) cost one
 
 Small, but it'd be nice to have the same-shape live-data contract across all three subscription hooks. Could be deferred — flag it for the futures section.
 
+
+
 ### Factory/deps contract is subtly different across generic hooks
+
+> **Status: ✅ Resolved** — `useLiveQuery`'s factory signature is now `(signal: AbortSignal) => UseLiveQueryConfig<…>`, matching `useSubscription`. The signal is the same one threaded into the underlying reactive store (fires on dep change + unmount), so callers who want to run auxiliary work in the factory (aux fetches, WASM decoder warmup, etc.) get free cancellation. Additive change — existing callers can type `_signal` and keep their bodies unchanged. README + spec examples updated.
 
 `useLiveQuery`'s factory is `() => UseLiveQueryConfig<…>` — no abort signal.
 `useSubscription`'s factory is `(signal: AbortSignal) => PendingRpcSubscriptionsRequest | null` — has the signal.
@@ -153,6 +215,8 @@ Worth doing for consistency even if no one uses it immediately. Symmetry with `u
 
 ### `useSelectAccount` returns `void`, not `Promise<void>`
 
+> **Status: ✅ Resolved (documented)** — the sync return is correct: selecting between already-authorized accounts is a local state switch, not a wallet round-trip (`useConnectWallet` is the round-trip hook, and it's the wallet that decides which accounts to authorize). Wrapping in `Promise.resolve(…)` to normalize the shape would hide that contract. Instead, the `useSelectAccount` docblock now states "Synchronous by design" explicitly and explains why; the README's action-hooks list annotates it with the reason inline, and the spec sketch's comment matches.
+
 [wallet-actions.ts:52](packages/kit-react-wallet/src/hooks/wallet-actions.ts#L52):
 
 ```ts
@@ -164,6 +228,8 @@ Every other action hook returns a `Promise<…>` — `useConnectWallet`, `useDis
 Either document the sync contract explicitly in the hook docblock, or wrap the plugin call in `Promise.resolve(…)` to normalize the shape. I'd lean "document it" since the underlying plugin's contract is the source of truth.
 
 ### Error channel quality is uneven
+
+> **Status: ✅ Resolved (deeper than proposed)** — rather than adding a "wrap in `useAction`" example to each docblock, the four async wallet hooks (`useConnectWallet`, `useDisconnectWallet`, `useSignMessage`, `useSignIn`) now *are* `useAction`-shaped. They return `ActionState<TArgs, TResult>` with `send`, reactive `status` + `isIdle` / `isRunning` / `isSuccess` / `isError` booleans, `data`, `error`, and `reset` — identical to `useSendTransaction`. Fire-and-forget call sites render from `isRunning` / `error`; flows that need the resolved value `await send(...)` and filter supersedes with `isAbortError`. Auto-supersede (double-click on "Connect" aborts the first attempt) comes along for free. `useSelectAccount` stays a bare callback because it's synchronous — no async lifecycle to track. Five new tests cover the four converted hooks plus a sanity check that `useSelectAccount` is still a bare function. README, spec hooks-category table, and spec hook sketches all updated. An audit of the remaining hooks (reactive reads, transaction hooks, infra) confirmed nothing else needs to change.
 
 Core hooks get three channels:
 
@@ -182,6 +248,8 @@ Either:
 
 ### No convenience for "send then watch confirmation"
 
+> **Status: ⏸ Withdrawn (misread)** — `useSendTransaction` already *is* send-and-confirm. The executor calls `sendAndConfirmTransaction(..., { commitment: 'confirmed' })` ([kit-plugin-rpc/src/transaction-plan-executor.ts:125](packages/kit-plugin-rpc/src/transaction-plan-executor.ts#L125)), and the returned `SuccessfulSingleTransactionPlanResult` is only resolved after confirmation — so `data.signature` is already a confirmed signature, not a pending one. The composed hook I proposed would be redundant. `useTransactionConfirmation` remains valuable for (a) watching `confirmed → finalized` progression when finality matters, and (b) displaying status for signatures the app didn't originate (URL params, tx history). Neither case justifies a composed named hook.
+
 The most common pattern after `useSendTransaction` is:
 
 ```tsx
@@ -198,11 +266,15 @@ It's four lines and it works, but it's also the ~90% flow. A composed hook (`use
 
 ### `PluginProvider` single-vs-array prop is a mild friction
 
+> **Status: ✅ Resolved** — `PluginProvider`'s prop shape is now a single `plugins: readonly ClientPlugin[]`. The discriminated-union `plugin` xor `plugins` form is gone. One-plugin callers wrap `[plugin]` — six characters — and the churn-warning diff no longer has to reconstruct a synthetic list from `plugin ? [plugin] : plugins`. Internal callers (`PayerProvider`, `IdentityProvider`, `<WalletProvider>`) migrated to `plugins={[…]}` and their `useMemo` now returns a memoized array. Tests, README, and spec updated.
+
 The discriminated-union prop shape (`plugin` xor `plugins`) is TypeScript-correct and tests the type system nicely. In practice the one-vs-many split is almost never load-bearing — authors with one plugin pass `plugin={…}`, authors with many pass `plugins={[…]}`, nothing ever dispatches on it.
 
 A single `plugins: readonly ClientPlugin[]` prop (accepting `[singlePlugin]` for the common case) would simplify both the prop shape and the churn-warning diff. The one-plugin case would cost a `[]` wrap — six characters — and the discriminated-union types go away. Not urgent; flag for when someone touches this file next.
 
 ### `useLiveQuery` three-generic surface is awkward
+
+> **Status: ⏸ Withdrawn** — two reasons. (1) Upstream `createReactiveStoreWithInitialValueAndSlotTracking` in Kit uses the exact same `<TRpcValue, TSubscriptionValue, TItem>` ordering — swapping in the React wrapper would make readers bouncing between Kit and kit-react see two different conventions for no inference win. (2) All three generics infer in practice: `TItem` from the mapper return types, `TRpcValue` / `TSubscriptionValue` from the request structural positions. Explicit generic specification is rare enough to not justify the divergence — the rare "widen `TItem`" case is better solved at the mapper site (`rpcValueMapper: (v): MyItem => …`) than by spelling the hook's type args.
 
 `useLiveQuery<TRpcValue, TSubscriptionValue, TItem>` requires the caller to specify three generics when inference can't carry them, which is any non-trivial mapper. Most call sites want to specify `TItem` only. Ordering matters for partial inference — `TItem` last means you'd have to explicitly spell the first two to specify the third.
 
@@ -219,6 +291,8 @@ With this shape a caller who only knows `TItem` writes `useLiveQuery<MyGame>(fac
 
 ### `<WalletProvider>`'s `role` prop is a single axis; real apps sometimes want two
 
+> **Status: ✅ Already handled** — re-read of the current error at [parent-assertions.ts:22-24](packages/kit-react/src/internal/parent-assertions.ts#L22-L24) shows it already lists `role 'signer' or 'payer'` in a parenthetical: *"RpcProvider requires a payer. Wrap it in a WalletProvider (with role 'signer' or 'payer') or a PayerProvider."* A `role='identity'` user reading that sees both valid fixes inline — either add a `<PayerProvider>` or widen the role. My review's proposed extra sentence was redundant with that parenthetical. Keeping the current message — adding role-specific branches would be the verbose turn we're avoiding.
+
 The `WalletRole` enum covers four useful combinations of (installs payer?) × (installs identity?). But:
 
 - `role="signer"` means wallet = payer and wallet = identity.
@@ -227,6 +301,8 @@ The `WalletRole` enum covers four useful combinations of (installs payer?) × (i
 There's no shorthand for "wallet = payer; no identity" beyond `role="payer"` (which is correct) and "wallet = identity, wallet = payer" beyond `role="signer"`. That's fine. The subtle gap: for `role="identity"` users, the error path when they forget to mount `<PayerProvider>` downstream is "`<RpcProvider>` requires a payer" — which is correct but doesn't mention the `role="identity"` combination. Worth an extra sentence in the `RpcProvider` error for the `role="identity"` case: "Add a `<PayerProvider signer={…}>` between `<WalletProvider role='identity'>` and `<RpcProvider>`, or change the wallet role to `'signer'` / `'payer'`."
 
 ### The "third-party providers" story has a small gap
+
+> **Status: 🟡 Deferred** — fair point but no concrete use case yet. The `useReactiveCapability<K, V>` helper is purely additive — can be introduced later without breaking anything, and it'd only really earn its place once a third party actually hits the need (a relayer plugin with a rotating `client.payer` that isn't `kit-plugin-wallet`, a custom-chain plugin with reactive `client.foo`, etc.). Revisit when someone surfaces that use case.
 
 `useClientCapability` is the recommended path for third-party hook authors. Good. But the spec only covers third-party **plugin authors** who ship React bindings for their own plugin — what about app authors who want to install *kit-plugin-wallet-like* behavior with their own reactive `client.foo`? The `subscribeTo<Capability>` convention is documented as "observed by `usePayer` / `useIdentity`" — there's no generic hook like `useCapability<K>('foo', …)` that subscribes to `subscribeToFoo` out of the box.
 
@@ -256,6 +332,8 @@ Two small snags:
 - [use-action.ts:63](packages/kit-react/src/hooks/use-action.ts#L63) — the `@example` block is a reasonable 20+ line snippet; beginners would benefit from a shorter "fire-and-forget" primary example with the try/catch version under "Advanced usage". See beginner-DX section above.
 
 ### Tests — ⚠️ real gaps
+
+> **Status: ✅ Resolved** — 66 new hook-level tests added across 7 files, raising the suite from 127 to 193 passing (browser / RN matrices combined). New shared stub helper at [`test/_setup-rpc.ts`](packages/kit-react/test/_setup-rpc.ts) covers `createDeferred` / `stubRpcRequest` / `stubRpcSubscription` / `createClientWithRpc`, making per-hook tests mostly mechanical. Coverage added for: `useBalance` (null-gate, capability throw, getBalance+accountNotifications wire-up, initial-response mapping + slot), `useAccount` (same, plus encoded vs decoded-decoder overload), `useTransactionConfirmation` (same, plus default vs explicit commitment), `useLiveQuery` (factory + signal-on-dep-change + mapper application), `useSubscription` (null-gate, notification emit, error surfacing, signal-on-dep-change), `useSendTransaction` / `useSendTransactions` / `usePlanTransaction` / `usePlanTransactions` (capability throws + signal threading + caller-config preservation), `useClientCapability` (pass-through, single / dual / 3+ error formatting, missing-provider), `useChain` generic widening. The wallet action hooks already got five smoke tests in an earlier pass. Deep slot-dedup + multi-notification scenarios stay covered at the `useLiveStore` / `useLiveQueryResult` primitive level in `live-store.test.tsx` — not re-tested per hook to avoid duplication.
 
 Existing tests:
 
@@ -288,6 +366,8 @@ Concrete suggestion: a shared `createStubRpcClient()` helper in a `_setup.ts` (s
 
 ### READMEs — ✅ mostly solid, one drift
 
+> **Status: ✅ Resolved** — `priorityFees` removed from both the README and the spec's prop-list for `<RpcProvider>`. `transactionConfig` (the actual top-level prop on `SolanaRpcConfig`) is now listed in its place. kit-react-wallet's README content was folded into the kit-react README's "Wallet bindings" section as part of the subpath consolidation.
+
 Both packages have structured, on-brand READMEs with brief intros, installation, usage, and deep-dive sections. Code snippets are TypeScript and realistic.
 
 One concrete drift, same as the spec:
@@ -306,13 +386,15 @@ Per CLAUDE.md the umbrella package is deprecated; no new exports should land the
 
 ### Lint / build / tests — not run (advisory only)
 
+> **Status: ✅ Validated** — run after each subsequent change this session: `pnpm test:types` clean, `pnpm test:unit` 117 passing / 63 skipped (cross-env), `pnpm build` emits `dist/index.*` + `dist/wallet/index.*` for all five platform/format combos, `pnpm lint` clean.
+
 The tsup + vitest + tsc-declarations setup matches the other packages in the monorepo and should be picked up by `pnpm lint` / `pnpm test` / `pnpm build` without bespoke wiring. Advisory; worth running before the prototype graduates.
 
 ---
 
 ## Code quality
 
-### `useConnectedWallet`'s ref-based memoization is load-bearing and well-commented
+### `useConnectedWallet`'s ref-based memoization is load-bearing and well-commented — ⏸ Withdrawn
 
 [wallet-state.ts:94–110](packages/kit-react-wallet/src/hooks/wallet-state.ts#L94-L110). The projection cache (return previous object when `account` and `wallet` haven't changed) is exactly right for `useSyncExternalStore`'s "skip the re-render when snapshot is referentially equal" contract, and the test at [wallet-state.test.tsx:56–76](packages/kit-react-wallet/test/wallet-state.test.tsx#L56-L76) covers it.
 

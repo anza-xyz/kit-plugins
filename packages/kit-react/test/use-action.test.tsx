@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { useAction } from '../src';
+import { isAbortError, useAction } from '../src';
 
 describe.skipIf(!__BROWSER__ && !__REACTNATIVE__)('useAction', () => {
     it('starts idle with no data or error', () => {
@@ -9,6 +9,60 @@ describe.skipIf(!__BROWSER__ && !__REACTNATIVE__)('useAction', () => {
         expect(result.current.status).toBe('idle');
         expect(result.current.data).toBeUndefined();
         expect(result.current.error).toBeUndefined();
+    });
+
+    it('exposes `is{Idle,Running,Success,Error}` booleans derived from status', async () => {
+        let resolveFn: (v: number) => void = () => {};
+        const fn = vi.fn((_signal: AbortSignal) => new Promise<number>(r => (resolveFn = r)));
+        const { result } = renderHook(() => useAction(fn));
+
+        // idle
+        expect(result.current.isIdle).toBe(true);
+        expect(result.current.isRunning).toBe(false);
+        expect(result.current.isSuccess).toBe(false);
+        expect(result.current.isError).toBe(false);
+
+        // running
+        let pending!: Promise<number>;
+        act(() => {
+            pending = result.current.send();
+        });
+        expect(result.current.isIdle).toBe(false);
+        expect(result.current.isRunning).toBe(true);
+        expect(result.current.isSuccess).toBe(false);
+        expect(result.current.isError).toBe(false);
+
+        // success
+        await act(async () => {
+            resolveFn(1);
+            await pending;
+        });
+        expect(result.current.isIdle).toBe(false);
+        expect(result.current.isRunning).toBe(false);
+        expect(result.current.isSuccess).toBe(true);
+        expect(result.current.isError).toBe(false);
+    });
+
+    it('sets isError after a rejected send', async () => {
+        const fn = vi.fn().mockRejectedValue(new Error('boom'));
+        const { result } = renderHook(() => useAction(fn));
+
+        await act(async () => {
+            await result.current.send().catch(() => undefined);
+        });
+        expect(result.current.isError).toBe(true);
+        expect(result.current.isRunning).toBe(false);
+        expect(result.current.isSuccess).toBe(false);
+        expect(result.current.isIdle).toBe(false);
+    });
+
+    it('isAbortError detects the superseded-call rejection shape', () => {
+        const abort = new Error('aborted');
+        abort.name = 'AbortError';
+        expect(isAbortError(abort)).toBe(true);
+        expect(isAbortError(new Error('regular'))).toBe(false);
+        expect(isAbortError('AbortError')).toBe(false);
+        expect(isAbortError(null)).toBe(false);
     });
 
     it('transitions idle → running → success on a successful call', async () => {

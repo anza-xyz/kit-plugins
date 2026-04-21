@@ -95,12 +95,12 @@ describe.skipIf(!__BROWSER__ && !__REACTNATIVE__)('providers', () => {
         expect(result.current).not.toHaveProperty('sendTransactions');
     });
 
-    it('PluginProvider applies a plugin', () => {
+    it('PluginProvider applies a single plugin wrapped in an array', () => {
         const plugin = (client: object) => ({ ...client, customField: 'yes' });
         const { result } = renderHook(() => useClient<{ customField: string }>(), {
             wrapper: ({ children }) => (
                 <RootWrap>
-                    <PluginProvider plugin={plugin}>{children}</PluginProvider>
+                    <PluginProvider plugins={[plugin]}>{children}</PluginProvider>
                 </RootWrap>
             ),
         });
@@ -126,7 +126,7 @@ describe.skipIf(!__BROWSER__ && !__REACTNATIVE__)('providers', () => {
         try {
             const { rerender } = render(
                 <RootWrap>
-                    <PluginProvider plugin={(c: object) => ({ ...c, n: 0 })}>
+                    <PluginProvider plugins={[(c: object) => ({ ...c, n: 0 })]}>
                         <span>ok</span>
                     </PluginProvider>
                 </RootWrap>,
@@ -136,7 +136,7 @@ describe.skipIf(!__BROWSER__ && !__REACTNATIVE__)('providers', () => {
             for (let i = 1; i <= 3; i++) {
                 rerender(
                     <RootWrap>
-                        <PluginProvider plugin={(c: object) => ({ ...c, n: i })}>
+                        <PluginProvider plugins={[(c: object) => ({ ...c, n: i })]}>
                             <span>ok</span>
                         </PluginProvider>
                     </RootWrap>,
@@ -149,13 +149,13 @@ describe.skipIf(!__BROWSER__ && !__REACTNATIVE__)('providers', () => {
         }
     });
 
-    it('PluginProvider does not warn when the plugin reference is stable', () => {
+    it('PluginProvider does not warn when plugin identities are stable', () => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
         try {
             const stable = (c: object) => ({ ...c, n: 1 });
             const { rerender } = render(
                 <RootWrap>
-                    <PluginProvider plugin={stable}>
+                    <PluginProvider plugins={[stable]}>
                         <span>ok</span>
                     </PluginProvider>
                 </RootWrap>,
@@ -163,7 +163,7 @@ describe.skipIf(!__BROWSER__ && !__REACTNATIVE__)('providers', () => {
             for (let i = 0; i < 5; i++) {
                 rerender(
                     <RootWrap>
-                        <PluginProvider plugin={stable}>
+                        <PluginProvider plugins={[stable]}>
                             <span>ok</span>
                         </PluginProvider>
                     </RootWrap>,

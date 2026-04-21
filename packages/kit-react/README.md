@@ -48,10 +48,10 @@ function Dashboard() {
 
 function ConnectButton() {
     const wallets = useWallets();
-    const connect = useConnectWallet();
+    const { send: connect, isRunning } = useConnectWallet();
     return wallets.map(w => (
-        <button key={w.name} onClick={() => connect(w)}>
-            Connect {w.name}
+        <button key={w.name} onClick={() => connect(w)} disabled={isRunning}>
+            {isRunning ? 'Connecting…' : `Connect ${w.name}`}
         </button>
     ));
 }
@@ -133,10 +133,10 @@ Set `client.payer` or `client.identity` from an explicit `TransactionSigner`. Us
 
 ### `PluginProvider`
 
-Installs any Kit plugin without needing a plugin-specific React wrapper.
+Installs any ordered list of Kit plugins without needing a plugin-specific React wrapper. For a single plugin, pass a one-element array:
 
 ```tsx
-<PluginProvider plugin={dasPlugin({ endpoint: '…' })}>
+<PluginProvider plugins={[dasPlugin({ endpoint: '…' })]}>
     <App />
 </PluginProvider>
 
@@ -145,7 +145,7 @@ Installs any Kit plugin without needing a plugin-specific React wrapper.
 </PluginProvider>
 ```
 
-Plugin identity must be stable across renders — memoize it in the caller.
+Plugin identity must be stable across renders — memoize in the caller. The array itself is compared element-wise, so inline `plugins={[a, b]}` is fine as long as `a` and `b` are stable references.
 
 ### `<WalletProvider>`
 
@@ -214,13 +214,46 @@ const { data } = useAccount(gameAddress, getGameCodec()); // Account<GameData> |
 const { data } = useTransactionConfirmation(signature);
 ```
 
+#### Rendering the three branches
+
+The canonical shape is a three-branch render — loading, error, data:
+
+```tsx
+function Balance({ address }: { address: Address }) {
+    const { data, error, isLoading } = useBalance(address);
+    if (isLoading) return <Spinner />;
+    if (error) return <span>Couldn't load balance.</span>;
+    return <span>{data} lamports</span>;
+}
+```
+
+Once `data` arrives the subscription keeps it live — subsequent RPC / WebSocket updates flow through without another loading pass, so the three-branch render collapses to the data branch for the rest of the component's life.
+
+#### Gating on upstream data
+
+Pass `null` when the argument isn't ready yet — a disabled query reports `{ data: undefined, error: undefined, isLoading: false }`, the same shape SWR / react-query return when the key is `null`.
+
+```tsx
+// ✅ Use optional chaining to fall through to `null` — hook still runs, stays disabled.
+const connected = useConnectedWallet();
+const { data: balance, isLoading } = useBalance(connected?.account.address ?? null);
+if (!connected) return <ConnectButton />;
+
+// ❌ Don't early-return before the hook. Rules of hooks forbids conditional hook calls;
+//    `react-hooks/rules-of-hooks` flags this, but the intent below (fetch only when connected)
+//    is what the `?? null` pattern above already expresses.
+const connected = useConnectedWallet();
+if (!connected) return <ConnectButton />;
+const { data: balance } = useBalance(connected.account.address);
+```
+
 For custom RPC + subscription combinations, use the generic hooks:
 
 ```tsx
 const { data: slot } = useSubscription(() => client.rpcSubscriptions.slotNotifications(), [client]);
 
 const { data: game } = useLiveQuery(
-    () => ({
+    _signal => ({
         rpcRequest: client.rpc.getAccountInfo(addr, { encoding: 'base64' }),
         rpcSubscriptionRequest: client.rpcSubscriptions.accountNotifications(addr, { encoding: 'base64' }),
         rpcValueMapper: v => (v ? parseGame(parseBase64RpcAccount(addr, v)) : null),
@@ -232,14 +265,28 @@ const { data: game } = useLiveQuery(
 
 ### Transactions
 
-`useSendTransaction` accepts the same inputs as `client.sendTransaction`: a raw instruction, an instruction plan, a transaction message, or a pre-built single-transaction plan.
+`useSendTransaction` accepts the same inputs as `client.sendTransaction`: a raw instruction, an instruction plan, a transaction message, or a pre-built single-transaction plan. The common case is fire-and-forget — call `send(...)` from an event handler, render from `isRunning` / `data` / `error`:
 
 ```tsx
-const { send, status, data, error, reset } = useSendTransaction();
-await send(getTransferInstruction({ source, destination, amount }));
+function SendButton({ ix }: { ix: Instruction }) {
+    const { send, isRunning, error } = useSendTransaction();
+    return (
+        <>
+            <button onClick={() => send(ix)} disabled={isRunning}>
+                {isRunning ? 'Sending…' : 'Send'}
+            </button>
+            {error && <span>{String(error)}</span>}
+        </>
+    );
+}
+```
 
-// With the fluent program client API
-await send(client.system.instructions.transfer({ source, destination, amount }));
+The hook also exposes the full lifecycle as a discriminated `status` string (`'idle' | 'running' | 'success' | 'error'`) alongside the `isIdle` / `isRunning` / `isSuccess` / `isError` booleans — use whichever reads better at the call site. The booleans match TanStack Query / SWR mutation conventions.
+
+With the fluent program client API, pass the instruction directly:
+
+```tsx
+send(client.system.instructions.transfer({ source, destination, amount }));
 ```
 
 `useSendTransactions` is the multi-transaction variant.
@@ -252,25 +299,40 @@ await send(client.system.instructions.transfer({ source, destination, amount }))
 const { send: plan, data: planned } = usePlanTransaction();
 const { send: execute } = useSendTransaction();
 
-await plan(getTransferInstruction({ source, destination, amount }));
-// render a preview using `planned.message.instructions`, …
-await execute(planned); // SingleTransactionPlan is valid sendTransaction input
+// Preview
+<button onClick={() => plan(getTransferInstruction({ source, destination, amount }))}>Preview</button>;
+
+// …once planned is in state:
+{
+    planned && <ConfirmModal plan={planned} onConfirm={() => execute(planned)} />;
+}
 ```
+
+#### Awaiting the resolved result (advanced)
+
+Fire-and-forget covers most UIs. If you need the resolved signature / plan to branch in an event handler (navigate to a tx page, post the signed bytes to an API, etc.), `await send(...)` — and filter aborts with `isAbortError`:
+
+```tsx
+import { isAbortError } from '@solana/kit-react';
+
+async function onClick() {
+    try {
+        const result = await send(ix);
+        navigate(`/tx/${result.signature}`);
+    } catch (err) {
+        if (isAbortError(err)) return; // superseded — state reflects the newer call
+        toast.error(String(err));
+    }
+}
+```
+
+If `send` is called again (or `reset()` runs) while a prior call is in flight, the prior call is aborted: its RPC request is cancelled via `AbortSignal`, its `await` rejects with `AbortError`, and its outcome is never written to state. `isAbortError` is the one-liner for skipping the stale branch; without the filter the hook's reactive state still shows the newest call correctly, but the stale caller's `catch` sees the AbortError.
 
 ### Generic async action
 
 `useAction` wraps any async function with reactive status / data / error tracking. It's the building block behind `useSendTransaction` and is exported for custom flows (sign-then-send, partial signing, aggregator submission).
 
-The wrapped function receives an `AbortSignal` as its first argument — thread it into your `fetch`/RPC options for real cancellation, or ignore it with `_signal`. When `send` is called again (or `reset()` runs) while a prior call is in flight, that prior call is aborted: its `await` rejects with `AbortError` and its outcome is never written to state. Callers should filter `AbortError` to avoid surfacing stale errors:
-
-```tsx
-try {
-    await send(...);
-} catch (err) {
-    if ((err as Error).name === 'AbortError') return; // superseded by a newer call
-    // handle real error
-}
-```
+The wrapped function receives an `AbortSignal` as its first argument — thread it into your `fetch`/RPC options for real cancellation, or ignore it with `_signal`.
 
 Example composition (sign-then-send):
 
@@ -340,13 +402,27 @@ function SendButton() {
 
 ### Action hooks
 
-Verb-first hooks that return stable function references:
+All async wallet actions return the same `ActionState` shape as [`useAction`](#generic-async-action) / [`useSendTransaction`](#transactions) — `{ send, status, isIdle, isRunning, isSuccess, isError, data, error, reset }`. Fire-and-forget call sites read `isRunning` / `error` from render; flows that need the resolved value `await send(...)` and filter supersedes with `isAbortError`. Calling `send` again while a prior call is in flight aborts the first — the right default for double-click on "Connect".
 
-- `useConnectWallet()` — `(wallet) => Promise<accounts>`.
-- `useDisconnectWallet()` — `() => Promise<void>`.
-- `useSelectAccount()` — `(account) => void`.
-- `useSignMessage()` — `(message) => Promise<SignatureBytes>`.
-- `useSignIn()` — `(wallet, input?) => Promise<SolanaSignInOutput>` (Sign In With Solana).
+- `useConnectWallet()` — `send: (wallet) => Promise<accounts>`.
+- `useDisconnectWallet()` — `send: () => Promise<void>`.
+- `useSignMessage()` — `send: (message) => Promise<SignatureBytes>`.
+- `useSignIn()` — `send: (wallet, input?) => Promise<SolanaSignInOutput>` (Sign In With Solana).
+- `useSelectAccount()` — **bare callback, synchronous**. `(account) => void`. Selecting between already-authorized accounts is a local state switch, not a wallet round-trip, so there's no async lifecycle to track.
+
+```tsx
+function ConnectButton({ wallet }: { wallet: UiWallet }) {
+    const { send: connect, isRunning, error } = useConnectWallet();
+    return (
+        <>
+            <button onClick={() => connect(wallet)} disabled={isRunning}>
+                {isRunning ? 'Connecting…' : `Connect ${wallet.name}`}
+            </button>
+            {error && <span>{String(error)}</span>}
+        </>
+    );
+}
+```
 
 ### Signer access
 
