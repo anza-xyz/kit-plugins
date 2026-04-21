@@ -8,26 +8,37 @@ import {
     extendClient,
     MainnetUrl,
     pipe,
+    Rpc,
+    RpcSubscriptions,
+    SolanaRpcApiFromClusterUrl,
+    SolanaRpcSubscriptionsApi,
 } from '@solana/kit';
 import { planAndSendTransactions } from '@solana/kit-plugin-instruction-plan';
 
 import { rpcAirdrop } from './airdrop';
 import { rpcGetMinimumBalance } from './get-minimum-balance';
-import { rpcConnection, rpcSubscriptionsConnection } from './rpc';
+import { rpcSubscriptionsConnection } from './rpc';
 import { rpcTransactionPlanExecutor } from './transaction-plan-executor';
 import { rpcTransactionPlanner, TransactionPlannerConfig } from './transaction-planner';
 
 /**
- * Configuration for the Solana RPC plugins.
+ * Configuration for {@link solanaRpcConnection}.
+ *
+ * Describes the Solana RPC and RPC Subscriptions endpoints and any optional
+ * transport configuration to forward to {@link createSolanaRpc} and
+ * {@link createSolanaRpcSubscriptions}.
  *
  * @typeParam TClusterUrl - The type of the RPC endpoint URL.
+ *
+ * @example
+ * ```ts
+ * const config: SolanaRpcConnectionConfig = {
+ *     rpcUrl: 'https://api.mainnet-beta.solana.com',
+ *     rpcSubscriptionsUrl: 'wss://api.mainnet-beta.solana.com',
+ * };
+ * ```
  */
-export type SolanaRpcConfig<TClusterUrl extends ClusterUrl = ClusterUrl> = {
-    /**
-     * The maximum number of concurrent transaction executions allowed.
-     * Defaults to 10.
-     */
-    maxConcurrency?: number;
+export type SolanaRpcConnectionConfig<TClusterUrl extends ClusterUrl = ClusterUrl> = {
     /** Optional configuration forwarded to {@link createSolanaRpc}. */
     rpcConfig?: Parameters<typeof createSolanaRpc>[1];
     /** Optional configuration forwarded to {@link createSolanaRpcSubscriptions}. */
@@ -39,6 +50,19 @@ export type SolanaRpcConfig<TClusterUrl extends ClusterUrl = ClusterUrl> = {
     rpcSubscriptionsUrl?: TClusterUrl;
     /** URL of the Solana RPC endpoint. */
     rpcUrl: TClusterUrl;
+};
+
+/**
+ * Configuration for the Solana RPC plugins.
+ *
+ * @typeParam TClusterUrl - The type of the RPC endpoint URL.
+ */
+export type SolanaRpcConfig<TClusterUrl extends ClusterUrl = ClusterUrl> = SolanaRpcConnectionConfig<TClusterUrl> & {
+    /**
+     * The maximum number of concurrent transaction executions allowed.
+     * Defaults to 10.
+     */
+    maxConcurrency?: number;
     /**
      * Whether to skip the preflight simulation when sending transactions.
      *
@@ -89,11 +113,7 @@ export function solanaRpc<TClusterUrl extends ClusterUrl>(config: SolanaRpcConfi
     return <T extends ClientWithPayer>(client: T) =>
         pipe(
             client,
-            solanaRpcConnection<TClusterUrl>(config.rpcUrl, config.rpcConfig),
-            solanaRpcSubscriptionsConnection<TClusterUrl>(
-                config.rpcSubscriptionsUrl ?? (config.rpcUrl.replace(/^http/, 'ws') as TClusterUrl),
-                config.rpcSubscriptionsConfig,
-            ),
+            solanaRpcConnection<TClusterUrl>(config),
             rpcGetMinimumBalance(),
             rpcTransactionPlanner(config.transactionConfig),
             rpcTransactionPlanExecutor({ maxConcurrency: config.maxConcurrency, skipPreflight: config.skipPreflight }),
@@ -211,55 +231,84 @@ export function solanaLocalRpc(config?: Partial<SolanaRpcConfig<string>>) {
 }
 
 /**
- * Enhances a client with a Solana RPC connection created from a cluster URL.
+ * Enhances a client with a Solana RPC connection and a Solana RPC Subscriptions
+ * connection created from a cluster URL.
  *
- * This plugin creates a Solana RPC using {@link createSolanaRpc} and installs it
- * on the client via {@link rpcConnection}.
+ * This plugin creates both a Solana RPC using {@link createSolanaRpc} and Solana
+ * RPC Subscriptions using {@link createSolanaRpcSubscriptions}, then installs
+ * them on the client. When `rpcSubscriptionsUrl` is omitted, it is derived from
+ * `rpcUrl` by swapping the `http`/`https` protocol for `ws`/`wss`.
  *
- * @param url - The URL of the Solana cluster.
- * @param config - Optional configuration forwarded to {@link createSolanaRpc}.
- * @return A plugin that adds `client.rpc`.
+ * @param config - Configuration describing the RPC and subscriptions endpoints.
+ * @return A plugin that adds `client.rpc` and `client.rpcSubscriptions`.
  *
  * @example
  * ```ts
  * import { createClient } from '@solana/kit';
  * import { solanaRpcConnection } from '@solana/kit-plugin-rpc';
  *
- * const client = createClient().use(solanaRpcConnection('https://api.mainnet-beta.solana.com'));
+ * const client = createClient().use(solanaRpcConnection({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
  * const { value: latestBlockhash } = await client.rpc.getLatestBlockhash().send();
  * ```
  *
- * @see {@link solanaRpcSubscriptionsConnection}
- * @see {@link rpcConnection}
+ * @example
+ * Narrowing the RPC API to a specific cluster using `mainnet`, `devnet`, or
+ * `testnet` helpers from `@solana/kit`:
+ *
+ * ```ts
+ * import { createClient, mainnet } from '@solana/kit';
+ * import { solanaRpcConnection } from '@solana/kit-plugin-rpc';
+ *
+ * const client = createClient().use(
+ *     solanaRpcConnection({ rpcUrl: mainnet('https://api.mainnet-beta.solana.com') }),
+ * );
+ * ```
+ *
+ * @see {@link SolanaRpcConnectionConfig}
+ * @see {@link solanaRpc}
  */
-export function solanaRpcConnection<TClusterUrl extends ClusterUrl>(
-    url: TClusterUrl,
-    config?: Parameters<typeof createSolanaRpc<TClusterUrl>>[1],
-) {
-    return rpcConnection(createSolanaRpc<TClusterUrl>(url, config));
+export function solanaRpcConnection<TClusterUrl extends ClusterUrl>(config: SolanaRpcConnectionConfig<TClusterUrl>) {
+    const rpc = createSolanaRpc<TClusterUrl>(config.rpcUrl, config.rpcConfig);
+    const rpcSubscriptionsUrl = config.rpcSubscriptionsUrl ?? (config.rpcUrl.replace(/^http/, 'ws') as TClusterUrl);
+    const rpcSubscriptions = createSolanaRpcSubscriptions<TClusterUrl>(
+        rpcSubscriptionsUrl,
+        config.rpcSubscriptionsConfig,
+    );
+    return <T extends object>(
+        client: T,
+    ): Omit<T, 'rpc' | 'rpcSubscriptions'> & {
+        rpc: Rpc<SolanaRpcApiFromClusterUrl<TClusterUrl>>;
+        rpcSubscriptions: RpcSubscriptions<SolanaRpcSubscriptionsApi>;
+    } => extendClient(client, { rpc, rpcSubscriptions });
 }
 
 /**
  * Enhances a client with a Solana RPC Subscriptions connection created from a cluster URL.
  *
- * This plugin creates Solana RPC Subscriptions using {@link createSolanaRpcSubscriptions}
- * and installs them on the client via {@link rpcSubscriptionsConnection}.
- *
  * @param url - The URL of the Solana cluster.
  * @param config - Optional configuration forwarded to {@link createSolanaRpcSubscriptions}.
  * @return A plugin that adds `client.rpcSubscriptions`.
  *
- * @example
- * ```ts
- * import { createClient } from '@solana/kit';
- * import { solanaRpcSubscriptionsConnection } from '@solana/kit-plugin-rpc';
+ * @deprecated {@link solanaRpcConnection} now installs both `rpc` and
+ * `rpcSubscriptions`, so this dedicated helper is no longer needed. If you only
+ * need subscriptions, inline a call to `extendClient` using
+ * {@link createSolanaRpcSubscriptions}:
  *
+ * ```ts
+ * // Before
  * const client = createClient()
  *     .use(solanaRpcSubscriptionsConnection('wss://api.mainnet-beta.solana.com'));
- * ```
  *
- * @see {@link solanaRpcConnection}
- * @see {@link rpcSubscriptionsConnection}
+ * // After — full Solana RPC + subscriptions setup in a single plugin
+ * const client = createClient()
+ *     .use(solanaRpcConnection({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
+ *
+ * // Or — subscriptions only
+ * import { createSolanaRpcSubscriptions, extendClient } from '@solana/kit';
+ *
+ * const rpcSubscriptions = createSolanaRpcSubscriptions('wss://api.mainnet-beta.solana.com');
+ * const client = createClient().use(c => extendClient(c, { rpcSubscriptions }));
+ * ```
  */
 export function solanaRpcSubscriptionsConnection<TClusterUrl extends ClusterUrl>(
     url: TClusterUrl,
@@ -271,15 +320,14 @@ export function solanaRpcSubscriptionsConnection<TClusterUrl extends ClusterUrl>
 /**
  * Enhances a client with Solana RPC and RPC Subscriptions capabilities.
  *
- * @deprecated Use {@link solanaRpcConnection} and {@link solanaRpcSubscriptionsConnection} instead.
+ * @deprecated Use {@link solanaRpcConnection} instead.
  * ```ts
  * // Before
  * const client = createClient().use(rpc('https://api.mainnet-beta.solana.com'));
  *
  * // After
  * const client = createClient()
- *     .use(solanaRpcConnection('https://api.mainnet-beta.solana.com'))
- *     .use(solanaRpcSubscriptionsConnection('wss://api.mainnet-beta.solana.com'));
+ *     .use(solanaRpcConnection({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
  * ```
  */
 export function rpc<TClusterUrl extends ClusterUrl>(
@@ -296,15 +344,17 @@ export function rpc<TClusterUrl extends ClusterUrl>(
  * Enhances a client with Solana RPC and RPC Subscriptions capabilities
  * using a local validator.
  *
- * @deprecated Use {@link solanaRpcConnection} and {@link solanaRpcSubscriptionsConnection} instead.
+ * @deprecated Use {@link solanaRpcConnection} or {@link solanaLocalRpc} instead.
  * ```ts
  * // Before
  * const client = createClient().use(localhostRpc());
  *
  * // After
  * const client = createClient()
- *     .use(solanaRpcConnection('http://127.0.0.1:8899'))
- *     .use(solanaRpcSubscriptionsConnection('ws://127.0.0.1:8900'));
+ *     .use(solanaRpcConnection({
+ *         rpcUrl: 'http://127.0.0.1:8899',
+ *         rpcSubscriptionsUrl: 'ws://127.0.0.1:8900',
+ *     }));
  * ```
  */
 export function localhostRpc(url?: string, rpcSubscriptionsConfig?: DefaultRpcSubscriptionsChannelConfig<string>) {

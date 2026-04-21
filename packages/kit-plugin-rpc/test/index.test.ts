@@ -1,5 +1,5 @@
 import { createClient, createSolanaRpc, createSolanaRpcSubscriptions, mainnet, TransactionSigner } from '@solana/kit';
-import { describe, expect, expectTypeOf, it } from 'vitest';
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 import {
     rpcConnection,
@@ -11,6 +11,19 @@ import {
     solanaRpcConnection,
     solanaRpcSubscriptionsConnection,
 } from '../src';
+
+vi.mock('@solana/kit', async () => {
+    const actual = await vi.importActual<typeof import('@solana/kit')>('@solana/kit');
+    return {
+        ...actual,
+        createSolanaRpc: vi.fn(actual.createSolanaRpc),
+        createSolanaRpcSubscriptions: vi.fn(actual.createSolanaRpcSubscriptions),
+    };
+});
+
+beforeEach(() => {
+    vi.clearAllMocks();
+});
 
 describe('rpcConnection', () => {
     it('sets the provided rpc instance on the client', () => {
@@ -31,15 +44,56 @@ describe('rpcSubscriptionsConnection', () => {
 });
 
 describe('solanaRpcConnection', () => {
-    it('creates and sets a Solana RPC from a URL', () => {
-        const client = createClient().use(solanaRpcConnection('https://api.mainnet-beta.solana.com'));
+    it('creates and sets a Solana RPC and Solana RPC Subscriptions from a config', () => {
+        const client = createClient().use(solanaRpcConnection({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
         expect(client).toHaveProperty('rpc');
+        expect(client).toHaveProperty('rpcSubscriptions');
         expect(client.rpc.sendTransaction).toBeTypeOf('function');
+        expect(client.rpcSubscriptions.accountNotifications).toBeTypeOf('function');
     });
 
     it('narrows the RPC API based on the cluster', () => {
-        const client = createClient().use(solanaRpcConnection(mainnet('https://api.mainnet-beta.solana.com')));
+        const client = createClient().use(
+            solanaRpcConnection({ rpcUrl: mainnet('https://api.mainnet-beta.solana.com') }),
+        );
         expectTypeOf(client.rpc).not.toHaveProperty('requestAirdrop');
+    });
+
+    it('derives the WebSocket URL from the RPC URL by default', () => {
+        createClient().use(solanaRpcConnection({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
+        expect(createSolanaRpcSubscriptions).toHaveBeenCalledWith('wss://api.mainnet-beta.solana.com', undefined);
+    });
+
+    it('also derives ws:// from http:// for unsecured endpoints', () => {
+        createClient().use(solanaRpcConnection({ rpcUrl: 'http://127.0.0.1:8899' }));
+        expect(createSolanaRpcSubscriptions).toHaveBeenCalledWith('ws://127.0.0.1:8899', undefined);
+    });
+
+    it('accepts an explicit rpcSubscriptionsUrl', () => {
+        createClient().use(
+            solanaRpcConnection({
+                rpcSubscriptionsUrl: 'wss://custom-ws.solana.com',
+                rpcUrl: 'https://api.mainnet-beta.solana.com',
+            }),
+        );
+        expect(createSolanaRpcSubscriptions).toHaveBeenCalledWith('wss://custom-ws.solana.com', undefined);
+    });
+
+    it('forwards rpcConfig and rpcSubscriptionsConfig to the underlying factories', () => {
+        const rpcConfig = {};
+        const rpcSubscriptionsConfig = {};
+        createClient().use(
+            solanaRpcConnection({
+                rpcConfig,
+                rpcSubscriptionsConfig,
+                rpcUrl: 'https://api.mainnet-beta.solana.com',
+            }),
+        );
+        expect(createSolanaRpc).toHaveBeenCalledWith('https://api.mainnet-beta.solana.com', rpcConfig);
+        expect(createSolanaRpcSubscriptions).toHaveBeenCalledWith(
+            'wss://api.mainnet-beta.solana.com',
+            rpcSubscriptionsConfig,
+        );
     });
 });
 

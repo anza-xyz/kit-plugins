@@ -20,7 +20,7 @@ import {
  * import { solanaRpcConnection, rpcGetMinimumBalance } from '@solana/kit-plugin-rpc';
  *
  * const client = createClient()
- *     .use(solanaRpcConnection('https://api.mainnet-beta.solana.com'))
+ *     .use(solanaRpcConnection({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
  *     .use(rpcGetMinimumBalance());
  *
  * const balance = await client.getMinimumBalance(100);

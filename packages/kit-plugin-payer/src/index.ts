@@ -113,7 +113,7 @@ export function payerFromFile(path: string) {
  * @deprecated Use `payer` and/or `generatedPayerWithSol` from `@solana/kit-plugin-signer` instead.
  * ```ts
  * import { createClient, lamports } from '@solana/kit';
- * import { solanaRpcConnection, solanaRpcSubscriptionsConnection, rpcAirdrop } from '@solana/kit-plugin-rpc';
+ * import { solanaRpcConnection, rpcAirdrop } from '@solana/kit-plugin-rpc';
  * import { payer, generatedPayerWithSol } from '@solana/kit-plugin-signer';
  *
  * // With an explicit payer.
@@ -121,8 +121,7 @@ export function payerFromFile(path: string) {
  *
  * // With a generated payer funded with SOL.
  * const client = await createClient()
- *     .use(solanaRpcConnection('http://127.0.0.1:8899'))
- *     .use(solanaRpcSubscriptionsConnection('ws://127.0.0.1:8900'))
+ *     .use(solanaRpcConnection({ rpcUrl: 'http://127.0.0.1:8899' }))
  *     .use(rpcAirdrop())
  *     .use(generatedPayerWithSol(lamports(100_000_000_000n)));
  * ```

@@ -24,12 +24,11 @@ import {
  * @example
  * ```ts
  * import { createClient } from '@solana/kit';
- * import { solanaRpcConnection, solanaRpcSubscriptionsConnection, rpcTransactionPlanner, rpcTransactionPlanExecutor } from '@solana/kit-plugin-rpc';
+ * import { solanaRpcConnection, rpcTransactionPlanner, rpcTransactionPlanExecutor } from '@solana/kit-plugin-rpc';
  * import { generatedPayer } from '@solana/kit-plugin-payer';
  *
  * const client = await createClient()
- *     .use(solanaRpcConnection('https://api.mainnet-beta.solana.com'))
- *     .use(solanaRpcSubscriptionsConnection('wss://api.mainnet-beta.solana.com'))
+ *     .use(solanaRpcConnection({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
  *     .use(generatedPayer())
  *     .use(rpcTransactionPlanner())
  *     .use(rpcTransactionPlanExecutor());
