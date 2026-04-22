@@ -38,7 +38,7 @@ The full mapping is:
 
 ```diff
   import { createClient, lamports } from '@solana/kit';
-  import { solanaRpcConnection, solanaRpcSubscriptionsConnection, rpcAirdrop } from '@solana/kit-plugin-rpc';
+  import { solanaRpcConnection, rpcAirdrop } from '@solana/kit-plugin-rpc';
 - import { payerOrGeneratedPayer } from '@solana/kit-plugin-payer';
 + import { payer, generatedPayerWithSol } from '@solana/kit-plugin-signer';
 
@@ -48,8 +48,7 @@ The full mapping is:
 
   // With a generated payer funded with SOL.
   const client = await createClient()
-      .use(solanaRpcConnection('http://127.0.0.1:8899'))
-      .use(solanaRpcSubscriptionsConnection('ws://127.0.0.1:8900'))
+      .use(solanaRpcConnection({ rpcUrl: 'http://127.0.0.1:8899' }))
       .use(rpcAirdrop())
 -     .use(payerOrGeneratedPayer(undefined));
 +     .use(generatedPayerWithSol(lamports(100_000_000_000n)));

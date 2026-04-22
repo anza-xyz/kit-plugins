@@ -18,11 +18,10 @@
   import { createClient } from '@solana/kit';
 - import { airdrop } from '@solana/kit-plugin-airdrop';
 + import { rpcAirdrop } from '@solana/kit-plugin-rpc';
-  import { solanaRpcConnection, solanaRpcSubscriptionsConnection } from '@solana/kit-plugin-rpc';
+  import { solanaRpcConnection } from '@solana/kit-plugin-rpc';
 
   const client = createClient()
-      .use(solanaRpcConnection('http://127.0.0.1:8899'))
-      .use(solanaRpcSubscriptionsConnection('ws://127.0.0.1:8900'))
+      .use(solanaRpcConnection({ rpcUrl: 'http://127.0.0.1:8899' }))
 -     .use(airdrop());
 +     .use(rpcAirdrop());
 ```

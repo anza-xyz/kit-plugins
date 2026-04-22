@@ -64,12 +64,11 @@ These asynchronous plugins generate a new random `KeyPairSigner`, airdrop some S
 
 ```ts
 import { createClient, lamports } from '@solana/kit';
-import { rpcAirdrop, solanaRpcConnection, solanaRpcSubscriptionsConnection } from '@solana/kit-plugin-rpc';
+import { rpcAirdrop, solanaRpcConnection } from '@solana/kit-plugin-rpc';
 import { generatedSignerWithSol } from '@solana/kit-plugin-signer';
 
 const client = await createClient()
-    .use(solanaRpcConnection('http://127.0.0.1:8899'))
-    .use(solanaRpcSubscriptionsConnection('ws://127.0.0.1:8900'))
+    .use(solanaRpcConnection({ rpcUrl: 'http://127.0.0.1:8899' }))
     .use(rpcAirdrop())
     .use(generatedSignerWithSol(lamports(10_000_000_000n)));
 ```

@@ -120,54 +120,9 @@ _See `solanaRpc` for available features, plus:_
     await client.airdrop(address('HQVxiMVDoV9jzG4tpoxmDZsNfWvaHXm8DGGv93Gka75v'), lamports(1_000_000_000n));
     ```
 
-## `rpcConnection` plugin
-
-The `rpcConnection` plugin sets a provided `Rpc` instance on the client. This is the generic variant that works with any RPC API.
-
-### Installation
-
-```ts
-import { createClient, createSolanaRpc } from '@solana/kit';
-import { rpcConnection } from '@solana/kit-plugin-rpc';
-
-const myRpc = createSolanaRpc('https://api.mainnet-beta.solana.com');
-const client = createClient().use(rpcConnection(myRpc));
-```
-
-### Features
-
-- `rpc`: Call any RPC method using type-safe methods.
-    ```ts
-    const { value: latestBlockhash } = await client.rpc.getLatestBlockhash().send();
-    ```
-
-## `rpcSubscriptionsConnection` plugin
-
-The `rpcSubscriptionsConnection` plugin sets a provided `RpcSubscriptions` instance on the client. This is the generic variant that works with any RPC Subscriptions API.
-
-### Installation
-
-```ts
-import { createClient, createSolanaRpcSubscriptions } from '@solana/kit';
-import { rpcSubscriptionsConnection } from '@solana/kit-plugin-rpc';
-
-const myRpcSubscriptions = createSolanaRpcSubscriptions('wss://api.mainnet-beta.solana.com');
-const client = createClient().use(rpcSubscriptionsConnection(myRpcSubscriptions));
-```
-
-### Features
-
-- `rpcSubscriptions`: Subscribe to RPC notifications using async iterators.
-    ```ts
-    const slotNotifications = await client.rpcSubscriptions.slotNotifications({ commitment: 'confirmed' }).subscribe();
-    for await (const slotNotification of slotNotifications) {
-        console.log('Got a slot notification', slotNotification);
-    }
-    ```
-
 ## `solanaRpcConnection` plugin
 
-The `solanaRpcConnection` plugin creates a Solana RPC from a cluster URL and sets it on the client.
+The `solanaRpcConnection` plugin creates a Solana RPC and Solana RPC Subscriptions from a cluster URL and installs both on the client.
 
 ### Installation
 
@@ -175,7 +130,7 @@ The `solanaRpcConnection` plugin creates a Solana RPC from a cluster URL and set
 import { createClient } from '@solana/kit';
 import { solanaRpcConnection } from '@solana/kit-plugin-rpc';
 
-const client = createClient().use(solanaRpcConnection('https://api.mainnet-beta.solana.com'));
+const client = createClient().use(solanaRpcConnection({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
 ```
 
 You may wrap your RPC URL using the `mainnet`, `devnet`, or `testnet` helpers from `@solana/kit`. When you do, the returned RPC API will be adjusted to match the selected cluster since some RPC features are not available on all clusters.
@@ -183,8 +138,17 @@ You may wrap your RPC URL using the `mainnet`, `devnet`, or `testnet` helpers fr
 ```ts
 import { mainnet } from '@solana/kit';
 
-const client = createClient().use(solanaRpcConnection(mainnet('https://api.mainnet-beta.solana.com')));
+const client = createClient().use(solanaRpcConnection({ rpcUrl: mainnet('https://api.mainnet-beta.solana.com') }));
 ```
+
+### Options
+
+All options are provided via a `SolanaRpcConnectionConfig` object:
+
+- `rpcUrl` **(required)**: URL of the Solana RPC endpoint.
+- `rpcSubscriptionsUrl`: URL of the RPC Subscriptions endpoint. Defaults to the `rpcUrl` with the protocol changed from `http` to `ws`.
+- `rpcConfig`: Optional configuration forwarded to `createSolanaRpc`.
+- `rpcSubscriptionsConfig`: Optional configuration forwarded to `createSolanaRpcSubscriptions`.
 
 ### Features
 
@@ -192,22 +156,6 @@ const client = createClient().use(solanaRpcConnection(mainnet('https://api.mainn
     ```ts
     const { value: latestBlockhash } = await client.rpc.getLatestBlockhash().send();
     ```
-
-## `solanaRpcSubscriptionsConnection` plugin
-
-The `solanaRpcSubscriptionsConnection` plugin creates Solana RPC Subscriptions from a cluster URL and sets them on the client.
-
-### Installation
-
-```ts
-import { createClient } from '@solana/kit';
-import { solanaRpcSubscriptionsConnection } from '@solana/kit-plugin-rpc';
-
-const client = createClient().use(solanaRpcSubscriptionsConnection('wss://api.mainnet-beta.solana.com'));
-```
-
-### Features
-
 - `rpcSubscriptions`: Subscribe to Solana RPC notifications using async iterators.
     ```ts
     const slotNotifications = await client.rpcSubscriptions.slotNotifications({ commitment: 'confirmed' }).subscribe();
@@ -229,11 +177,10 @@ The client must have `rpc` and `rpcSubscriptions` installed before applying this
 
 ```ts
 import { createClient } from '@solana/kit';
-import { solanaRpcConnection, solanaRpcSubscriptionsConnection, rpcAirdrop } from '@solana/kit-plugin-rpc';
+import { solanaRpcConnection, rpcAirdrop } from '@solana/kit-plugin-rpc';
 
 const client = createClient()
-    .use(solanaRpcConnection('http://127.0.0.1:8899'))
-    .use(solanaRpcSubscriptionsConnection('ws://127.0.0.1:8900'))
+    .use(solanaRpcConnection({ rpcUrl: 'http://127.0.0.1:8899' }))
     .use(rpcAirdrop());
 ```
 
@@ -257,7 +204,7 @@ import { createClient } from '@solana/kit';
 import { solanaRpcConnection, rpcGetMinimumBalance } from '@solana/kit-plugin-rpc';
 
 const client = createClient()
-    .use(solanaRpcConnection('https://api.mainnet-beta.solana.com'))
+    .use(solanaRpcConnection({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
     .use(rpcGetMinimumBalance());
 ```
 
@@ -283,17 +230,11 @@ The client must have a `payer` set before applying this plugin.
 
 ```ts
 import { createClient } from '@solana/kit';
-import {
-    solanaRpcConnection,
-    solanaRpcSubscriptionsConnection,
-    rpcTransactionPlanner,
-    rpcTransactionPlanExecutor,
-} from '@solana/kit-plugin-rpc';
+import { solanaRpcConnection, rpcTransactionPlanner, rpcTransactionPlanExecutor } from '@solana/kit-plugin-rpc';
 import { generatedPayer } from '@solana/kit-plugin-payer';
 
 const client = await createClient()
-    .use(solanaRpcConnection('https://api.mainnet-beta.solana.com'))
-    .use(solanaRpcSubscriptionsConnection('wss://api.mainnet-beta.solana.com'))
+    .use(solanaRpcConnection({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
     .use(generatedPayer())
     .use(rpcTransactionPlanner())
     .use(rpcTransactionPlanExecutor());
@@ -323,17 +264,11 @@ This plugin requires `rpc` and `rpcSubscriptions` to be configured on the client
 
 ```ts
 import { createClient } from '@solana/kit';
-import {
-    solanaRpcConnection,
-    solanaRpcSubscriptionsConnection,
-    rpcTransactionPlanner,
-    rpcTransactionPlanExecutor,
-} from '@solana/kit-plugin-rpc';
+import { solanaRpcConnection, rpcTransactionPlanner, rpcTransactionPlanExecutor } from '@solana/kit-plugin-rpc';
 import { generatedPayer } from '@solana/kit-plugin-payer';
 
 const client = await createClient()
-    .use(solanaRpcConnection('https://api.mainnet-beta.solana.com'))
-    .use(solanaRpcSubscriptionsConnection('wss://api.mainnet-beta.solana.com'))
+    .use(solanaRpcConnection({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
     .use(generatedPayer())
     .use(rpcTransactionPlanner())
     .use(rpcTransactionPlanExecutor());
@@ -365,3 +300,10 @@ Setting `skipPreflight: true` changes the behavior:
 | Estimation succeeds | Set CU, skip preflight           | Set CU, skip preflight          |
 | Estimation fails    | Throw                            | Use consumed CU, skip preflight |
 | Explicit CU limit   | Run preflight                    | Skip preflight                  |
+
+## Deprecated plugins
+
+The following plugins are still exported for backward compatibility but are deprecated. Prefer `solanaRpcConnection` for new code.
+
+- `rpcConnection(rpc)` / `rpcSubscriptionsConnection(rpcSubscriptions)`: Trivial wrappers around `extendClient`. Inline `extendClient({ rpc })` or `extendClient({ rpcSubscriptions })` instead, or use `solanaRpcConnection` when starting from a cluster URL.
+- `solanaRpcSubscriptionsConnection(url, config?)`: No longer needed because `solanaRpcConnection` installs both `rpc` and `rpcSubscriptions`.

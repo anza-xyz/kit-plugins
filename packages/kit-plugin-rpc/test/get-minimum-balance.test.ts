@@ -19,7 +19,9 @@ describe('rpcGetMinimumBalance', () => {
     });
 
     it('works with a Solana RPC connection', () => {
-        const client = createClient().use(solanaRpcConnection('https://my-rpc.com')).use(rpcGetMinimumBalance());
+        const client = createClient()
+            .use(solanaRpcConnection({ rpcUrl: 'https://my-rpc.com' }))
+            .use(rpcGetMinimumBalance());
         expect(client).toHaveProperty('getMinimumBalance');
     });
 
