@@ -23,9 +23,15 @@ Two reactive store types covering the two categories of async operations. Both e
 
 **`ReactiveStreamStore<T>`** — for long-lived connections that emit multiple values (RPC subscriptions, and the RPC-fetch + subscription hybrid used by named hooks). Lifecycle `loading | loaded | error | retrying`. `retry()` re-establishes a broken connection, preserving the last known value as stale data during `retrying`. Replaces the prior `ReactiveStore<T>` type — the single generic store splits into the two specialized types below, no backwards-compat alias needed since `ReactiveStore` was not yet widely consumed.
 
+Note CM: Already have this as `ReactiveStore`. [Open PR](https://github.com/anza-xyz/kit/pull/1552) adds retry + status + getUnifiedState. Will rename to `ReactiveStreamStore`
+
 **`ReactiveActionStore<TArgs, T>`** — for invocation-based async operations (user-triggered actions, and also one-shot RPC reads when auto-dispatched by the consumer). Lifecycle `idle | running | success | error`. `dispatch(...args)` invokes the operation; a second dispatch while a first is in flight aborts the first via its `abortSignal` — "click twice, only the second submits." Stale-while-revalidate: during `running` after a previous `success`, `data` retains the old value so consumers can render stale data with an overlay.
 
+Note CM: [Open PR](https://github.com/anza-xyz/kit/pull/1550), will rename from `ActionStore`
+
 **`createActionStore<TArgs, T>(operation: (signal: AbortSignal, ...args: TArgs) => Promise<T>): ReactiveActionStore<TArgs, T>`** — factory for action stores. Kit primitive; every framework's action-hook implementation ≈ `useSyncExternalStore(store.subscribe, store.getUnifiedState)` plus a bridge wrapping `dispatch` / `reset`.
+
+Note CM: [Open PR](https://github.com/anza-xyz/kit/pull/1550)
 
 ### In `@solana/rpc-subscriptions-spec`
 
@@ -33,15 +39,27 @@ Two reactive store types covering the two categories of async operations. Both e
 
 The previous async `.reactive(): Promise<ReactiveStore<T>>` is either renamed to `.reactiveStore()` as a breaking change, or `.reactiveStore()` is added as the sync replacement with `.reactive()` deprecated. Either is fine; the spec uses the sync name.
 
+Note CM: [Open PR](https://github.com/anza-xyz/kit/pull/1553)
+
 ### In `@solana/rpc-spec`
 
 **`PendingRpcRequest<T>.reactiveStore(): ReactiveActionStore<[], T>`** — synchronous method returning an action store that fires a fresh RPC call per dispatch. Thin wrapper (`createActionStore(signal => this.send({ abortSignal: signal }))`) but worth centralizing so every reactive binding calls `.reactiveStore()` instead of each writing the same wrapper.
 
 Precondition: `PendingRpcRequest` must be multi-dispatch — each dispatch re-invokes the transport. (Confirmed already the case.)
 
+Note CM: TODO
+
 ### In `@solana/kit`
 
-**`createReactiveStoreWithInitialValueAndSlotTracking<T>(...): ReactiveStreamStore<SolanaRpcResponse<T>>`** — returns the new specialized stream store type with `retry()` support. `retry()` re-runs both the initial RPC fetch and the subscription. The factory was not yet widely consumed so this can land without deprecation.
+**`createReactiveStoreWithInitialValueAndSlotTracking<T>(...): ReactiveStreamStore<SolanaRpcResponse<T>>`** — returns the new specialized stream store type with `retry()` support. `retry()` re-runs both the initial RPC fetch and the subscription. No change to API surface needed
+
+Note CM: Part of [Open PR](https://github.com/anza-xyz/kit/pull/1552)
+
+### In `@solana/kit-plugin-rpc`
+
+**`solanaRpcConnection` plugin.** A single plugin that installs both `client.rpc` and `client.rpcSubscriptions`, configured from `{ rpcUrl, rpcSubscriptionsUrl }`. Replaces the previous pairing of `solanaRpcConnection` + `solanaRpcSubscriptionsConnection` for the common case, and supersedes `solanaRpcReadOnly` (which also installed `getMinimumBalance`; that helper is trivially reconstructable via `PluginProvider` when needed). kit-react's `RpcConnectionProvider` wraps this plugin directly.
+
+Note CM: [Open PR](https://github.com/anza-xyz/kit-plugins/pull/201), known breaking change
 
 ### In `@solana/kit-plugin-wallet`
 
@@ -49,7 +67,15 @@ Precondition: `PendingRpcRequest` must be multi-dispatch — each dispatch re-in
 
 Caveat: the wallet-standard spec doesn't accept abort signals today, so `getAbortablePromise` cancels the *await* but not the underlying wallet call. Practical consequence: a double-click on Connect may briefly show two wallet popups. Most wallets de-dupe these; documenting the limitation is enough for now. When wallet-standard adds signal support, this becomes end-to-end cancellation automatically.
 
+Note CM: TODO on wallet-plugin, on [open PR](https://github.com/anza-xyz/kit-plugins/pull/191)
+
+Note CM: TODO wallet-standard proposal to add signals, backward compatible/optional. Orthogonal to this work, not blocking
+
 **`subscribeToPayer` / `subscribeToIdentity` publish points.** The `walletSigner` / `walletPayer` / `walletIdentity` plugins install a sibling `subscribeTo<Capability>(listener): () => void` function alongside each reactive capability they set on the client. kit-react's `usePayer` / `useIdentity` subscribe to these. The wallet plugin is currently the only reactive signer source; if a second reactive plugin appears (e.g. a relayer that rotates `payer`), the convention extends cleanly.
+
+Note CM: ClientWithSubscribeToPayer/Identity interfaces merged in Kit (not released yet)
+
+Note CM: TODO add to wallet-plugin, on [open PR](https://github.com/anza-xyz/kit-plugins/pull/191)
 
 ### Errors
 
@@ -96,9 +122,9 @@ A single-package layout (rather than a sibling `@solana/kit-react-wallet` packag
 
 **Kit owns the state machines.** Lifecycle enums (`loading | loaded | error | retrying` for streams, `idle | running | success | error` for actions), abort semantics (double-click supersede on actions, retry-as-reconnection on streams), and stale-while-revalidate behavior all live in Kit primitives. kit-react exposes them through `useSyncExternalStore`; it does not reimplement them. This keeps the React layer thin and the behavior consistent with any future Vue / Svelte / Solid binding.
 
-**Named hooks only where there's domain logic.** `useBalance` exists because it hides RPC + subscription pairing, slot dedup, and response mapping. `useGetEpochInfo` does not exist because it would be a one-liner wrapping `client.rpc.getEpochInfo()`. For one-off reads without domain logic, callers use `useRpc` (the generic bridge for one-shot RPC calls) or reach into `client.rpc.*` directly through the escape-hatch `useClient()`.
+**Named hooks only where there's domain logic.** `useBalance` exists because it hides RPC + subscription pairing, slot dedup, and response mapping. `useGetEpochInfo` does not exist because it would be a one-liner wrapping `client.rpc.getEpochInfo()`. For one-off reads without domain logic, callers use `useRequest` (the generic bridge for any `.reactiveStore()`-backed pending, including RPC calls) or reach into `client.rpc.*` directly through the escape-hatch `useClient()`.
 
-**Adapters integrate, they don't replace.** The SWR and TanStack Query adapters bridge kit-react's reactive state into those libraries' cache layers (dedupe across components, persistence, devtools, Suspense modes) and expose mutation hooks that play with cache invalidation. One-shot reads no longer *require* a cache library — `useRpc` covers them natively — but apps that want shared cache semantics across many components can opt in.
+**Adapters integrate, they don't replace.** The SWR and TanStack Query adapters bridge kit-react's reactive state into those libraries' cache layers (dedupe across components, persistence, devtools, Suspense modes) and expose mutation hooks that play with cache invalidation. One-shot reads no longer *require* a cache library — `useRequest` covers them natively — but apps that want shared cache semantics across many components can opt in.
 
 ## Core Library (`@solana/kit-react`)
 
@@ -110,15 +136,18 @@ A single-package layout (rather than a sibling `@solana/kit-react-wallet` packag
     "react": "^18.0.0 || ^19.0.0",
     "@solana/kit": "^6.x",
     "@solana/kit-plugin-instruction-plan": "^1.x",
+    "@solana/kit-plugin-signer": "^1.x",
     "@solana/kit-plugin-wallet": "^1.x"
   },
   "peerDependenciesMeta": {
+    "@solana/kit-plugin-instruction-plan": { "optional": true },
+    "@solana/kit-plugin-signer": { "optional": true },
     "@solana/kit-plugin-wallet": { "optional": true }
   }
 }
 ```
 
-`@solana/kit-plugin-wallet` is an **optional** peer dependency — required only if you import from `@solana/kit-react/wallet`. Apps that don't use wallet (read-only dashboards, bots, server flows) install the other peers and skip it. `@solana/kit-plugin-instruction-plan` provides the `client.sendTransaction()` / `client.planTransaction()` methods used by `useSendTransaction` and `useAction` flows — the actual implementation comes from whichever RPC plugin is installed (`kit-plugin-rpc`, `kit-plugin-litesvm`, etc.).
+`@solana/kit-plugin-wallet` is an **optional** peer dependency — required only if you import from `@solana/kit-react/wallet`. Apps that don't use wallet (read-only dashboards, bots, server flows) install the other peers and skip it. `@solana/kit-plugin-signer` is also optional — required only if you mount `PayerProvider`, `IdentityProvider`, or `SignerProvider` (i.e. you install a static signer that isn't wallet-backed). `@solana/kit-plugin-instruction-plan` is optional too — required only if you mount `RpcProvider` or `LiteSvmProvider` (i.e. you send transactions). Apps that only read chain state via `RpcConnectionProvider` can skip it. The plugin provides the `client.sendTransaction()` / `client.planTransaction()` methods used by `useSendTransaction` and `useAction` flows — the actual implementation comes from whichever RPC plugin is installed (`kit-plugin-rpc`, `kit-plugin-litesvm`, etc.).
 
 The SWR and TanStack Query adapters follow the same pattern: `swr` and `@tanstack/react-query` are declared as optional peer dependencies, pulled in only when their respective subpath is imported.
 
@@ -126,7 +155,7 @@ The SWR and TanStack Query adapters follow the same pattern: `swr` and `@tanstac
 
 ### Providers
 
-`KitClientProvider` is the root — every app mounts it once, at the top of the tree. It creates the base Kit client and publishes the configured chain. Every other provider (`WalletProvider`, `PayerProvider`, `RpcProvider`, …) reads the client from context, extends it with `.use()`, and provides the new client to its subtree. The nesting order of those providers is the plugin chain order — each maps to a Kit plugin.
+`KitClientProvider` is the root — every `@solana/kit-react` hook needs one as an ancestor. Most apps mount a single instance at the top of the tree, but multi-chain apps can mount several (e.g. a mainnet trading section and a devnet testing section as siblings, each with its own chain and client — see [Single chain per `KitClientProvider`](#design-choices)). It creates the base Kit client and publishes the configured chain. Every other provider (`WalletProvider`, `PayerProvider`, `RpcProvider`, …) reads the client from context, extends it with `.use()`, and provides the new client to its subtree. The nesting order of those providers is the plugin chain order — each maps to a Kit plugin.
 
 #### Common case
 
@@ -157,7 +186,7 @@ createClient()
 
 #### Provider reference
 
-**`KitClientProvider`** — root provider. Seeds the client context with a Kit client and publishes the configured chain for `useChain()`. By default creates a fresh client via `createClient()` and disposes it on unmount; power users can pass their own via the optional `client` prop (for SSR, custom client factories, or shared clients across multiple trees — lifecycle then belongs to the caller). Does not map to a plugin — it's the base that every other provider composes on top of. Every `@solana/kit-react` tree must have exactly one `KitClientProvider` ancestor:
+**`KitClientProvider`** — root provider. Seeds the client context with a Kit client and publishes the configured chain for `useChain()`. By default creates a fresh client via `createClient()` and disposes it on unmount; power users can pass their own via the optional `client` prop (for SSR, custom client factories, or shared clients across multiple trees — lifecycle then belongs to the caller). Does not map to a plugin — it's the base that every other provider composes on top of. Every `@solana/kit-react` hook must have a `KitClientProvider` ancestor; the nearest one wins, so sibling trees can target different chains independently:
 
 ```tsx
 <KitClientProvider chain="solana:devnet">
@@ -187,25 +216,25 @@ Ownership switches with the prop: when omitted, `KitClientProvider` calls `clien
 
 **`WalletProvider`** *(from `@solana/kit-react/wallet`)* — wraps one of the wallet plugins. Reads the chain from the enclosing `KitClientProvider` via context. Accepts an optional `role` prop that defaults to `"signer"` — the common case where the wallet both pays for and signs transactions. Other roles are available for advanced setups: `"payer"` (wallet pays fees only), `"identity"` (wallet signs but a relayer pays), or `"none"` (wallet UI only, manual signer access via `useConnectedWallet()`). These map to the `walletSigner`, `walletPayer`, `walletIdentity`, and `walletWithoutSigner` plugins respectively. Also accepts `autoConnect`, `storage`, `storageKey`, and `filter` props, forwarded to the underlying wallet plugin.
 
-**`PayerProvider`** and **`IdentityProvider`** — set `client.payer` and `client.identity` respectively from an explicit signer. Use these when the payer or identity is not the connected wallet (e.g. a backend relayer, a different keypair).
+**`PayerProvider`**, **`IdentityProvider`**, and **`SignerProvider`** — wrap the `payer()`, `identity()`, and `signer()` plugins from `@solana/kit-plugin-signer`. `PayerProvider` sets `client.payer`; `IdentityProvider` sets `client.identity`; `SignerProvider` sets both from a single signer (the common case where one keypair both pays fees and acts as identity). Use these when the signer is not the connected wallet — e.g. a backend relayer, a test keypair, or a CLI script.
 
-**`RpcProvider`** — wraps `solanaRpc` (the full RPC chain: RPC, subscriptions, transaction planning, execution). Its props extend `SolanaRpcConfig` from `@solana/kit-plugin-rpc` directly (`rpcUrl`, `rpcSubscriptionsUrl`, `maxConcurrency`, `rpcConfig`, `rpcSubscriptionsConfig`, `skipPreflight`, `transactionConfig`) so the provider surface stays zero-drift with the plugin. Asserts that `"payer" in client` at render time — if no ancestor provider has set a payer, it throws a message that also points at the read-only escape path below.
+**`RpcProvider`** — wraps `solanaRpc` (the full RPC chain: RPC, subscriptions, transaction planning, execution). Its props extend `SolanaRpcConfig` from `@solana/kit-plugin-rpc` directly (`rpcUrl`, `rpcSubscriptionsUrl`, `maxConcurrency`, `rpcConfig`, `rpcSubscriptionsConfig`, `skipPreflight`, `transactionConfig`) so the provider surface stays zero-drift with the plugin. Asserts that `"payer" in client` at render time — if no ancestor provider has set a payer, it throws a message that also points at the connection-only escape path below.
 
-*Read-only apps* that don't send transactions (explorers, dashboards, watchers, server-side scripts) should use `RpcReadOnlyProvider` instead of `RpcProvider`. It wraps `solanaRpcReadOnly` — `client.rpc`, `client.rpcSubscriptions`, and `client.getMinimumBalance` — without the transaction-planning / sending halves, so no `WalletProvider` / `PayerProvider` is required:
+*Apps that don't send transactions* (explorers, dashboards, watchers, server-side scripts) should use `RpcConnectionProvider` instead of `RpcProvider`. It wraps `solanaRpcConnection` — `client.rpc` and `client.rpcSubscriptions` — without the transaction-planning / sending halves, so no `WalletProvider` / `PayerProvider` is required:
 
 ```tsx
-import { KitClientProvider, RpcReadOnlyProvider } from '@solana/kit-react';
+import { KitClientProvider, RpcConnectionProvider } from '@solana/kit-react';
 
 <KitClientProvider chain="solana:mainnet">
-    <RpcReadOnlyProvider rpcUrl="https://api.mainnet-beta.solana.com">
+    <RpcConnectionProvider rpcUrl="https://api.mainnet-beta.solana.com">
         <Dashboard />
-    </RpcReadOnlyProvider>
+    </RpcConnectionProvider>
 </KitClientProvider>;
 ```
 
-`useBalance`, `useAccount`, `useTransactionConfirmation`, `useLiveData`, `useSubscription`, and `useRpc` all work against this lighter stack; only the transaction-sending and transaction-planning hooks need the full `RpcProvider`. For more granular stacks (e.g. RPC only, no subscriptions) drop to `PluginProvider` + `solanaRpcConnection` / `solanaRpcSubscriptionsConnection`.
+`useBalance`, `useAccount`, `useTransactionConfirmation`, `useLiveData`, `useSubscription`, and `useRequest` all work against this lighter stack; only the transaction-sending and transaction-planning hooks need the full `RpcProvider`. The name reflects what the provider installs (`solanaRpcConnection`) rather than claiming "read-only" — `client.rpc.sendTransaction` and `client.rpc.requestAirdrop` remain reachable for callers who wire them up manually; the provider simply omits the higher-level transaction APIs. For more granular stacks (e.g. RPC only, no subscriptions) drop to `PluginProvider` with a hand-picked plugin list.
 
-**`LiteSvmProvider`** — wraps `litesvm`. Drop-in replacement for `RpcProvider` in test/dev environments. Provides the same client capabilities (RPC, transaction planning, execution) backed by a local LiteSVM instance instead of a remote RPC node.
+**`LiteSvmProvider`** — wraps `litesvm`. Drop-in replacement for `RpcProvider` in test/dev environments. Provides the same client capabilities (RPC, transaction planning, execution) backed by a local LiteSVM instance instead of a remote RPC node. There is no lighter connection-only counterpart today (no `LiteSvmConnectionProvider`) — LiteSVM is primarily a transaction-execution harness, so the connection-only slice hasn't been needed. If a use case appears, the plugin can be split along the same lines as `solanaRpc` / `solanaRpcConnection`.
 
 **`PluginProvider`** — generic provider for installing an ordered list of Kit plugins without needing a plugin-specific React wrapper. Accepts a single `plugins` prop; for the one-plugin case, pass a one-element array:
 
@@ -272,19 +301,18 @@ import { WalletProvider } from '@solana/kit-react/wallet';
 
 ### Hooks
 
-Hooks in this library fall into four return-shape categories. Knowing which category a hook belongs to tells you how to consume it without having to read its signature:
+Hooks in this library fall into six return-shape categories. Knowing which category a hook belongs to tells you how to consume it without having to read its signature:
 
 | Category        | Return shape                                                                    | Backed by                          | Examples                                                                                                                                                                                           |
 | --------------- | ------------------------------------------------------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Live data       | `{ data, error, status, isLoading, retry, slot }` (reactive, read-only)         | `ReactiveStreamStore`              | `useBalance`, `useAccount`, `useTransactionConfirmation`, `useLiveData`, `useSubscription`                                                                                                         |
-| One-shot read   | `{ data, error, status, isLoading, refresh }` (reactive, read-only)             | `ReactiveActionStore` (auto-dispatched) | `useRpc`                                                                                                                                                                                       |
-| Tracked action  | `{ send, status, isIdle, isRunning, isSuccess, isError, data, error, reset }` (async) | `ReactiveActionStore`              | `useSendTransaction`, `useSendTransactions`, `usePlanTransaction`, `usePlanTransactions`, `useAction`, `useConnectWallet`, `useDisconnectWallet`, `useSignMessage`, `useSignIn`                    |
-| Bare callback   | `(args) => result` (stable fn)                                                  | Plugin method                      | `useSelectAccount` (synchronous — local account switch, no async lifecycle)                                                                                                                        |
-| Reactive value  | Raw value (reactive, read-only)                                                 | `subscribe` / `getState` on plugin | `useClient`, `useChain`, `usePayer`, `useIdentity`, `useWallets`, `useWalletStatus`, `useConnectedWallet`, `useWalletSigner`, `useWalletState`                                                     |
+| One-shot read   | `{ data, error, status, isLoading, refresh }` (reactive, read-only)             | `ReactiveActionStore` (auto-dispatched) | `useRequest`                                                                                                                                                                                       |
+| Tracked action  | `{ send, status, isIdle, isRunning, isSuccess, isError, data, error, reset }` (async) | `ReactiveActionStore`              | `useSendTransaction`, `useSendTransactions`, `usePlanTransaction`, `usePlanTransactions`, `useAction`; `useConnectWallet`, `useDisconnectWallet`, `useSignMessage`, `useSignIn` *(from `@solana/kit-react/wallet`)* |
+| Bare callback   | `(args) => result` (stable fn)                                                  | Plugin method                      | `useSelectAccount` *(from `@solana/kit-react/wallet`; synchronous — local account switch, no async lifecycle)*                                                                                     |
+| Context value   | Raw value (stable per provider)                                                 | React context                      | `useClient`, `useChain`                                                                                                                                                                            |
+| Reactive value  | Raw value (reactive, read-only)                                                 | `subscribe` / `getState` on plugin | `usePayer`, `useIdentity`; `useWallets`, `useWalletStatus`, `useConnectedWallet`, `useWalletSigner`, `useWalletState` *(from `@solana/kit-react/wallet`)*                                          |
 
-Live-data and one-shot-read hooks share the lifecycle vocabulary (`loading / loaded / error / retrying` for streams, `idle / running / success / error` mapped to the same-named read shape by `useRpc`) — the distinction at the render layer is the extra `slot` field on live-data and `refresh` vs. `retry` affordance. Every user-triggered async action — wallet connect, sign, send — returns the same `ActionState` shape. Reactive values are single-snapshot reads from long-lived domain state (wallet, client, chain) and don't carry a lifecycle.
-
-> **Looking for wallet hooks?** `useWallets`, `useWalletStatus`, `useConnectedWallet`, `useWalletSigner`, `useWalletState`, `useConnectWallet`, `useDisconnectWallet`, `useSelectAccount`, `useSignMessage`, and `useSignIn` live at the `@solana/kit-react/wallet` subpath. Import them from there.
+Live-data and one-shot-read hooks share the `loading / loaded / error / retrying / disabled` read vocabulary; `useRequest` maps the underlying action-store states (`idle / running / success / error`) onto it — see [One-shot requests](#one-shot-requests-userequest) for the mapping. The distinction at the render layer is the extra `slot` field on live-data and `refresh` vs. `retry` affordance. Every user-triggered async action — wallet connect, sign, send — returns the same `ActionState` shape. Context values (`useClient`, `useChain`) are stable for the lifetime of the nearest provider. Reactive values are live snapshots of plugin-owned state (wallet identity, payer, identity) that update when the underlying store emits. Bare callback is a single-member category by design: `useSelectAccount` is the only wallet operation with no async lifecycle to track (it's a local state switch between already-authorized accounts), so an `ActionState` wrapper would be inventing a state machine that never ticks.
 
 #### Client access
 
@@ -298,9 +326,17 @@ const ClientContext: React.Context<Client>;
 
 /**
  * Access the raw Kit client from context.
- * Power-user escape hatch for imperative use.
+ *
+ * Defaults to the base `Client` shape. Callers who know a specific plugin
+ * is installed can widen the type via the generic — same escape-hatch
+ * pattern as `useChain<T>()`. Pure cast, no runtime capability check;
+ * use {@link useClientCapability} when you also want the missing-plugin
+ * error to surface at mount.
+ *
+ * Power-user escape hatch for imperative use; most consumers reach for a
+ * named hook (`useBalance`, `useRequest`, …) instead.
  */
-function useClient(): Client;
+function useClient<TClient extends object = object>(): Client<TClient>;
 
 /**
  * The wallet-standard chain identifier accepted by `KitClientProvider`.
@@ -432,7 +468,7 @@ Two hooks for reading the signers installed on the client by the payer / identit
 /**
  * Returns the current fee payer (`client.payer`), or `null` if unavailable.
  * Wallet-backed via `<WalletProvider role="signer" | "payer">` — reactive.
- * Static via `<PayerProvider signer={…}>` — always returns the signer.
+ * Static via `<PayerProvider signer={…}>` or `<SignerProvider signer={…}>` — always returns the signer.
  */
 function usePayer(): TransactionSigner | null;
 
@@ -465,11 +501,11 @@ Plugins that participate today:
 - **`walletPayer`** installs `subscribeToPayer` only.
 - **`walletIdentity`** installs `subscribeToIdentity` only.
 - **`walletWithoutSigner`** installs neither — it doesn't set `payer` or `identity`.
-- **`PayerProvider`** / **`IdentityProvider`** (static) install neither — the signer is fixed for the lifetime of the provider, so there is no change to observe.
+- **`payer`** / **`identity`** / **`signer`** *(from `@solana/kit-plugin-signer`, installed by `PayerProvider` / `IdentityProvider` / `SignerProvider`)* install neither — the signer is fixed for the lifetime of the provider, so there is no change to observe.
 
 Static plugins without the subscribe hook still work fine: the hook falls back to a no-op subscribe and just reads the capability once per render. Consumers can ignore this detail entirely — it's only relevant for plugin authors whose capability is reactive and who want `usePayer` / `useIdentity` to stay in sync.
 
-This is currently a kit-react convention. See [Future directions](#future-directions) for the option of promoting it to a shared kit-core helper once a second reactive consumer (Vue, Svelte, …) or a second reactive plugin appears.
+The shape is a Kit-level convention — `ClientWithSubscribeToPayer` and `ClientWithSubscribeToIdentity` are exported from `@solana/kit`, so any reactive framework binding (Vue, Svelte, Solid) or direct client consumer can observe it without depending on kit-react. kit-react just provides the `useSyncExternalStore` bridge. See [Future directions](#future-directions) for the option of promoting the *producer-side* machinery (listener registry, notify helper) into a shared kit-core helper once a second reactive plugin appears.
 
 ##### Reading capabilities whose getters may throw
 
@@ -497,6 +533,8 @@ function usePayer(): TransactionSigner | null {
 
 This is load-bearing for wallet-backed flows: without the swallow, mounting `<WalletProvider>` before a wallet connects would crash the subtree on first render. The swallow is specifically for the "present but unavailable" state — the outer `'payer' in client` check still throws loudly when no payer plugin is installed at all, so missing-provider bugs are not hidden.
 
+This is also why `usePayer` / `useIdentity` can't route through `useClientCapability` like the other capability hooks — that helper returns a narrowed client whose `payer` / `identity` would be read via the throwing getter; the `readOptional` wrapper needs to sit between the read and the caller, so we do the `'payer' in client` assertion manually.
+
 #### Getting a kit signer from a wallet account
 
 For cases where you need a signer for an account other than the connected one (e.g. a different account within the same wallet, or multi-wallet flows), use `createSignerFromWalletAccount` from `@solana/wallet-account-signer` with any `UiWalletAccount`:
@@ -518,8 +556,19 @@ const signer = useMemo(
 Implementation:
 
 ```tsx
+// Shared helper: every wallet hook needs `client.wallet`, so route through
+// `useClientCapability` to get both the typed narrowing and a loud error if
+// the wallet plugin isn't installed.
+function useWalletClient(hookName: string) {
+    return useClientCapability<ClientWithWallet>({
+        capability: 'wallet',
+        hookName,
+        providerHint: 'Mount <WalletProvider> or install `kit-plugin-wallet`.',
+    });
+}
+
 function useWallets(): readonly UiWallet[] {
-    const client = useClient();
+    const client = useWalletClient('useWallets');
     return useSyncExternalStore(
         client.wallet.subscribe,
         () => client.wallet.getState().wallets,
@@ -527,7 +576,7 @@ function useWallets(): readonly UiWallet[] {
 }
 
 function useWalletStatus(): WalletStatus {
-    const client = useClient();
+    const client = useWalletClient('useWalletStatus');
     return useSyncExternalStore(
         client.wallet.subscribe,
         () => client.wallet.getState().status,
@@ -535,7 +584,7 @@ function useWalletStatus(): WalletStatus {
 }
 
 function useConnectedWallet() {
-    const client = useClient();
+    const client = useWalletClient('useConnectedWallet');
     // Project {account, wallet} out of the snapshot, memoizing across calls so
     // signer-only changes upstream don't re-render consumers of this hook.
     const lastRef = useRef<{ account: UiWalletAccount; wallet: UiWallet } | null>(null);
@@ -552,18 +601,18 @@ function useConnectedWallet() {
 }
 
 function useWalletSigner() {
-    const client = useClient();
+    const client = useWalletClient('useWalletSigner');
     const getSnapshot = () => client.wallet.getState().connected?.signer ?? null;
     return useSyncExternalStore(client.wallet.subscribe, getSnapshot, getSnapshot);
 }
 
 function useWalletState(): WalletState {
-    const client = useClient();
+    const client = useWalletClient('useWalletState');
     return useSyncExternalStore(client.wallet.subscribe, client.wallet.getState);
 }
 
 function useConnectWallet() {
-    const client = useClient();
+    const client = useWalletClient('useConnectWallet');
     return useAction(
         (signal, wallet: UiWallet) => client.wallet.connect(wallet, { abortSignal: signal }),
         [client],
@@ -571,7 +620,7 @@ function useConnectWallet() {
 }
 
 function useDisconnectWallet() {
-    const client = useClient();
+    const client = useWalletClient('useDisconnectWallet');
     return useAction(
         (signal) => client.wallet.disconnect({ abortSignal: signal }),
         [client],
@@ -579,7 +628,7 @@ function useDisconnectWallet() {
 }
 
 function useSignMessage() {
-    const client = useClient();
+    const client = useWalletClient('useSignMessage');
     return useAction(
         (signal, message: Uint8Array) => client.wallet.signMessage(message, { abortSignal: signal }),
         [client],
@@ -587,7 +636,7 @@ function useSignMessage() {
 }
 
 function useSignIn() {
-    const client = useClient();
+    const client = useWalletClient('useSignIn');
     return useAction(
         (signal, wallet: UiWallet, input?: SolanaSignInInput) =>
             client.wallet.signIn(wallet, input, { abortSignal: signal }),
@@ -596,7 +645,7 @@ function useSignIn() {
 }
 
 function useSelectAccount() {
-    const client = useClient();
+    const client = useWalletClient('useSelectAccount');
     // Synchronous — no ActionState wrapping.
     return useCallback(
         (account: UiWalletAccount) => client.wallet.selectAccount(account),
@@ -665,8 +714,12 @@ type LiveQueryResult<T> = {
      * for "as of slot X" freshness indicators, coordinating a refetch with a
      * just-sent transaction's slot, and stale-data detection.
      *
-     * Always `undefined` for `useSubscription` — raw notifications aren't
-     * wrapped in Kit's `SolanaRpcResponse` slot envelope.
+     * For `useSubscription`, populated when the subscription emits
+     * `SolanaRpcResponse`-shaped notifications (e.g. `accountNotifications`,
+     * `programNotifications`) and `undefined` for subscriptions that emit
+     * raw values (e.g. `slotNotifications`, `logsNotifications`). The
+     * envelope is unwrapped on the way out, so `data` is always the inner
+     * value regardless of shape.
      */
     slot: Slot | undefined;
 };
@@ -683,14 +736,18 @@ function useBalance(address: Address | null): LiveQueryResult<Lamports>;
  * Live account for an address.
  * Combines getAccountInfo + accountNotifications with slot-based dedup.
  * When a decoder is provided, the account data is decoded and returned as
- * a typed Account<TData>. Without a decoder, returns the raw EncodedAccount.
+ * a typed `MaybeAccount<TData>`. Without a decoder, returns the raw
+ * `MaybeEncodedAccount`. Both are Kit's "fetched account that may or may
+ * not exist on-chain" discriminated union — `exists: true` narrows to an
+ * `Account` / `EncodedAccount` with data, `exists: false` keeps the
+ * address for the missing-account case.
  * Pass `null` to disable — a disabled query reports `status: 'disabled'`.
  */
-function useAccount(address: Address | null): LiveQueryResult<EncodedAccount | null>;
+function useAccount(address: Address | null): LiveQueryResult<MaybeEncodedAccount>;
 function useAccount<TData extends object>(
     address: Address | null,
     decoder: Decoder<TData>,
-): LiveQueryResult<Account<TData> | null>;
+): LiveQueryResult<MaybeAccount<TData>>;
 
 /**
  * Live transaction confirmation status.
@@ -704,7 +761,6 @@ function useTransactionConfirmation(
 ): LiveQueryResult<{
     err: TransactionError | null;
     confirmationStatus: Commitment | null;
-    confirmations: bigint | null;
 }>;
 ```
 
@@ -722,92 +778,116 @@ Internally this is two static "empty" stores, not one: `disabledLiveStore` is ta
 Implementation sketch:
 
 ```tsx
-function useBalance(address: Address | null): LiveQueryResult<Lamports> {
-    const client = useClient();
+// Shared helper: every live-data hook needs `client.rpc` + `client.rpcSubscriptions`.
+// Route through `useClientCapability` so mounting one of these hooks without an
+// `RpcProvider` / `RpcConnectionProvider` ancestor fails loud at mount.
+function useRequestConnectionClient(hookName: string) {
+    return useClientCapability<ClientWithRpc & ClientWithRpcSubscriptions>({
+        capability: ['rpc', 'rpcSubscriptions'],
+        hookName,
+        providerHint: 'Mount <RpcProvider> or <RpcConnectionProvider>.',
+    });
+}
 
-    const store = useLiveStore(
-        (signal) => {
-            if (!address) return disabledLiveStore<Lamports>();
-            return createReactiveStoreWithInitialValueAndSlotTracking({
-                abortSignal: signal,
-                rpcRequest: client.rpc.getBalance(address),
-                rpcSubscriptionRequest: client.rpcSubscriptions.accountNotifications(address),
-                // The factory unwraps the `SolanaRpcResponse` envelope before
-                // handing it to the mapper, so `value` here is already
-                // `Lamports`, not `{ value: Lamports, ... }`.
-                rpcValueMapper: (lamports) => lamports,
-                rpcSubscriptionValueMapper: ({ lamports }) => lamports,
-            });
+// Each named hook is paired with a framework-agnostic live-data builder.
+// The builder produces a LiveDataSpec<T> — the RPC request, subscription
+// request, and two mappers — without any React or abort-signal plumbing.
+// useBalance / useLiveSwr / useLiveQuery all consume the same spec, so
+// the choice of cache layer is orthogonal to the choice of data source.
+
+type LiveDataSpec<TRpcValue, TSubscriptionValue, T> = Omit<
+    CreateReactiveStoreConfig<TRpcValue, TSubscriptionValue, T>,
+    'abortSignal'
+>;
+
+function createBalanceLiveData(
+    client: ClientWithRpc & ClientWithRpcSubscriptions,
+    address: Address,
+): LiveDataSpec<Lamports, { lamports: Lamports }, Lamports> {
+    return {
+        rpcRequest: client.rpc.getBalance(address),
+        rpcSubscriptionRequest: client.rpcSubscriptions.accountNotifications(address),
+        // The factory unwraps the `SolanaRpcResponse` envelope before
+        // handing it to the mapper, so `value` here is already
+        // `Lamports`, not `{ value: Lamports, ... }`.
+        rpcValueMapper: (lamports) => lamports,
+        rpcSubscriptionValueMapper: ({ lamports }) => lamports,
+    };
+}
+
+function createAccountLiveData<TData extends object>(
+    client: ClientWithRpc & ClientWithRpcSubscriptions,
+    address: Address,
+    decoder?: Decoder<TData>,
+): LiveDataSpec<unknown, unknown, MaybeEncodedAccount | MaybeAccount<TData>> {
+    // parseBase64RpcAccount returns a MaybeEncodedAccount when its input
+    // may be null — the missing-account case becomes
+    // `{ address, exists: false }` rather than a raw `null`.
+    const mapValue = (value: unknown) => {
+        const encoded = parseBase64RpcAccount(address, value);
+        return decoder ? decodeAccount(encoded, decoder) : encoded;
+    };
+    return {
+        rpcRequest: client.rpc.getAccountInfo(address, { encoding: 'base64' }),
+        rpcSubscriptionRequest: client.rpcSubscriptions.accountNotifications(address, { encoding: 'base64' }),
+        rpcValueMapper: mapValue,
+        rpcSubscriptionValueMapper: mapValue,
+    };
+}
+
+function createTransactionConfirmationLiveData(
+    client: ClientWithRpc & ClientWithRpcSubscriptions,
+    signature: Signature,
+    commitment: Commitment,
+): LiveDataSpec<unknown, unknown, TransactionConfirmationStatus> {
+    return {
+        rpcRequest: client.rpc.getSignatureStatuses([signature]),
+        rpcSubscriptionRequest: client.rpcSubscriptions.signatureNotifications(signature, { commitment }),
+        rpcValueMapper: (statuses) => {
+            const status = statuses[0];
+            return status
+                ? { err: status.err, confirmationStatus: status.confirmationStatus }
+                : { err: null, confirmationStatus: null };
         },
+        rpcSubscriptionValueMapper: (notification) => ({
+            err: notification.err,
+            confirmationStatus: commitment,
+        }),
+    };
+}
+
+// The named hooks are thin wrappers: they resolve the client, gate on a
+// null argument, and delegate to the builder.
+
+function useBalance(address: Address | null): LiveQueryResult<Lamports> {
+    const client = useRequestConnectionClient('useBalance');
+    return useLiveData(
+        () => (address ? createBalanceLiveData(client, address) : null),
         [client, address],
     );
-
-    return useLiveQueryResult(store);
 }
 
 function useAccount<TData extends object>(
     address: Address | null,
     decoder?: Decoder<TData>,
-): LiveQueryResult<EncodedAccount | Account<TData> | null> {
-    const client = useClient();
-
-    const store = useLiveStore(
-        (signal) => {
-            if (!address) return disabledLiveStore<Account<TData> | EncodedAccount | null>();
-            return createReactiveStoreWithInitialValueAndSlotTracking({
-                abortSignal: signal,
-                rpcRequest: client.rpc.getAccountInfo(address, { encoding: 'base64' }),
-                rpcSubscriptionRequest: client.rpcSubscriptions.accountNotifications(address, { encoding: 'base64' }),
-                rpcValueMapper: (value) => {
-                    if (!value) return null;
-                    const encoded = parseBase64RpcAccount(address, value);
-                    return decoder ? decodeAccount(encoded, decoder) : encoded;
-                },
-                rpcSubscriptionValueMapper: (value) => {
-                    if (!value) return null;
-                    const encoded = parseBase64RpcAccount(address, value);
-                    return decoder ? decodeAccount(encoded, decoder) : encoded;
-                },
-            });
-        },
+): LiveQueryResult<MaybeEncodedAccount | MaybeAccount<TData>> {
+    const client = useRequestConnectionClient('useAccount');
+    return useLiveData(
+        () => (address ? createAccountLiveData(client, address, decoder) : null),
         [client, address, decoder],
     );
-
-    return useLiveQueryResult(store);
 }
 
 function useTransactionConfirmation(
     signature: Signature | null,
     options?: { commitment?: Commitment },
-): LiveQueryResult<{ err: TransactionError | null; confirmationStatus: Commitment | null; confirmations: bigint | null }> {
-    const client = useClient();
+): LiveQueryResult<TransactionConfirmationStatus> {
+    const client = useRequestConnectionClient('useTransactionConfirmation');
     const commitment = options?.commitment ?? 'confirmed';
-
-    const store = useLiveStore(
-        (signal) => {
-            if (!signature) return disabledLiveStore<TransactionConfirmationStatus>();
-            return createReactiveStoreWithInitialValueAndSlotTracking({
-                abortSignal: signal,
-                rpcRequest: client.rpc.getSignatureStatuses([signature]),
-                rpcSubscriptionRequest: client.rpcSubscriptions
-                    .signatureNotifications(signature, { commitment }),
-                rpcValueMapper: (statuses) => {
-                    const status = statuses[0];
-                    return status
-                        ? { err: status.err, confirmationStatus: status.confirmationStatus, confirmations: status.confirmations }
-                        : { err: null, confirmationStatus: null, confirmations: null };
-                },
-                rpcSubscriptionValueMapper: (notification) => ({
-                    err: notification.err,
-                    confirmationStatus: commitment,
-                    confirmations: null,
-                }),
-            });
-        },
+    return useLiveData(
+        () => (signature ? createTransactionConfirmationLiveData(client, signature, commitment) : null),
         [client, signature, commitment],
     );
-
-    return useLiveQueryResult(store);
 }
 ```
 
@@ -918,10 +998,14 @@ function useLiveQueryResult<T>(
 
 /**
  * Bridge for `useSubscription`. The store comes straight from `.reactiveStore()`
- * on a pending subscription request, so its data is the raw notification with
- * no slot envelope.
+ * on a pending subscription request. Each notification is duck-typed for
+ * Kit's `SolanaRpcResponse` envelope: when present, `data` is unwrapped to
+ * the inner value and `slot` is lifted from `context.slot`; when absent,
+ * the notification passes through as-is with `slot: undefined`.
  */
-function useSubscriptionResult<T>(store: ReactiveStreamStore<T>): LiveQueryResult<T> {
+function useSubscriptionResult<T>(
+    store: ReactiveStreamStore<T>,
+): LiveQueryResult<UnwrapRpcResponse<T>> {
     const state = useSyncExternalStore(store.subscribe, store.getUnifiedState);
     const disabled = (store as { [DISABLED]?: true })[DISABLED] === true;
 
@@ -936,15 +1020,33 @@ function useSubscriptionResult<T>(store: ReactiveStreamStore<T>): LiveQueryResul
                 status: 'disabled',
             };
         }
+        const { data, slot } = splitRpcResponse(state.data);
         return {
-            data: state.data,
+            data,
             error: state.error,
             isLoading: state.status === 'loading',
             retry: store.retry,
-            slot: undefined,
+            slot,
             status: state.status,
         };
     }, [state, disabled, store.retry]);
+}
+
+// Duck-type the `SolanaRpcResponse` envelope — `{ context: { slot }, value }` —
+// and split it into `{ data, slot }`. Anything else passes through.
+function splitRpcResponse<T>(
+    notification: T | undefined,
+): { data: UnwrapRpcResponse<T> | undefined; slot: Slot | undefined } {
+    if (
+        notification != null &&
+        typeof notification === 'object' &&
+        'context' in notification &&
+        'value' in notification
+    ) {
+        const envelope = notification as SolanaRpcResponse<unknown>;
+        return { data: envelope.value as UnwrapRpcResponse<T>, slot: envelope.context.slot };
+    }
+    return { data: notification as UnwrapRpcResponse<T> | undefined, slot: undefined };
 }
 ```
 
@@ -959,18 +1061,19 @@ For custom RPC + subscription combinations the named hooks don't cover:
  * Generic live-data hook for any RPC + subscription pair.
  * Handles store creation, slot dedup, abort, and cleanup.
  *
- * The factory function is called when `deps` change with a fresh
- * `AbortSignal` (the same one that gets threaded into the underlying
- * reactive store — it fires on next dep change and on unmount). Ignore the
- * signal if you don't need it, or thread it into auxiliary work that should
- * be cancelled alongside the store (additional fetch, decoder warmup, etc).
+ * The builder function runs when `deps` change and returns a
+ * `LiveDataSpec<T>` — the RPC request, subscription request, and the two
+ * mappers that unify their value shapes. Return `null` to disable the
+ * query (matches the null-gate convention used by `useBalance`,
+ * `useAccount`, etc.). Abort signal plumbing is handled internally.
+ *
  * ESLint's `react-hooks/exhaustive-deps` rule can trace which values the
- * factory captures and warn when any are missing from `deps` — add
+ * builder captures and warn when any are missing from `deps` — add
  * `'useLiveData'` to your project's `exhaustive-deps` `additionalHooks`
  * setting to opt in.
  */
 function useLiveData<TRpcValue, TSubscriptionValue, T>(
-    factory: (signal: AbortSignal) => CreateReactiveStoreConfig<TRpcValue, TSubscriptionValue, T>,
+    buildSpec: () => LiveDataSpec<TRpcValue, TSubscriptionValue, T> | null,
     deps: DependencyList,
 ): LiveQueryResult<T>;
 ```
@@ -978,9 +1081,15 @@ function useLiveData<TRpcValue, TSubscriptionValue, T>(
 Usage:
 
 ```tsx
-// Watch a custom program account
+// Using a stock builder — equivalent to `useBalance(address)`:
+const { data: balance } = useLiveData(
+    () => (address ? createBalanceLiveData(client, address) : null),
+    [client, address],
+);
+
+// Inline for a custom program account:
 const { data: gameState } = useLiveData(
-    _signal => ({
+    () => ({
         rpcRequest: client.rpc.getAccountInfo(gameAddress),
         rpcSubscriptionRequest: client.rpcSubscriptions.accountNotifications(gameAddress),
         rpcValueMapper: (v) => parseGameState(v.value),
@@ -990,15 +1099,45 @@ const { data: gameState } = useLiveData(
 );
 ```
 
+Third-party plugins are expected to ship their own `create<Feature>LiveData(client, ...args)` builders alongside the plugin. The builder has no React dependency, so the same function works with `useLiveData`, `useLiveSwr`, and `useLiveQuery` — the cache layer is the caller's choice, not the plugin author's.
+
 #### Subscriptions (no initial fetch)
 
 For subscription-only data where there is no RPC fetch equivalent:
 
 ```typescript
 /**
- * Subscribe to an RPC subscription. Returns the latest notification value in
- * the same `LiveQueryResult<T>` shape as the named hooks, with `slot` always
- * `undefined` (raw notifications have no `SolanaRpcResponse` envelope).
+ * Unwraps `SolanaRpcResponse<U>` → `U` at the type level, so subscriptions
+ * that emit slot-stamped notifications surface `U` as `data` (the slot
+ * moves to the top-level `slot` field). Non-envelope subscriptions pass
+ * through unchanged.
+ */
+type UnwrapRpcResponse<T> = T extends SolanaRpcResponse<infer U> ? U : T;
+
+/**
+ * Anything that produces a `ReactiveStreamStore<T>` via
+ * `.reactiveStore({ abortSignal })`. `PendingRpcSubscriptionsRequest<T>`
+ * satisfies this by design; plugin-authored streaming-request objects that
+ * follow the same convention plug in without modification.
+ */
+type ReactiveStreamSource<T> = {
+    reactiveStore(options: { abortSignal: AbortSignal }): ReactiveStreamStore<T>;
+};
+
+/**
+ * Subscribe to a stream. Returns the latest notification in the same
+ * `LiveQueryResult` shape as the named hooks.
+ *
+ * Accepts any object with `.reactiveStore({ abortSignal })` — typically
+ * `PendingRpcSubscriptionsRequest`, but plugin-authored streaming objects
+ * that follow the same convention work too.
+ *
+ * When the stream emits `SolanaRpcResponse<U>`-shaped notifications
+ * (`accountNotifications`, `programNotifications`, etc.), the envelope is
+ * unwrapped: `data` is the inner value `U` and `slot` is populated from
+ * `context.slot`. For streams that emit raw values (`slotNotifications`,
+ * `logsNotifications`, etc.), `data` is the notification as-is and `slot`
+ * is `undefined`.
  *
  * Return `null` from the factory to disable — matches the null-gate
  * convention used by `useBalance` / `useAccount` /
@@ -1006,9 +1145,9 @@ For subscription-only data where there is no RPC fetch equivalent:
  * traffic and reports `status: 'disabled'`.
  */
 function useSubscription<T>(
-    factory: (signal: AbortSignal) => PendingRpcSubscriptionsRequest<T> | null,
+    factory: (signal: AbortSignal) => ReactiveStreamSource<T> | null,
     deps: DependencyList,
-): LiveQueryResult<T>;
+): LiveQueryResult<UnwrapRpcResponse<T>>;
 ```
 
 Usage:
@@ -1036,9 +1175,9 @@ Implementation:
 
 ```tsx
 function useSubscription<T>(
-    factory: (signal: AbortSignal) => PendingRpcSubscriptionsRequest<T> | null,
+    factory: (signal: AbortSignal) => ReactiveStreamSource<T> | null,
     deps: DependencyList,
-): LiveQueryResult<T> {
+): LiveQueryResult<UnwrapRpcResponse<T>> {
     const store = useLiveStore<ReactiveStreamStore<T>>(
         (signal) => {
             const pending = factory(signal);
@@ -1055,19 +1194,19 @@ function useSubscription<T>(
 }
 ```
 
-`useSubscription` shares the same `useLiveStore` + bridge pipeline as the named hooks. The difference is the bridge (`useSubscriptionResult` vs. `useLiveQueryResult`) because pending subscription requests don't wrap their notifications in Kit's `SolanaRpcResponse` slot envelope.
+`useSubscription` shares the same `useLiveStore` + bridge pipeline as the named hooks. The bridge (`useSubscriptionResult`, defined [earlier](#live-data-subscription-backed)) inspects each notification at runtime: subscriptions that emit `SolanaRpcResponse<U>` (`accountNotifications`, `programNotifications`, `signatureNotifications`, …) are unwrapped so `data` is the inner value and `slot` comes from `context.slot`; subscriptions that emit raw values (`slotNotifications`, `logsNotifications`, `rootNotifications`, …) pass through as-is with `slot` undefined. The `UnwrapRpcResponse<T>` conditional type keeps the return type aligned with the runtime behavior, so callers never have to reach for `data.context.slot` or `data.value` themselves.
 
 > **Why sync `.reactiveStore()` and not async `.reactive()`?** The async form returns `Promise<ReactiveStreamStore<T>>`, which forces every consumer to invent a second state machine on top of the store's own `loading | loaded | error | retrying` — "waiting for the promise" vs. "waiting for the first notification" — and leaves no place to put `retry()` during transport-setup failures (no store exists yet). The sync form delegates transport setup to `createReactiveStoreFromDataPublisherFactory` inside Kit, so the store is usable immediately and setup failures surface through the store's existing `error` state with `retry()` working out of the box.
 
-#### One-shot RPC reads (`useRpc`)
+#### One-shot requests (`useRequest`)
 
 For RPC calls that don't have a subscription counterpart — `getEpochInfo`, `getMinimumBalanceForRentExemption`, `getLatestBlockhash`, `getRecentPerformanceSamples`, etc. — or for cases where you want a one-shot read of a value that `useAccount` / `useBalance` would otherwise subscribe to.
 
 Backed by `ReactiveActionStore` ([Prerequisites](#prerequisites)): each mount auto-dispatches the request, deps change triggers a fresh dispatch (auto-aborting any in-flight predecessor), and consumers get a `refresh()` function to re-fire manually.
 
 ```typescript
-/** The state returned by {@link useRpc}. */
-type RpcReadResult<T> = {
+/** The state returned by {@link useRequest}. */
+type RequestResult<T> = {
     /**
      * The current value, or `undefined` while loading or when disabled. On
      * `error`, holds the last successful value (if any) so UIs can show
@@ -1091,41 +1230,63 @@ type RpcReadResult<T> = {
      * Re-fire the RPC call with the current deps. Stable reference. Safe to
      * pass to an onClick handler or put in effect deps. Call this when the
      * user explicitly requests a refresh, or to retry after an error.
+     *
+     * Note: unlike live-data hooks (which expose a separate `retry()` for
+     * the error path), `useRequest` collapses both affordances under
+     * `refresh` — there's only one re-dispatch mechanism on an action
+     * store, and distinguishing "user-initiated refresh" from "error
+     * recovery" at the API level would be a naming split without a
+     * behavioural one.
      */
     refresh: () => void;
 };
 
 /**
- * Fire an RPC request on mount and whenever `deps` change. Returns reactive
- * state tracking the call's lifecycle.
+ * Anything that produces a `ReactiveActionStore<[], T>` via `.reactiveStore()`.
+ * `PendingRpcRequest<T>` satisfies this by design; plugin authors whose
+ * pending-request objects expose the same method plug in without
+ * modification. This duck-type is the orthogonality boundary — `useRequest`
+ * doesn't know or care where the pending came from.
+ */
+type ReactiveActionSource<T> = {
+    reactiveStore(): ReactiveActionStore<[], T>;
+};
+
+/**
+ * Fire a one-shot request on mount and whenever `deps` change. Returns
+ * reactive state tracking the call's lifecycle.
+ *
+ * Accepts any object with `.reactiveStore()` — typically `PendingRpcRequest`,
+ * but plugin-authored pending objects that follow the same convention work
+ * too (e.g. a DAS client's `getAsset(address)`).
  *
  * Return `null` from `factory` to disable — matches the null-gate convention
  * used by `useBalance` / `useAccount`.
  */
-function useRpc<T>(
-    factory: (signal: AbortSignal) => PendingRpcRequest<T> | null,
+function useRequest<T>(
+    factory: (signal: AbortSignal) => ReactiveActionSource<T> | null,
     deps: DependencyList,
-): RpcReadResult<T>;
+): RequestResult<T>;
 ```
 
 Usage:
 
 ```tsx
 // Fetch epoch info on mount; refresh on user click.
-const { data: epoch, error, refresh } = useRpc(
+const { data: epoch, error, refresh } = useRequest(
     () => client.rpc.getEpochInfo(),
     [client],
 );
 if (error) return <button onClick={refresh}>Retry</button>;
 
 // Deps-driven: refetch when the address changes.
-const { data: supply } = useRpc(
+const { data: supply } = useRequest(
     () => client.rpc.getTokenSupply(mintAddress),
     [client, mintAddress],
 );
 
 // Conditional (disabled when inputs aren't ready).
-const { data: account } = useRpc(
+const { data: account } = useRequest(
     () => address ? client.rpc.getAccountInfo(address) : null,
     [client, address],
 );
@@ -1134,10 +1295,10 @@ const { data: account } = useRpc(
 Implementation:
 
 ```tsx
-function useRpc<T>(
-    factory: (signal: AbortSignal) => PendingRpcRequest<T> | null,
+function useRequest<T>(
+    factory: (signal: AbortSignal) => ReactiveActionSource<T> | null,
     deps: DependencyList,
-): RpcReadResult<T> {
+): RequestResult<T> {
     const store = useLiveStore<ReactiveActionStore<[], T>>(
         (signal) => {
             const pending = factory(signal);
@@ -1153,7 +1314,7 @@ function useRpc<T>(
         store.dispatch();
     }, [store]);
 
-    return useRpcReadResult(store);
+    return useRequestResult(store);
 }
 ```
 
@@ -1167,7 +1328,7 @@ The bridge maps the action-store's `idle | running | success | error` to the rea
 - action `error` → read `error`.
 - `refresh()` wraps `store.dispatch()`.
 
-> **Why auto-dispatch at the hook layer rather than in the primitive?** `ReactiveActionStore` is deliberately neutral on initiation — different frameworks (and even different hooks within kit-react) want different policies. `useRpc` auto-dispatches on mount / deps change; `useSendTransaction` waits for the user. One primitive, two policies.
+> **Why auto-dispatch at the hook layer rather than in the primitive?** `ReactiveActionStore` is deliberately neutral on initiation — different frameworks (and even different hooks within kit-react) want different policies. `useRequest` auto-dispatches on mount / deps change; `useSendTransaction` waits for the user. One primitive, two policies.
 
 #### Sending transactions
 
@@ -1255,14 +1416,18 @@ await send(getTransferInstruction({ source, destination, amount }));
 await send(client.system.instructions.transfer({ source, destination, amount }));
 
 // Send an instruction plan
-await send(instructionPlan('sequential', [ixA, ixB]));
+await send(sequentialInstructionPlan([ixA, ixB]));
 ```
 
 Implementation:
 
 ```tsx
 function useSendTransaction() {
-    const client = useClient();
+    const client = useClientCapability<ClientWithSendTransaction>({
+        capability: 'sendTransaction',
+        hookName: 'useSendTransaction',
+        providerHint: 'Mount <RpcProvider> or <LiteSvmProvider> (or another provider that installs transaction execution).',
+    });
     return useAction(
         (signal, input: Parameters<typeof client.sendTransaction>[0], config?: Config) =>
             client.sendTransaction(input, { ...config, abortSignal: signal }),
@@ -1424,16 +1589,16 @@ const { send: handleSwap, status, data: result, error } = useAction(
 
 #### One-shot reads
 
-Covered by **`useRpc`** — see [the one-shot reads section](#one-shot-rpc-reads-userpc) earlier. Auto-dispatches on mount / deps change, returns `{ data, error, status, isLoading, refresh }`, backed by `PendingRpcRequest.reactiveStore()` (a `ReactiveActionStore`) from [Prerequisites](#prerequisites).
+Covered by **`useRequest`** — see [the one-shot requests section](#one-shot-requests-userequest) earlier. Auto-dispatches on mount / deps change, returns `{ data, error, status, isLoading, refresh }`, backed by `PendingRpcRequest.reactiveStore()` (a `ReactiveActionStore`) from [Prerequisites](#prerequisites).
 
 ```typescript
-const { data: epoch, error, refresh } = useRpc(
+const { data: epoch, error, refresh } = useRequest(
     () => client.rpc.getEpochInfo(),
     [client],
 );
 ```
 
-When you want shared cache semantics across many components (dedupe, persistence, devtools, Suspense), opt into `useRpcSwr` or `useRpcQuery` from the [SWR](#swr-adapter-solanakit-reactswr) or [TanStack Query](#tanstack-query-adapter-solanakit-reactquery) adapters — same underlying Kit primitive, routed through the cache library.
+When you want shared cache semantics across many components (dedupe, persistence, devtools, Suspense), opt into `useRequestSwr` or `useRequestQuery` from the [SWR](#swr-adapter-solanakit-reactswr) or [TanStack Query](#tanstack-query-adapter-solanakit-reactquery) adapters — same underlying Kit primitive, routed through the cache library.
 
 For imperative one-offs (outside the render path), call the pending request directly:
 
@@ -1480,7 +1645,7 @@ After `PluginProvider`, any `useClient()` call in the subtree returns the DAS-ex
 
 ```typescript
 // @my-org/kit-react-das
-import { useClientCapability } from '@solana/kit-react';
+import { useClientCapability, useRequest } from '@solana/kit-react';
 import type { DasClient } from '@my-org/kit-plugin-das';
 
 export function useAsset(address: Address) {
@@ -1489,13 +1654,13 @@ export function useAsset(address: Address) {
         hookName: 'useAsset',
         providerHint: 'Usually supplied by <DasProvider>.',
     });
-    return useSWR(['das-asset', address], () =>
-        client.das.getAsset(address).send()
-    );
+    return useRequest(() => client.das.getAsset(address), [client, address]);
 }
 ```
 
 Consumers just import `useAsset` — they never need to touch `useClient` or know about the underlying DAS plugin.
+
+Note the choice of primitive. Plugins and cache libraries are **orthogonal axes of extensibility**: a plugin author shouldn't assume their users have installed SWR or TanStack Query, so the reference convenience hook is built on kit-react's native primitives (`useRequest` for one-shot reads, `useLiveData` / `useSubscription` for streams). That gives every consumer a working hook out of the box. Plugin authors who want to offer cache-integrated variants too can ship them under their own subpaths (`@my-org/kit-react-das/swr`, `.../query`) that peer-depend on the relevant cache library — the same pattern kit-react itself uses for its adapters. End users then pick the cache layer independently of which plugins they've installed.
 
 ### `useClientCapability` — runtime-checked third-party hooks
 
@@ -1514,15 +1679,9 @@ function useClientCapability<TClient extends object>(options: {
 
 The TypeScript narrowing is still a caller-declared cast (same as `useClient<T>()`), but the runtime check makes the missing-provider failure loud at mount rather than deferring to a cryptic call-site crash. This is the recommended path for hook authors who want their users to see "useAsset() requires `client.das`. Usually supplied by `<DasProvider>`" rather than "Cannot read properties of undefined".
 
-### `useClient` is generic for advanced cases
+### `useClient<T>()` vs. `useClientCapability<T>()`
 
-`useClient` still accepts a type parameter for the rare case where you want a bare cast without a capability check:
-
-```typescript
-function useClient<TClient extends object = object>(): Client<TClient>;
-```
-
-Use this when you specifically don't want the runtime check (e.g. testing code inspecting the raw client) — in production hooks, reach for `useClientCapability` first.
+`useClient<T>()` (shown in [Client access](#client-access)) is a pure cast — no runtime check. Use it when you specifically don't want the runtime check (e.g. testing code inspecting the raw client, or a hook that tolerates missing capabilities). In production hooks that depend on a specific plugin being installed, reach for `useClientCapability` first so the missing-provider failure surfaces at mount with a typed message instead of a cryptic crash at the call site.
 
 ## SWR Adapter (`@solana/kit-react/swr`)
 
@@ -1539,28 +1698,41 @@ Use this when you specifically don't want the runtime check (e.g. testing code i
 
 ### Naming convention
 
-Every hook in this adapter carries the `Swr` suffix (e.g. `useLiveSwr`, `useRpcSwr`, `useSendTransactionSwr`). The suffix makes the cache backing visible at every call site, avoids collisions with core hook names, and stays greppable. The [TanStack adapter](#tanstack-query-adapter-solanakit-reactquery) uses the `Query` suffix the same way.
+Every hook in this adapter carries the `Swr` suffix (e.g. `useLiveSwr`, `useRequestSwr`, `useSendTransactionSwr`). The suffix makes the cache backing visible at every call site, avoids collisions with core hook names, and stays greppable. The [TanStack adapter](#tanstack-query-adapter-solanakit-reactquery) uses the `Query` suffix the same way.
 
 ### Generic bridge
 
-Bridges any Kit reactive stream store into SWR's cache via `useSWRSubscription`:
+Bridges a `LiveDataSpec<T>` (the same shape consumed by `useLiveData` and the stock live-data builders) into SWR's cache via `useSWRSubscription`:
 
 ```typescript
 /**
- * Bridge a Kit ReactiveStreamStore into SWR.
+ * Bridge a `LiveDataSpec<T>` into SWR's cache via `useSWRSubscription`.
  * Manages subscription lifecycle and error propagation.
+ *
+ * `spec` is the same framework-agnostic shape consumed by `useLiveData`
+ * and `useLiveQuery`, so the stock live-data builders
+ * (`createBalanceLiveData`, `createAccountLiveData`, …) and plugin-author
+ * builders plug in directly. Pass `null` as the key to disable.
  */
 function useLiveSwr<T>(
-    key: SWRKey,
-    config: CreateReactiveStoreConfig,
+    key: SWRKey | null,
+    spec: LiveDataSpec<unknown, unknown, T>,
 ): SWRResponse<T>;
 ```
 
 Usage:
 
 ```tsx
-// Custom live data via SWR
-const { data, error, isLoading } = useLiveSwr(
+// Route `useBalance`'s data source through SWR — every component reading
+// `['balance', address]` dedupes into one subscription and participates
+// in SWR's cache invalidation / devtools / persistence.
+const { data: balance, error, isLoading } = useLiveSwr(
+    ['balance', address],
+    createBalanceLiveData(client, address),
+);
+
+// Custom live data — same bridge, arbitrary RPC + subscription pair.
+const { data: gameState } = useLiveSwr(
     ['gameState', gameAddress],
     {
         rpcRequest: client.rpc.getAccountInfo(gameAddress),
@@ -1568,6 +1740,32 @@ const { data, error, isLoading } = useLiveSwr(
         rpcValueMapper: (v) => parseGameState(v.value),
         rpcSubscriptionValueMapper: (v) => parseGameState(v),
     },
+);
+```
+
+### Subscription-only bridge
+
+For streams without an RPC fetch counterpart, `useSubscriptionSwr` routes a `ReactiveStreamSource<T>` (same duck-type consumed by core's `useSubscription`) through SWR's cache. Subscriptions don't have meaningful initial-fetch or persistence semantics — the cache win is dedup across components and devtools visibility into which streams are active. Envelope unwrapping matches core's `useSubscription`.
+
+```typescript
+/**
+ * Bridge a `ReactiveStreamSource<T>` into SWR's cache via
+ * `useSWRSubscription`. `SolanaRpcResponse`-shaped notifications are
+ * unwrapped the same way as core's `useSubscription` — `data` is the
+ * inner value.
+ */
+function useSubscriptionSwr<T>(
+    key: SWRKey | null,
+    source: ReactiveStreamSource<T>,
+): SWRResponse<UnwrapRpcResponse<T>>;
+```
+
+Usage:
+
+```tsx
+const { data: slot } = useSubscriptionSwr(
+    ['slot'],
+    client.rpcSubscriptions.slotNotifications(),
 );
 ```
 
@@ -1605,16 +1803,70 @@ await trigger(getTransferInstruction({ source, destination, amount }));
 // SWR automatically revalidates the balance query after success
 ```
 
+Implementation:
+
+```tsx
+import { useClientCapability } from '@solana/kit-react';
+import useSWRMutation from 'swr/mutation';
+
+function useSendTransactionSwr(options?: { revalidateKeys?: SWRKey[] }) {
+    const client = useClientCapability<ClientWithSendTransaction>({
+        capability: 'sendTransaction',
+        hookName: 'useSendTransactionSwr',
+        providerHint: 'Mount <RpcProvider> or <LiteSvmProvider>.',
+    });
+
+    return useSWRMutation(
+        'sendTransaction',
+        (_key, { arg }: { arg: Parameters<typeof client.sendTransaction>[0] }) =>
+            client.sendTransaction(arg),
+        {
+            onSuccess() {
+                options?.revalidateKeys?.forEach((key) => mutate(key));
+            },
+        },
+    );
+}
+```
+
+The adapter is thin — it delegates entirely to `client.sendTransaction()` and wires up `useSWRMutation`'s lifecycle around it.
+
+### Generic action bridge
+
+`useActionSwr` mirrors core's `useAction` but routes through `useSWRMutation`, so the operation's lifecycle plugs into SWR's cache invalidation and devtools. Useful for custom mutations (wallet sign flows, off-chain API calls, compound sign-then-send) where you want cache-library integration without reaching past kit-react's API.
+
+```typescript
+/**
+ * Bridge any async operation into SWR's mutation primitive. The generic
+ * counterpart to `useSendTransactionSwr`.
+ */
+function useActionSwr<TArgs extends unknown[], TResult>(
+    key: SWRKey,
+    fn: (...args: TArgs) => Promise<TResult>,
+    options?: { revalidateKeys?: SWRKey[] },
+): SWRMutationResponse<TResult, unknown, SWRKey, TArgs>;
+```
+
+Usage:
+
+```tsx
+const { trigger, isMutating } = useActionSwr(
+    'sign-payload',
+    async (payload: Uint8Array) => signer.signMessage(payload),
+    { revalidateKeys: [['session']] },
+);
+```
+
 ### One-shot reads
 
-Core provides `useRpc` for one-shot RPC calls. Use `useRpcSwr` when you want SWR's cache (shared across components, persistence, Suspense mode):
+Core provides `useRequest` for one-shot requests. Use `useRequestSwr` when you want SWR's cache (shared across components, persistence, Suspense mode):
 
 ```typescript
 // Core — no cache sharing, per-hook state
-const { data } = useRpc(() => client.rpc.getEpochInfo(), [client]);
+const { data } = useRequest(() => client.rpc.getEpochInfo(), [client]);
 
 // SWR-backed — cache hits across components, persistence, Suspense
-const { data } = useRpcSwr(['epochInfo'], () => client.rpc.getEpochInfo());
+const { data } = useRequestSwr(['epochInfo'], () => client.rpc.getEpochInfo());
 ```
 
 ## TanStack Query Adapter (`@solana/kit-react/query`)
@@ -1632,22 +1884,77 @@ const { data } = useRpcSwr(['epochInfo'], () => client.rpc.getEpochInfo());
 
 ### Naming convention
 
-Every hook in this adapter carries the `Query` suffix (e.g. `useLiveQuery`, `useRpcQuery`, `useSendTransactionQuery`). Matches TanStack Query's own ecosystem vocabulary (`useQuery`, `useInfiniteQuery`, `useSuspenseQuery` are all named with `Query`) and avoids collisions with core hook names — core's generic live-data hook is `useLiveData`, not `useLiveQuery`.
+Every hook in this adapter carries the `Query` suffix (e.g. `useLiveQuery`, `useRequestQuery`, `useSendTransactionQuery`). Matches TanStack Query's own ecosystem vocabulary (`useQuery`, `useInfiniteQuery`, `useSuspenseQuery` are all named with `Query`) and avoids collisions with core hook names — core's generic live-data hook is `useLiveData`, not `useLiveQuery`.
 
 ### Generic bridge
 
-Bridges a Kit reactive stream store into TanStack Query's cache. Subscription pushes updates via `queryClient.setQueryData`:
+Bridges a `LiveDataSpec<T>` into TanStack Query's cache — initial fetch via `queryFn`, ongoing updates pushed via `queryClient.setQueryData`. Same spec shape as `useLiveData` / `useLiveSwr`:
 
 ```typescript
 /**
- * Bridge a Kit ReactiveStreamStore into TanStack Query.
+ * Bridge a `LiveDataSpec<T>` into TanStack Query's cache.
  * Initial fetch via queryFn, ongoing updates via subscription → setQueryData.
+ *
+ * `spec` is the same framework-agnostic shape consumed by `useLiveData`
+ * and `useLiveSwr`, so the stock live-data builders
+ * (`createBalanceLiveData`, `createAccountLiveData`, …) and plugin-author
+ * builders plug in directly.
  */
 function useLiveQuery<T>(
     key: QueryKey,
-    config: CreateReactiveStoreConfig,
+    spec: LiveDataSpec<unknown, unknown, T>,
     options?: UseQueryOptions,
 ): UseQueryResult<T>;
+```
+
+Usage:
+
+```tsx
+// Route `useBalance`'s data source through TanStack Query — every
+// component reading `['balance', address]` dedupes into one subscription
+// and participates in TanStack's cache invalidation / devtools /
+// Suspense.
+const { data: balance, error, isLoading } = useLiveQuery(
+    ['balance', address],
+    createBalanceLiveData(client, address),
+);
+
+// Custom live data — same bridge, arbitrary RPC + subscription pair.
+const { data: gameState } = useLiveQuery(
+    ['gameState', gameAddress],
+    {
+        rpcRequest: client.rpc.getAccountInfo(gameAddress),
+        rpcSubscriptionRequest: client.rpcSubscriptions.accountNotifications(gameAddress),
+        rpcValueMapper: (v) => parseGameState(v.value),
+        rpcSubscriptionValueMapper: (v) => parseGameState(v),
+    },
+);
+```
+
+### Subscription-only bridge
+
+For streams without an RPC fetch counterpart, `useSubscriptionQuery` routes a `ReactiveStreamSource<T>` through TanStack's cache. The subscription pushes updates via `queryClient.setQueryData` — same dedup / devtools benefits as `useLiveQuery`, just without an initial `queryFn` fetch (the first value arrives from the first notification). Envelope unwrapping matches core's `useSubscription`.
+
+```typescript
+/**
+ * Bridge a `ReactiveStreamSource<T>` into TanStack Query's cache.
+ * `SolanaRpcResponse`-shaped notifications are unwrapped the same way
+ * as core's `useSubscription`.
+ */
+function useSubscriptionQuery<T>(
+    key: QueryKey,
+    source: ReactiveStreamSource<T>,
+    options?: UseQueryOptions,
+): UseQueryResult<UnwrapRpcResponse<T>>;
+```
+
+Usage:
+
+```tsx
+const { data: slot } = useSubscriptionQuery(
+    ['slot'],
+    client.rpcSubscriptions.slotNotifications(),
+);
 ```
 
 ### Mutation hooks
@@ -1697,14 +2004,18 @@ await mutateAsync(client.system.instructions.transfer({ source, destination, amo
 Implementation:
 
 ```tsx
-import { useClient } from '@solana/kit-react';
+import { useClientCapability } from '@solana/kit-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 function useSendTransactionQuery(options?: {
     onSuccess?: (result: SuccessfulSingleTransactionPlanResult) => void;
     invalidateKeys?: QueryKey[];
 }) {
-    const client = useClient();
+    const client = useClientCapability<ClientWithSendTransaction>({
+        capability: 'sendTransaction',
+        hookName: 'useSendTransactionQuery',
+        providerHint: 'Mount <RpcProvider> or <LiteSvmProvider>.',
+    });
     const queryClient = useQueryClient();
 
     return useMutation({
@@ -1720,40 +2031,44 @@ function useSendTransactionQuery(options?: {
 }
 ```
 
-The SWR adapter's `useSendTransactionSwr` follows the same pattern with `useSWRMutation`:
+The adapter is thin — it delegates entirely to `client.sendTransaction()` and wires up `useMutation`'s lifecycle around it.
 
-```tsx
-import { useClient } from '@solana/kit-react';
-import useSWRMutation from 'swr/mutation';
+### Generic action bridge
 
-function useSendTransactionSwr(options?: { revalidateKeys?: SWRKey[] }) {
-    const client = useClient();
+`useActionQuery` mirrors core's `useAction` but routes through TanStack's `useMutation`, so the operation plugs into cache invalidation, optimistic updates, and devtools. The generic counterpart to `useSendTransactionQuery`.
 
-    return useSWRMutation(
-        'sendTransaction',
-        (_key, { arg }: { arg: Parameters<typeof client.sendTransaction>[0] }) =>
-            client.sendTransaction(arg),
-        {
-            onSuccess() {
-                options?.revalidateKeys?.forEach((key) => mutate(key));
-            },
-        },
-    );
-}
+```typescript
+/**
+ * Bridge any async operation into TanStack's mutation primitive.
+ */
+function useActionQuery<TArgs extends unknown[], TResult>(
+    fn: (...args: TArgs) => Promise<TResult>,
+    options?: {
+        onSuccess?: (result: TResult) => void;
+        invalidateKeys?: QueryKey[];
+    },
+): UseMutationResult<TResult, unknown, TArgs>;
 ```
 
-Both adapters are thin — they delegate entirely to `client.sendTransaction()` and just wire up the cache library's mutation lifecycle around it.
+Usage:
+
+```tsx
+const { mutateAsync, isPending } = useActionQuery(
+    async (payload: Uint8Array) => signer.signMessage(payload),
+    { invalidateKeys: [['session']] },
+);
+```
 
 ### One-shot reads
 
-Core provides `useRpc`. Use `useRpcQuery` when you want TanStack's cache (dedupe, Suspense, devtools, invalidation):
+Core provides `useRequest`. Use `useRequestQuery` when you want TanStack's cache (dedupe, Suspense, devtools, invalidation):
 
 ```typescript
 // Core — no cache sharing, per-hook state
-const { data } = useRpc(() => client.rpc.getEpochInfo(), [client]);
+const { data } = useRequest(() => client.rpc.getEpochInfo(), [client]);
 
 // TanStack-backed — shared cache, Suspense-capable, devtools-visible
-const { data } = useRpcQuery(['epochInfo'], () => client.rpc.getEpochInfo());
+const { data } = useRequestQuery(['epochInfo'], () => client.rpc.getEpochInfo());
 ```
 
 ## What Each Layer Provides
@@ -1761,38 +2076,50 @@ const { data } = useRpcQuery(['epochInfo'], () => client.rpc.getEpochInfo());
 | Feature | Core | SWR Adapter | TanStack Adapter |
 |---------|------|-------------|------------------|
 | Providers | ✅ | — | — |
-| Wallet hooks | ✅ | — | — |
+| Wallet hooks | ✅ (`@solana/kit-react/wallet` subpath) | — | — |
 | `useBalance`, `useAccount` | ✅ (ReactiveStreamStore → useSyncExternalStore) | ✅ (SWR cache) | ✅ (TanStack cache) |
 | Generic live data | `useLiveData` | `useLiveSwr` | `useLiveQuery` |
-| `useSubscription` | ✅ | — | — |
-| One-shot reads | `useRpc` (ReactiveActionStore, auto-dispatched) | `useRpcSwr` (SWR cache) | `useRpcQuery` (TanStack cache) |
+| Subscription-only bridge | `useSubscription` | `useSubscriptionSwr` | `useSubscriptionQuery` |
+| One-shot reads | `useRequest` (ReactiveActionStore, auto-dispatched) | `useRequestSwr` (SWR cache) | `useRequestQuery` (TanStack cache) |
 | Send transactions | `useSendTransaction` / `useSendTransactions` (ActionState) | `useSendTransactionSwr` / `useSendTransactionsSwr` (SWR mutation) | `useSendTransactionQuery` / `useSendTransactionsQuery` (TanStack mutation) |
-| `useAction` (generic) | ✅ | — | — |
-| Suspense | — | — | ✅ |
-| Devtools | — | — | ✅ |
-| Cache dedup | Per-component | SWR built-in | TanStack built-in |
+| Generic action bridge | `useAction` | `useActionSwr` | `useActionQuery` |
+| Suspense | — | ✅ | ✅ |
+| Devtools | — | ✅ | ✅ |
+| Cross-component dedup | — (each hook has its own store; lift into context to share) | SWR built-in (by key) | TanStack built-in (by query key) |
 
 ## Design Decisions
 
+**Headless by design — no UI.** kit-react ships providers, hooks, and reactive state primitives; it does not ship buttons, modals, wallet pickers, connect flows, or any other rendered components. Wallet-standard discovery and the `walletSigner` plugin are the deepest this library goes — the app (or a higher-level UI library like wallet-ui, connectorkit, or a framework-kit-style opinionated bundle) owns how that state is presented. Rationale: UI is where apps differ most, and a kit-react modal would compete with every downstream library that wants to own the visual layer, while solving a problem the hooks already solve at a lower level. Keeping kit-react headless lets UI libraries build on top instead of around, and lets teams with design-system constraints skip kit-react's opinions without giving up the state machinery.
+
 **Client is an implementation detail.** Consumers use providers and hooks. `useClient()` is an escape hatch for power users, not the primary API. This matches how wagmi hides its core under React hooks.
 
-**No per-RPC-method hooks.** Kit has dozens of RPC methods. Wrapping each in a hook adds maintenance surface without adding logic — `useRpc(() => client.rpc.getEpochInfo(), [client])` is the generic escape hatch and reads cleanly at the call site. A dedicated `useGetEpochInfo()` would save exactly the body of that factory function, at the cost of a ~50-hook surface to maintain in lockstep with Kit's RPC spec.
+**No per-RPC-method hooks.** Kit has dozens of RPC methods. Wrapping each in a hook adds maintenance surface without adding logic — `useRequest(() => client.rpc.getEpochInfo(), [client])` is the generic escape hatch and reads cleanly at the call site. A dedicated `useGetEpochInfo()` would save exactly the body of that factory function, at the cost of a ~50-hook surface to maintain in lockstep with Kit's RPC spec.
 
 **Named hooks only for live data.** `useBalance` and `useAccount` earn their existence by hiding the RPC + subscription pairing, slot dedup, and response mapping. These are Solana-specific domain knowledge that developers shouldn't need to figure out. `useAccount` additionally hides the RPC encoding format and the `parseBase64RpcAccount` bridge between raw RPC responses and Kit's `Account` type, and progressively discloses decoding via an optional `decoder` argument.
 
-**One-shot reads in core via `useRpc`.** Earlier drafts delegated one-shot reads entirely to SWR / TanStack on the reasoning that "plain React doesn't have a good data-fetching primitive." Once Kit ships `PendingRpcRequest.reactiveStore(): ReactiveActionStore`, that reasoning stops applying — the primitive exists, one layer down. `useRpc` auto-dispatches on mount and deps change (via `useEffect`), bridges the action store into `useSyncExternalStore`, and surfaces `{ data, error, status, refresh }` with the same stale-while-revalidate semantics that the subscription hooks give. Consumers who want shared cache / Suspense / devtools still opt into the SWR / TanStack adapters; those who don't get a first-class read hook without pulling in a cache library.
+**One-shot reads in core via `useRequest`.** Earlier drafts delegated one-shot reads entirely to SWR / TanStack on the reasoning that "plain React doesn't have a good data-fetching primitive." Once Kit ships `PendingRpcRequest.reactiveStore(): ReactiveActionStore`, that reasoning stops applying — the primitive exists, one layer down. `useRequest` auto-dispatches on mount and deps change (via `useEffect`), bridges the action store into `useSyncExternalStore`, and surfaces `{ data, error, status, refresh }` with the same stale-while-revalidate semantics that the subscription hooks give. Consumers who want shared cache / Suspense / devtools still opt into the SWR / TanStack adapters; those who don't get a first-class read hook without pulling in a cache library.
 
-**Adapters integrate, not replace.** The SWR and TanStack adapters bridge kit-react's reactive stores into those libraries' cache layers — `useSWRSubscription` for streams, `setQueryData` for live updates, `useSWRMutation` / `useMutation` for sends — plus `useRpcSwr` / `useRpcQuery` for cache-backed one-shot reads. They don't re-implement the Kit-side state machines; they pipe `subscribe` / `getUnifiedState` / `dispatch` into the cache library's existing APIs.
+**Read shape vs. send shape — `useRequest` vs. `useAction`.** Two separate hooks rather than one with a flag, because the two use cases want different affordances: `useRequest` auto-dispatches on mount and returns a read-oriented shape (`data`, `refresh`); `useAction` is user-triggered and returns a send-oriented shape (`send`, `reset`, `isIdle`). Both wrap `ReactiveActionStore` internally, but collapsing them into one hook would force every caller to choose which half to ignore at every site. Plugin authors whose pending objects expose `.reactiveStore(): ReactiveActionStore` plug straight into `useRequest` via the `ReactiveActionSource<T>` duck-type; anything else (a user-triggered operation, a custom async call) reaches for `useAction`.
 
-**Plugin React hooks are optional.** Any Kit plugin works with kit-react through `PluginProvider` + core's generic hooks: `useRpc(() => client.myPlugin.foo())`, `useLiveData(...)`, `useSubscription(...)`, `useAction(...)`, or the `useClient()` escape hatch for anything else. Plugin authors don't need to ship React bindings for their plugin to be usable — core provides enough primitives for consumers to build whatever hook shape they need against any plugin. Typed convenience hooks (see [Third-party extensions](#third-party-extensions)) are a DX upgrade, not a prerequisite — they let plugin authors reduce boilerplate and attach a stable error story via `useClientCapability`, but the consumer-facing functionality is available the moment the plugin is installed.
+**Duck-typed orthogonality boundaries.** The generic hooks (`useRequest`, `useSubscription`, `useLiveData`, `useLiveSwr`, `useLiveQuery`) all accept the smallest possible input shape: `ReactiveActionSource<T>` (anything with `.reactiveStore(): ReactiveActionStore<[], T>`), `ReactiveStreamSource<T>` (anything with `.reactiveStore({ abortSignal }): ReactiveStreamStore<T>`), or `LiveDataSpec<T>` (the RPC + subscription + mappers, minus signal). Kit's `PendingRpcRequest` / `PendingRpcSubscriptionsRequest` satisfy these by design, but so does any plugin-authored pending object that follows the same convention — no patching kit-react, no registering types, no wrapper layer. This is the same pattern used by `subscribeTo<Capability>`: the framework layer publishes a duck-type; the plugin layer conforms.
 
-**`{ data, error, status, retry }` rather than Suspense / Error Boundaries.** Live-data hooks return a reactive snapshot shape (mirroring Kit's `ReactiveState<T>` with an added `'disabled'` variant) instead of suspending or throwing. Suspense's contract is "throw a promise that eventually resolves or rejects" — one-shot — and subscriptions don't fit that model: they never "resolve" in Suspense's sense, they keep emitting updates. `useSyncExternalStore` is the React-team-supplied primitive for this class of state and is deliberately incompatible with Suspense. The rest of the ecosystem makes the same call: TanStack Query's `useSuspenseQuery` only wraps one-shot fetches; its subscription path uses `{ data, isLoading, error }`. Error Boundaries catch *unexpected* errors (bugs, crashes) and remain a valid backstop above the tree, but expected errors (RPC down, signature rejected, wallet disconnected mid-fetch) usually need specific UI branches ("Try again", "Switch RPC", "Reconnect") — returning `error` + `retry()` reactively lets the component branch on the error shape and recover in-place without remounting. Mutations (`useSendTransaction`, `useAction`) can't suspend either: you can't throw a promise from an event handler, and every mutation primitive in the ecosystem (TanStack's `useMutation`, SWR's `useSWRMutation`) returns the same `{ status, data, error }` shape. Consumers who specifically want Suspense for one-shot RPC reads opt in via the SWR / TanStack adapters, both of which have Suspense modes — kit-react owns the live-data primitives that fundamentally can't suspend.
+**Adapters integrate, not replace.** The SWR and TanStack adapters bridge kit-react's reactive stores into those libraries' cache layers — `useSWRSubscription` for streams, `setQueryData` for live updates, `useSWRMutation` / `useMutation` for sends — plus `useRequestSwr` / `useRequestQuery` for cache-backed one-shot reads. They don't re-implement the Kit-side state machines; they pipe `subscribe` / `getUnifiedState` / `dispatch` into the cache library's existing APIs.
+
+**Plugin React hooks are optional.** Any Kit plugin works with kit-react through `PluginProvider` + core's generic hooks: `useRequest(() => client.myPlugin.foo())`, `useLiveData(...)`, `useSubscription(...)`, `useAction(...)`, or the `useClient()` escape hatch for anything else. Plugin authors don't need to ship React bindings for their plugin to be usable — core provides enough primitives for consumers to build whatever hook shape they need against any plugin. Typed convenience hooks (see [Third-party extensions](#third-party-extensions)) are a DX upgrade, not a prerequisite — they let plugin authors reduce boilerplate and attach a stable error story via `useClientCapability`, but the consumer-facing functionality is available the moment the plugin is installed.
+
+**`{ data, error, status, retry }` rather than Suspense / Error Boundaries.** Live-data hooks return a reactive snapshot shape (mirroring Kit's `ReactiveState<T>` with an added `'disabled'` variant) instead of suspending or throwing.
+
+*Subscriptions can't suspend.* Suspense's contract is "throw a promise that eventually resolves or rejects" — one-shot — and subscriptions don't fit that model: they never "resolve" in Suspense's sense, they keep emitting updates. `useSyncExternalStore` is the React-team-supplied primitive for this class of state and is deliberately incompatible with Suspense. The rest of the ecosystem makes the same call: TanStack Query's `useSuspenseQuery` only wraps one-shot fetches; its subscription path uses `{ data, isLoading, error }`. Consumers who specifically want Suspense for one-shot RPC reads opt in via the SWR / TanStack adapters, both of which have Suspense modes — kit-react owns the live-data primitives that fundamentally can't suspend.
+
+*Mutations can't suspend either.* You can't throw a promise from an event handler, and every mutation primitive in the ecosystem (TanStack's `useMutation`, SWR's `useSWRMutation`) returns the same `{ status, data, error }` shape. `useSendTransaction` / `useAction` follow that convention.
+
+*Error Boundaries remain a valid backstop, but not the primary error channel.* Boundaries catch *unexpected* errors (bugs, crashes) and remain useful above the tree. Expected errors (RPC down, signature rejected, wallet disconnected mid-fetch) usually need specific UI branches ("Try again", "Switch RPC", "Reconnect") — returning `error` + `retry()` reactively lets the component branch on the error shape and recover in-place without remounting.
 
 **First-class retry.** Every live-data hook returns a `retry()` function drawn from the underlying `ReactiveStore.retry` — stable identity, safe as an `onClick`. Retry is end-to-end: Kit's stores tear down the broken stream, transition through `status: 'retrying'` preserving the last known `data`, re-open the WebSocket (and for named hooks, re-run the initial RPC fetch), and return to `loaded` or `error` as appropriate. The React bridge adds no layer on top — consumers writing `<button onClick={retry}>Retry</button>` get correct behavior without a `useCallback` wrapper or external state.
 
-**SSR-safe by default.** Every provider renders on the server without throwing, and every hook returns a hydration-stable "not yet available" snapshot during SSR. The wallet plugin explicitly ships a server stub (`status === 'pending'`, empty `wallets`, throwing actions) so its first render matches on both server and client. The reactive hooks (`useBalance`, `useAccount`, `useTransactionConfirmation`, `useLiveQuery`, `useSubscription`, `useRpc`) skip the reactive-store factory entirely on non-browser builds — they return `{ status: 'loading', data: undefined, isLoading: true }` without firing HTTP or opening WebSockets, then the real store kicks in on the client. Action hooks (`useSendTransaction`, `useAction`, the wallet action hooks) are already safe: `createActionStore` starts in `idle` and nothing fires until `dispatch()` is called, which doesn't happen during SSR since it's event-triggered. We deliberately don't prefetch on the server even though we could: on-chain state moves fast enough that any prefetched value would usually mismatch the first client snapshot, and the hydration failure is worse than an extra loading flicker. For per-request clients (Next.js app router, Remix), `KitClientProvider`'s `client` prop accepts a pre-built client whose lifecycle the caller owns.
+**SSR-safe by default.** Every provider renders on the server without throwing, and every hook returns a hydration-stable "not yet available" snapshot during SSR. The wallet plugin explicitly ships a server stub (`status === 'pending'`, empty `wallets`, throwing actions) so its first render matches on both server and client. The reactive hooks (`useBalance`, `useAccount`, `useTransactionConfirmation`, `useLiveQuery`, `useSubscription`, `useRequest`) skip the reactive-store factory entirely on non-browser builds — they return `{ status: 'loading', data: undefined, isLoading: true }` without firing HTTP or opening WebSockets, then the real store kicks in on the client. Action hooks (`useSendTransaction`, `useAction`, the wallet action hooks) are already safe: `createActionStore` starts in `idle` and nothing fires until `dispatch()` is called, which doesn't happen during SSR since it's event-triggered. We deliberately don't prefetch on the server even though we could: on-chain state moves fast enough that any prefetched value would usually mismatch the first client snapshot, and the hydration failure is worse than an extra loading flicker. For per-request clients (Next.js app router, Remix), `KitClientProvider`'s `client` prop accepts a pre-built client whose lifecycle the caller owns.
 
-**Errors are surfaced as `unknown`, narrowed with Kit helpers.** Kit throws `SolanaError` with stable error codes; the wallet plugin throws `WalletStandardError` with the same pattern. Hooks propagate errors through `LiveQueryResult.error` / `ActionState.error` / `RpcReadResult.error` as `unknown`, and consumers narrow in render branches via `isSolanaError(e, SOLANA_ERROR__WALLET__USER_REJECTED)` / `isWalletStandardError(e, ...)`:
+**Errors are surfaced as `unknown`, narrowed with Kit helpers.** Kit throws `SolanaError` with stable error codes; the wallet plugin throws `WalletStandardError` with the same pattern. Hooks propagate errors through `LiveQueryResult.error` / `ActionState.error` / `RequestResult.error` as `unknown`, and consumers narrow in render branches via `isSolanaError(e, SOLANA_ERROR__WALLET__USER_REJECTED)` / `isWalletStandardError(e, ...)`:
 
 ```tsx
 const { error, retry } = useBalance(address);
@@ -1816,21 +2143,19 @@ kit-react doesn't re-wrap or coerce errors — the original `SolanaError` / `Wal
 
 **Transaction confirmation is subscription-backed.** `useTransactionConfirmation` uses `signatureNotifications` + `getSignatureStatuses` with slot-based dedup, rather than polling. This fits the core's philosophy that named hooks earn their place by hiding RPC + subscription pairing.
 
-**Signer hooks duck-type on a per-capability subscribe convention, not on wallet state.** Earlier drafts had `usePayer` / `useIdentity` reach for `client.wallet.subscribe` directly to stay reactive. That coupled core signer hooks to the wallet plugin's type — a smell, since any reactive plugin (not just wallet) could install a dynamic `payer` or `identity`. The current design instead defines a per-capability subscribe convention: whoever installs `client.payer` can optionally install `client.subscribeToPayer(listener)` alongside it (same for `identity`). The hook observes that sibling if present, otherwise falls back to a no-op subscribe. This keeps the core hooks wallet-agnostic, supports future reactive plugins for free, and is a much smaller surface than a global `client.subscribe` primitive (which would force every reactive plugin to share one bus and cause over-rendering). Static plugins like `PayerProvider` participate implicitly by not installing a subscribe hook — the value never changes, so nothing needs to fire.
+**Signer hooks duck-type on a per-capability subscribe convention, not on wallet state.** Earlier drafts had `usePayer` / `useIdentity` reach for `client.wallet.subscribe` directly to stay reactive. That coupled core signer hooks to the wallet plugin's type — a smell, since any reactive plugin (not just wallet) could install a dynamic `payer` or `identity`. The current design instead defines a per-capability subscribe convention: whoever installs `client.payer` can optionally install `client.subscribeToPayer(listener)` alongside it (same for `identity`). The hook observes that sibling if present, otherwise falls back to a no-op subscribe. This keeps the core hooks wallet-agnostic, supports future reactive plugins for free, and is a much smaller surface than a global `client.subscribe` primitive (which would force every reactive plugin to share one bus and cause over-rendering). Static plugins like `payer()` / `identity()` / `signer()` (mounted via `PayerProvider` / `IdentityProvider` / `SignerProvider`) participate implicitly by not installing a subscribe hook — the value never changes, so nothing needs to fire.
 
 **Single chain per `KitClientProvider`.** Each `KitClientProvider` is scoped to one chain — discovery, connection, and signer creation all depend on it. Apps that need multiple chains (e.g. a mainnet trading section and a devnet testing section) use separate `KitClientProvider`s, which means separate clients and separate wallet connections. This is the correct behavior: a wallet that supports `solana:mainnet` may not support a different chain like `l2:mainnet`, so you can't safely share a connection across chains.
-
-A future backward-compatible enhancement could enable opt-in state syncing between providers: if `WalletStorage` gained an optional `subscribe` method (matching the pattern used by Zustand's `persist` and TanStack Query's storage adapters), the plugin could react to external writes and auto-connect when a sibling provider connects. Both providers would still independently verify chain support — the shared storage just propagates the wallet selection, not the connection itself. Plain `localStorage` (no `subscribe`) would continue to work unchanged.
 
 ## Future directions
 
 Items explicitly considered during design and deferred. None are blocking, but each has a concrete motivation that may trigger revisiting.
 
-### Promote `subscribeTo<Capability>` to kit-core
+### Promote the `subscribeTo<Capability>` producer-side helper to kit-core
 
-The per-capability subscribe convention (see [Signer access](#signer-access)) currently lives in kit-react and is implemented by kit-plugin-wallet. The convention itself is framework-agnostic — any reactive framework (Vue's `shallowRef`, Svelte stores, Solid's `from()`) would want the same hook. The framework-side bridge is inherently framework-specific and not shareable, but the producer-side machinery (listener registry, unsubscribe idempotency, safe iteration during notify) is repeatable and ~20 lines of glue around `@solana/subscribable`'s existing `DataPublisher` / `ReactiveStore` primitives.
+The consumer-facing shape (see [Signer access](#signer-access)) already lives in Kit — `ClientWithSubscribeToPayer` / `ClientWithSubscribeToIdentity` are exported from `@solana/kit`, and kit-react's `usePayer` / `useIdentity` duck-type against them. What's *not* yet shared is the **producer-side** machinery every reactive plugin needs to install a `subscribeTo<Capability>` hook: a listener registry, unsubscribe idempotency, and safe iteration during notify. Today `kit-plugin-wallet` hand-rolls this by forwarding its internal wallet store's `subscribe`; a second reactive plugin would have to re-derive the same ~20 lines of glue around `@solana/subscribable`'s existing `DataPublisher` / `ReactiveStore` primitives.
 
-If a second reactive plugin appears (e.g. a relayer plugin whose `payer` rotates) or a second framework integration lands (Vue / Svelte bindings), graduate the convention to a kit-core helper:
+If a second reactive plugin appears (e.g. a relayer plugin whose `payer` rotates), graduate the producer-side helper to kit-core:
 
 ```typescript
 // Speculative kit-core API
@@ -1840,7 +2165,7 @@ function createCapabilityChangeNotifier(): {
 };
 ```
 
-Until then, the convention stays documented here and re-implemented ad-hoc by kit-plugin-wallet. Callers don't need to know about the helper either way — they consume the `subscribeTo<Capability>` shape.
+Until then, producers re-implement ad-hoc; consumers already have the types they need.
 
 ### Batched live-query hook
 
@@ -1854,6 +2179,15 @@ Solana's `accountSubscribe` RPC method is one-at-a-time — there's no WebSocket
 The upstream primitive (`createReactiveStoreWithInitialValueAndSlotTracking` in `@solana/kit`) is 1:1 by design — one RPC request + one subscription → one store. A batched hook needs either a new upstream primitive (e.g. `createReactiveStoreWithBatchedInitialValuesAndSlotTracking`) or a variant of the existing one that accepts a pre-fetched initial value instead of performing the fetch itself.
 
 Deferred until there's a concrete use case. The rules-of-hooks argument is the stronger motivator — revisit when someone hits it.
+
+### Observe external writes to `WalletStorage`
+
+The wallet plugin's storage layer is write-through today: it persists the active wallet selection, but doesn't watch for external writes. If `WalletStorage` gained an optional `subscribe` method (matching the pattern used by Zustand's `persist` and TanStack Query's storage adapters), the plugin could react to cross-tab writes or sibling-provider changes and reconcile its in-memory state without a reload. Two motivating cases:
+
+1. **Cross-tab sync.** User connects in tab A; tab B picks up the selection without the user re-prompting.
+2. **Sibling-provider sync within one app.** Two `KitClientProvider`s in the same tree sharing a storage key could propagate wallet selection across them (each still verifies chain support independently — storage propagates the selection, not the connection).
+
+Plain `localStorage` (no `subscribe`) would continue to work unchanged — callers opt in by supplying a storage adapter that exposes `subscribe`. Deferred until a concrete product use case appears; both motivators are nice-to-have, neither is blocking.
 
 ## Appendix: Comparisons
 
@@ -1884,7 +2218,7 @@ All of framework-kit's core functionality is covered:
 These framework-kit features are omitted by design, not oversight:
 
 - **Dedicated transfer/token/stake hooks** (`useSolTransfer`, `useSplToken`, `useWrapSol`, `useStake`) — covered by `useSendTransaction()` + the relevant instruction. Higher-level libraries can add these.
-- **Per-method one-shot RPC hooks** (`useProgramAccounts`, `useLookupTable`, `useNonceAccount`, `useLatestBlockhash`, `useSimulateTransaction`) — covered generically by `useRpc(() => client.rpc.X(...), deps)` rather than one named hook per RPC method. Avoids the maintenance surface of dozens of thin wrappers and stays aligned with Kit's granular RPC surface.
+- **Per-method one-shot RPC hooks** (`useProgramAccounts`, `useLookupTable`, `useNonceAccount`, `useLatestBlockhash`, `useSimulateTransaction`) — covered generically by `useRequest(() => client.rpc.X(...), deps)` rather than one named hook per RPC method. Avoids the maintenance surface of dozens of thin wrappers and stays aligned with Kit's granular RPC surface.
 - **Wallet modal state** (`useWalletModalState`, `WalletConnectionManager`) — UI concern, left to consumer or UI libraries.
 - **SWR query infrastructure** (`useSolanaRpcQuery`, query key scoping) — each cache library handles this natively.
 
@@ -1897,7 +2231,7 @@ Features that framework-kit does not provide:
 - **`useLiveData`** — generic subscription-backed queries for any RPC + subscription pair.
 - **`useSubscription`** — raw subscription hook for subscription-only data.
 - **`PluginProvider`** — any Kit plugin works without a React-specific wrapper.
-- **`PayerProvider` / `IdentityProvider`** — separate payer and identity from wallet.
+- **`PayerProvider` / `IdentityProvider` / `SignerProvider`** — separate payer, identity, or both from wallet (backed by `@solana/kit-plugin-signer`).
 - **`KitClientProvider`** — explicit root that creates the Kit client and publishes the chain, so the provider hierarchy is traceable without hidden wrappers.
 - **`LiteSvmProvider`** — drop-in testing provider backed by a local SVM.
 - **Granular wallet hooks** — `useWallets()`, `useWalletStatus()`, `useConnectedWallet()` subscribe to only the slice they need.
