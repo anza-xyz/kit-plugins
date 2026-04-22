@@ -107,9 +107,13 @@ Note CM: [Open PR](https://github.com/anza-xyz/kit/pull/1553)
 
 ### In `@solana/rpc-spec`
 
-**`PendingRpcRequest<T>.reactiveStore(): ReactiveActionStore<[], T>`** — synchronous method returning an action store that fires a fresh RPC call per dispatch. Thin wrapper (`createActionStore(signal => this.send({ abortSignal: signal }))`) but worth centralizing so every reactive binding calls `.reactiveStore()` instead of each writing the same wrapper.
+**`PendingRpcRequest<T>.reactiveStore(): ReactiveActionStore<[], T>`** — synchronous method returning an action store that auto-dispatches on creation, then fires a fresh RPC call per subsequent dispatch. Construction semantics parallel `PendingRpcSubscriptionsRequest.reactiveStore()` — calling `.reactiveStore()` means "I want this live now"; callers who want a build-now-dispatch-later store drop to `createActionStore(signal => this.send({ abortSignal: signal }))` directly. `ReactiveActionStore` itself stays neutral on initiation — only `.reactiveStore()` commits to eager dispatch.
 
 Precondition: `PendingRpcRequest` must be multi-dispatch — each dispatch re-invokes the transport. (Confirmed already the case.)
+
+SSR rule: bindings must not call `.reactiveStore()` on the server, same as for `PendingRpcSubscriptionsRequest`. Auto-dispatch means creating the store is a side-effecting operation; server-side prefetch, if wanted, uses the imperative `.send()` path directly.
+
+No store-level `abortSignal` argument (unlike `PendingRpcSubscriptionsRequest.reactiveStore({ abortSignal })`) — the per-dispatch signal from `createActionStore`'s operation handles supersede, and an in-flight HTTP request completes on its own without leaking resources. A WebSocket does leak if left open, which is why subscriptions need a lifetime anchor; RPC reads don't.
 
 Note CM: TODO
 
@@ -1266,7 +1270,7 @@ function useSubscription<T>(
 
 For RPC calls that don't have a subscription counterpart — `getEpochInfo`, `getMinimumBalanceForRentExemption`, `getLatestBlockhash`, `getRecentPerformanceSamples`, etc. — or for cases where you want a one-shot read of a value that `useAccount` / `useBalance` would otherwise subscribe to.
 
-Backed by `ReactiveActionStore` ([Prerequisites](#prerequisites)): each mount auto-dispatches the request, deps change triggers a fresh dispatch (auto-aborting any in-flight predecessor), and consumers get a `refresh()` function to re-fire manually.
+Backed by `ReactiveActionStore` via `PendingRpcRequest.reactiveStore()` ([Prerequisites](#prerequisites)): each mount creates the store and fires the request eagerly (the `.reactiveStore()` method auto-dispatches on creation), deps change rebuilds the store with a fresh dispatch (auto-aborting any in-flight predecessor), and consumers get a `refresh()` function to re-fire manually.
 
 ```typescript
 /** The state returned by {@link useRequest}. */
@@ -1367,16 +1371,13 @@ function useRequest<T>(
         (signal) => {
             const pending = factory(signal);
             if (pending == null) return disabledActionStore<T>();
+            // `.reactiveStore()` auto-dispatches on creation — see
+            // [Prerequisites](#prerequisites). The hook doesn't need a
+            // separate useEffect to fire the initial request.
             return pending.reactiveStore();
         },
         deps,
     );
-
-    useEffect(() => {
-        // Auto-dispatch on mount / store rebuild. If `disabledActionStore`
-        // was returned, `dispatch` is a no-op.
-        store.dispatch();
-    }, [store]);
 
     return useRequestResult(store);
 }
@@ -1384,15 +1385,14 @@ function useRequest<T>(
 
 The bridge maps the action-store's `idle | running | success | error` to the read shape above:
 
-- action `idle` pre-dispatch → read `loading` (the hook will dispatch momentarily; `idle` would leak a confusing "not started" state consumers don't care about).
+- action `running` with no prior data → read `loading` (the auto-dispatch from `.reactiveStore()` fires at construction, so there's no pre-dispatch idle state to expose).
 - action `idle` from `disabledActionStore` → read `disabled`.
-- action `running` with no prior data → read `loading`.
-- action `running` with prior data (dispatch after previous success) → read `retrying` (same "stale-while-revalidate" UX as stream stores).
+- action `running` with prior data (re-dispatch via `refresh()`) → read `retrying` (same "stale-while-revalidate" UX as stream stores).
 - action `success` → read `loaded`.
 - action `error` → read `error`.
-- `refresh()` wraps `store.dispatch()`.
+- `refresh()` wraps `store.dispatch()` — re-fires the RPC manually.
 
-> **Why auto-dispatch at the hook layer rather than in the primitive?** `ReactiveActionStore` is deliberately neutral on initiation — different frameworks (and even different hooks within kit-react) want different policies. `useRequest` auto-dispatches on mount / deps change; `useSendTransaction` waits for the user. One primitive, two policies.
+> **Why does `.reactiveStore()` auto-dispatch when `ReactiveActionStore` is neutral on initiation?** The primitive stays neutral — `useSendTransaction` and custom `useAction` flows build their own action stores via `createActionStore(fn)` and dispatch on user input. Only the `.reactiveStore()` convenience method on `PendingRpcRequest` / `PendingRpcSubscriptionsRequest` commits to eager dispatch, because calling `.reactiveStore()` semantically means "I want this live now" (same reasoning as subscriptions). Consumers who want build-now-dispatch-later drop one layer to `createActionStore`.
 
 #### Sending transactions
 
@@ -2161,9 +2161,9 @@ const { data } = useRequestQuery(['epochInfo'], () => client.rpc.getEpochInfo())
 
 **Named hooks only for live data.** `useBalance` and `useAccount` earn their existence by hiding the RPC + subscription pairing, slot dedup, and response mapping. These are Solana-specific domain knowledge that developers shouldn't need to figure out. `useAccount` additionally hides the RPC encoding format and the `parseBase64RpcAccount` bridge between raw RPC responses and Kit's `Account` type, and progressively discloses decoding via an optional `decoder` argument.
 
-**One-shot reads in core via `useRequest`.** Earlier drafts delegated one-shot reads entirely to SWR / TanStack on the reasoning that "plain React doesn't have a good data-fetching primitive." Once Kit ships `PendingRpcRequest.reactiveStore(): ReactiveActionStore`, that reasoning stops applying — the primitive exists, one layer down. `useRequest` auto-dispatches on mount and deps change (via `useEffect`), bridges the action store into `useSyncExternalStore`, and surfaces `{ data, error, status, refresh }` with the same stale-while-revalidate semantics that the subscription hooks give. Consumers who want shared cache / Suspense / devtools still opt into the SWR / TanStack adapters; those who don't get a first-class read hook without pulling in a cache library.
+**One-shot reads in core via `useRequest`.** Earlier drafts delegated one-shot reads entirely to SWR / TanStack on the reasoning that "plain React doesn't have a good data-fetching primitive." Once Kit ships `PendingRpcRequest.reactiveStore(): ReactiveActionStore` with eager auto-dispatch on creation, that reasoning stops applying — the primitive exists, one layer down. `useRequest` bridges the action store into `useSyncExternalStore` and surfaces `{ data, error, status, refresh }` with the same stale-while-revalidate semantics that the subscription hooks give. Consumers who want shared cache / Suspense / devtools still opt into the SWR / TanStack adapters; those who don't get a first-class read hook without pulling in a cache library.
 
-**Read shape vs. send shape — `useRequest` vs. `useAction`.** Two separate hooks rather than one with a flag, because the two use cases want different affordances: `useRequest` auto-dispatches on mount and returns a read-oriented shape (`data`, `refresh`); `useAction` is user-triggered and returns a send-oriented shape (`send`, `reset`, `isIdle`). Both wrap `ReactiveActionStore` internally, but collapsing them into one hook would force every caller to choose which half to ignore at every site. Plugin authors whose pending objects expose `.reactiveStore(): ReactiveActionStore` plug straight into `useRequest` via the `ReactiveActionSource<T>` duck-type; anything else (a user-triggered operation, a custom async call) reaches for `useAction`.
+**Read shape vs. send shape — `useRequest` vs. `useAction`.** Two separate hooks rather than one with a flag, because the two use cases want different affordances: `useRequest` consumes an eager-dispatching `.reactiveStore()` and returns a read-oriented shape (`data`, `refresh`); `useAction` wraps any async function via `createActionStore` (neutral on initiation) and returns a send-oriented shape (`send`, `reset`, `isIdle`). Both wrap `ReactiveActionStore` internally, but collapsing them into one hook would force every caller to choose which half to ignore at every site. Plugin authors whose pending objects expose `.reactiveStore(): ReactiveActionStore` plug straight into `useRequest` via the `ReactiveActionSource<T>` duck-type; anything else (a user-triggered operation, a custom async call) reaches for `useAction`.
 
 **Duck-typed orthogonality boundaries.** The generic hooks (`useRequest`, `useSubscription`, `useLiveData`, `useLiveSwr`, `useLiveQuery`) all accept the smallest possible input shape: `ReactiveActionSource<T>` (anything with `.reactiveStore(): ReactiveActionStore<[], T>`), `ReactiveStreamSource<T>` (anything with `.reactiveStore({ abortSignal }): ReactiveStreamStore<T>`), or `LiveDataSpec<T>` (the RPC + subscription + mappers, minus signal). Kit's `PendingRpcRequest` / `PendingRpcSubscriptionsRequest` satisfy these by design, but so does any plugin-authored pending object that follows the same convention — no patching kit-react, no registering types, no wrapper layer. This is the same pattern used by `subscribeTo<Capability>`: the framework layer publishes a duck-type; the plugin layer conforms.
 
@@ -2181,7 +2181,7 @@ const { data } = useRequestQuery(['epochInfo'], () => client.rpc.getEpochInfo())
 
 **First-class retry.** Every live-data hook returns a `retry()` function drawn from the underlying `ReactiveStore.retry` — stable identity, safe as an `onClick`. Retry is end-to-end: Kit's stores tear down the broken stream, transition through `status: 'retrying'` preserving the last known `data`, re-open the WebSocket (and for named hooks, re-run the initial RPC fetch), and return to `loaded` or `error` as appropriate. The React bridge adds no layer on top — consumers writing `<button onClick={retry}>Retry</button>` get correct behavior without a `useCallback` wrapper or external state.
 
-**SSR-safe by default.** Every provider renders on the server without throwing, and every hook returns a hydration-stable "not yet available" snapshot during SSR. The wallet plugin explicitly ships a server stub (`status === 'pending'`, empty `wallets`, throwing actions) so its first render matches on both server and client. The reactive hooks (`useBalance`, `useAccount`, `useTransactionConfirmation`, `useLiveQuery`, `useSubscription`, `useRequest`) skip the reactive-store factory entirely on non-browser builds — they return `{ status: 'loading', data: undefined, isLoading: true }` without firing HTTP or opening WebSockets, then the real store kicks in on the client. Action hooks (`useSendTransaction`, `useAction`, the wallet action hooks) are already safe: `createActionStore` starts in `idle` and nothing fires until `dispatch()` is called, which doesn't happen during SSR since it's event-triggered. We deliberately don't prefetch on the server even though we could: on-chain state moves fast enough that any prefetched value would usually mismatch the first client snapshot, and the hydration failure is worse than an extra loading flicker. For per-request clients (Next.js app router, Remix), `KitClientProvider`'s `client` prop accepts a pre-built client whose lifecycle the caller owns.
+**SSR-safe by default.** Every provider renders on the server without throwing, and every hook returns a hydration-stable "not yet available" snapshot during SSR. The wallet plugin explicitly ships a server stub (`status === 'pending'`, empty `wallets`, throwing actions) so its first render matches on both server and client. The reactive hooks (`useBalance`, `useAccount`, `useTransactionConfirmation`, `useLiveQuery`, `useSubscription`, `useRequest`) skip the reactive-store factory entirely on non-browser builds — they return `{ status: 'loading', data: undefined, isLoading: true }` without firing HTTP or opening WebSockets, then the real store kicks in on the client. This skip is load-bearing for `useRequest`: `PendingRpcRequest.reactiveStore()` auto-dispatches on creation (same semantics as `PendingRpcSubscriptionsRequest.reactiveStore()`), so not calling it on the server is what prevents a server-side fetch. Action hooks (`useSendTransaction`, `useAction`, the wallet action hooks) are already safe: they build action stores via `createActionStore(fn)` directly (which stays neutral on initiation), so nothing fires until `dispatch()` is called, which doesn't happen during SSR since it's event-triggered. We deliberately don't prefetch on the server even though we could: on-chain state moves fast enough that any prefetched value would usually mismatch the first client snapshot, and the hydration failure is worse than an extra loading flicker. For per-request clients (Next.js app router, Remix), `KitClientProvider`'s `client` prop accepts a pre-built client whose lifecycle the caller owns.
 
 **Errors are surfaced as `unknown`, narrowed with Kit helpers.** Kit throws `SolanaError` with stable error codes; the wallet plugin throws `WalletStandardError` with the same pattern. Hooks propagate errors through `LiveQueryResult.error` / `ActionState.error` / `RequestResult.error` as `unknown`, and consumers narrow in render branches via `isSolanaError(e, SOLANA_ERROR__WALLET__USER_REJECTED)` / `isWalletStandardError(e, ...)`:
 
