@@ -83,7 +83,7 @@ These changes must land in Kit and kit-plugins before this spec can be implement
 
 ### In `@solana/subscribable`
 
-Two reactive store types covering the two categories of async operations. Both expose `subscribe(listener): () => void` + `getUnifiedState()` returning the full `{ status, data, error }` snapshot (currently `getUnifiedState` for backward compat; planned rename to `getState` in a later breaking change).
+Two reactive store types covering the two categories of async operations. Both expose `subscribe(listener): () => void` plus a snapshot accessor returning the full `{ status, data, error }` state. The accessor name is asymmetric for now: `ReactiveStreamStore` exposes `getUnifiedState()` (its legacy `getState()` returns only the value and is deprecated), while `ReactiveActionStore` exposes `getState()` directly. Both will converge on `getState()` returning the unified snapshot in a later breaking change; the asymmetry is accepted in the meantime to avoid a breaking Kit release.
 
 **`ReactiveStreamStore<T>`** — for long-lived connections that emit multiple values (RPC subscriptions, and the RPC-fetch + subscription hybrid used by named hooks). Lifecycle `loading | loaded | error | retrying`. `retry()` re-establishes a broken connection, preserving the last known value as stale data during `retrying`. Replaces the prior `ReactiveStore<T>` type — the single generic store splits into the two specialized types below, no backwards-compat alias needed since `ReactiveStore` was not yet widely consumed.
 
@@ -93,7 +93,7 @@ Note CM: Already have this as `ReactiveStore`. [Open PR](https://github.com/anza
 
 Note CM: [Open PR](https://github.com/anza-xyz/kit/pull/1550), will rename from `ActionStore`
 
-**`createActionStore<TArgs, T>(operation: (signal: AbortSignal, ...args: TArgs) => Promise<T>): ReactiveActionStore<TArgs, T>`** — factory for action stores. Kit primitive; every framework's action-hook implementation ≈ `useSyncExternalStore(store.subscribe, store.getUnifiedState)` plus a bridge wrapping `dispatch` / `reset`.
+**`createReactiveActionStore<TArgs, T>(operation: (signal: AbortSignal, ...args: TArgs) => Promise<T>): ReactiveActionStore<TArgs, T>`** — factory for action stores. Kit primitive; every framework's action-hook implementation ≈ `useSyncExternalStore(store.subscribe, store.getState)` plus a bridge wrapping `dispatch` / `reset`.
 
 Note CM: [Open PR](https://github.com/anza-xyz/kit/pull/1550)
 
@@ -107,13 +107,13 @@ Note CM: [Open PR](https://github.com/anza-xyz/kit/pull/1553)
 
 ### In `@solana/rpc-spec`
 
-**`PendingRpcRequest<T>.reactiveStore(): ReactiveActionStore<[], T>`** — synchronous method returning an action store that auto-dispatches on creation, then fires a fresh RPC call per subsequent dispatch. Construction semantics parallel `PendingRpcSubscriptionsRequest.reactiveStore()` — calling `.reactiveStore()` means "I want this live now"; callers who want a build-now-dispatch-later store drop to `createActionStore(signal => this.send({ abortSignal: signal }))` directly. `ReactiveActionStore` itself stays neutral on initiation — only `.reactiveStore()` commits to eager dispatch.
+**`PendingRpcRequest<T>.reactiveStore(): ReactiveActionStore<[], T>`** — synchronous method returning an action store that auto-dispatches on creation, then fires a fresh RPC call per subsequent dispatch. Construction semantics parallel `PendingRpcSubscriptionsRequest.reactiveStore()` — calling `.reactiveStore()` means "I want this live now"; callers who want a build-now-dispatch-later store drop to `createReactiveActionStore(signal => this.send({ abortSignal: signal }))` directly. `ReactiveActionStore` itself stays neutral on initiation — only `.reactiveStore()` commits to eager dispatch.
 
 Precondition: `PendingRpcRequest` must be multi-dispatch — each dispatch re-invokes the transport. (Confirmed already the case.)
 
 SSR rule: bindings must not call `.reactiveStore()` on the server, same as for `PendingRpcSubscriptionsRequest`. Auto-dispatch means creating the store is a side-effecting operation; server-side prefetch, if wanted, uses the imperative `.send()` path directly.
 
-No store-level `abortSignal` argument (unlike `PendingRpcSubscriptionsRequest.reactiveStore({ abortSignal })`) — the per-dispatch signal from `createActionStore`'s operation handles supersede, and an in-flight HTTP request completes on its own without leaking resources. A WebSocket does leak if left open, which is why subscriptions need a lifetime anchor; RPC reads don't.
+No store-level `abortSignal` argument (unlike `PendingRpcSubscriptionsRequest.reactiveStore({ abortSignal })`) — the per-dispatch signal from `createReactiveActionStore`'s operation handles supersede, and an in-flight HTTP request completes on its own without leaking resources. A WebSocket does leak if left open, which is why subscriptions need a lifetime anchor; RPC reads don't.
 
 Note CM: TODO
 
@@ -171,7 +171,7 @@ With these in place, kit-react is ~300 lines of bridge code. The rest of this sp
 ├──────────────────────────────────────────────────────┤
 │  Kit + plugins                  (framework-agnostic) │
 │  ReactiveStreamStore / ReactiveActionStore           │
-│  createActionStore, .reactiveStore() on pendings,    │
+│  createReactiveActionStore, .reactiveStore() on pendings,    │
 │  walletSigner / walletPayer / walletIdentity / …     │
 └──────────────────────────────────────────────────────┘
 ```
@@ -1392,7 +1392,7 @@ The bridge maps the action-store's `idle | running | success | error` to the rea
 - action `error` → read `error`.
 - `refresh()` wraps `store.dispatch()` — re-fires the RPC manually.
 
-> **Why does `.reactiveStore()` auto-dispatch when `ReactiveActionStore` is neutral on initiation?** The primitive stays neutral — `useSendTransaction` and custom `useAction` flows build their own action stores via `createActionStore(fn)` and dispatch on user input. Only the `.reactiveStore()` convenience method on `PendingRpcRequest` / `PendingRpcSubscriptionsRequest` commits to eager dispatch, because calling `.reactiveStore()` semantically means "I want this live now" (same reasoning as subscriptions). Consumers who want build-now-dispatch-later drop one layer to `createActionStore`.
+> **Why does `.reactiveStore()` auto-dispatch when `ReactiveActionStore` is neutral on initiation?** The primitive stays neutral — `useSendTransaction` and custom `useAction` flows build their own action stores via `createReactiveActionStore(fn)` and dispatch on user input. Only the `.reactiveStore()` convenience method on `PendingRpcRequest` / `PendingRpcSubscriptionsRequest` commits to eager dispatch, because calling `.reactiveStore()` semantically means "I want this live now" (same reasoning as subscriptions). Consumers who want build-now-dispatch-later drop one layer to `createReactiveActionStore`.
 
 #### Sending transactions
 
@@ -1511,14 +1511,14 @@ function useAction<TArgs extends unknown[], TResult>(
     useEffect(() => { fnRef.current = fn; });
 
     const store = useMemo(
-        () => createActionStore<TArgs, TResult>(
+        () => createReactiveActionStore<TArgs, TResult>(
             (signal, ...args) => fnRef.current(signal, ...args),
         ),
         // eslint-disable-next-line react-hooks/exhaustive-deps -- `fnRef` decouples deps from the store
         deps,
     );
 
-    const snapshot = useSyncExternalStore(store.subscribe, store.getUnifiedState);
+    const snapshot = useSyncExternalStore(store.subscribe, store.getState);
 
     return useMemo(
         () => ({
@@ -1537,13 +1537,13 @@ function useAction<TArgs extends unknown[], TResult>(
 }
 ```
 
-The state machine, abort-on-supersede, and stale-while-revalidate semantics live in `createActionStore` — the React hook is a ~20-line bridge adding `is*` convenience booleans and a stable `send` alias for `dispatch`.
+The state machine, abort-on-supersede, and stale-while-revalidate semantics live in `createReactiveActionStore` — the React hook is a ~20-line bridge adding `is*` convenience booleans and a stable `send` alias for `dispatch`.
 
 The `send` function accepts the same inputs as `client.sendTransaction()` — raw instructions, fluent program client instructions, instruction plans, or pre-built transaction messages. For imperative flows where you don't need React state tracking, you can also call `client.sendTransaction(...)` directly via `useClient()`.
 
 #### Generic async action
 
-`useAction` wraps any async function with status/data/error tracking. It's the building block behind `useSendTransaction`, and is exported for custom async flows like sign-then-send or partial signing. Backed by `createActionStore` ([Prerequisites](#prerequisites)) — the state machine, supersede semantics, and stale-while-revalidate behavior all live in the Kit primitive.
+`useAction` wraps any async function with status/data/error tracking. It's the building block behind `useSendTransaction`, and is exported for custom async flows like sign-then-send or partial signing. Backed by `createReactiveActionStore` ([Prerequisites](#prerequisites)) — the state machine, supersede semantics, and stale-while-revalidate behavior all live in the Kit primitive.
 
 ```typescript
 /**
@@ -2163,11 +2163,11 @@ const { data } = useRequestQuery(['epochInfo'], () => client.rpc.getEpochInfo())
 
 **One-shot reads in core via `useRequest`.** Earlier drafts delegated one-shot reads entirely to SWR / TanStack on the reasoning that "plain React doesn't have a good data-fetching primitive." Once Kit ships `PendingRpcRequest.reactiveStore(): ReactiveActionStore` with eager auto-dispatch on creation, that reasoning stops applying — the primitive exists, one layer down. `useRequest` bridges the action store into `useSyncExternalStore` and surfaces `{ data, error, status, refresh }` with the same stale-while-revalidate semantics that the subscription hooks give. Consumers who want shared cache / Suspense / devtools still opt into the SWR / TanStack adapters; those who don't get a first-class read hook without pulling in a cache library.
 
-**Read shape vs. send shape — `useRequest` vs. `useAction`.** Two separate hooks rather than one with a flag, because the two use cases want different affordances: `useRequest` consumes an eager-dispatching `.reactiveStore()` and returns a read-oriented shape (`data`, `refresh`); `useAction` wraps any async function via `createActionStore` (neutral on initiation) and returns a send-oriented shape (`send`, `reset`, `isIdle`). Both wrap `ReactiveActionStore` internally, but collapsing them into one hook would force every caller to choose which half to ignore at every site. Plugin authors whose pending objects expose `.reactiveStore(): ReactiveActionStore` plug straight into `useRequest` via the `ReactiveActionSource<T>` duck-type; anything else (a user-triggered operation, a custom async call) reaches for `useAction`.
+**Read shape vs. send shape — `useRequest` vs. `useAction`.** Two separate hooks rather than one with a flag, because the two use cases want different affordances: `useRequest` consumes an eager-dispatching `.reactiveStore()` and returns a read-oriented shape (`data`, `refresh`); `useAction` wraps any async function via `createReactiveActionStore` (neutral on initiation) and returns a send-oriented shape (`send`, `reset`, `isIdle`). Both wrap `ReactiveActionStore` internally, but collapsing them into one hook would force every caller to choose which half to ignore at every site. Plugin authors whose pending objects expose `.reactiveStore(): ReactiveActionStore` plug straight into `useRequest` via the `ReactiveActionSource<T>` duck-type; anything else (a user-triggered operation, a custom async call) reaches for `useAction`.
 
 **Duck-typed orthogonality boundaries.** The generic hooks (`useRequest`, `useSubscription`, `useLiveData`, `useLiveSwr`, `useLiveQuery`) all accept the smallest possible input shape: `ReactiveActionSource<T>` (anything with `.reactiveStore(): ReactiveActionStore<[], T>`), `ReactiveStreamSource<T>` (anything with `.reactiveStore({ abortSignal }): ReactiveStreamStore<T>`), or `LiveDataSpec<T>` (the RPC + subscription + mappers, minus signal). Kit's `PendingRpcRequest` / `PendingRpcSubscriptionsRequest` satisfy these by design, but so does any plugin-authored pending object that follows the same convention — no patching kit-react, no registering types, no wrapper layer. This is the same pattern used by `subscribeTo<Capability>`: the framework layer publishes a duck-type; the plugin layer conforms.
 
-**Adapters integrate, not replace.** The SWR and TanStack adapters bridge kit-react's reactive stores into those libraries' cache layers — `useSWRSubscription` for streams, `setQueryData` for live updates, `useSWRMutation` / `useMutation` for sends — plus `useRequestSwr` / `useRequestQuery` for cache-backed one-shot reads. They don't re-implement the Kit-side state machines; they pipe `subscribe` / `getUnifiedState` / `dispatch` into the cache library's existing APIs.
+**Adapters integrate, not replace.** The SWR and TanStack adapters bridge kit-react's reactive stores into those libraries' cache layers — `useSWRSubscription` for streams, `setQueryData` for live updates, `useSWRMutation` / `useMutation` for sends — plus `useRequestSwr` / `useRequestQuery` for cache-backed one-shot reads. They don't re-implement the Kit-side state machines; they pipe `subscribe` / `getUnifiedState` (streams) / `getState` + `dispatch` (actions) into the cache library's existing APIs.
 
 **Plugin React hooks are optional.** Any Kit plugin works with kit-react through `PluginProvider` + core's generic hooks: `useRequest(() => client.myPlugin.foo())`, `useLiveData(...)`, `useSubscription(...)`, `useAction(...)`, or the `useClient()` escape hatch for anything else. Plugin authors don't need to ship React bindings for their plugin to be usable — core provides enough primitives for consumers to build whatever hook shape they need against any plugin. Typed convenience hooks (see [Third-party extensions](#third-party-extensions)) are a DX upgrade, not a prerequisite — they let plugin authors reduce boilerplate and attach a stable error story via `useClientCapability`, but the consumer-facing functionality is available the moment the plugin is installed.
 
@@ -2181,7 +2181,7 @@ const { data } = useRequestQuery(['epochInfo'], () => client.rpc.getEpochInfo())
 
 **First-class retry.** Every live-data hook returns a `retry()` function drawn from the underlying `ReactiveStore.retry` — stable identity, safe as an `onClick`. Retry is end-to-end: Kit's stores tear down the broken stream, transition through `status: 'retrying'` preserving the last known `data`, re-open the WebSocket (and for named hooks, re-run the initial RPC fetch), and return to `loaded` or `error` as appropriate. The React bridge adds no layer on top — consumers writing `<button onClick={retry}>Retry</button>` get correct behavior without a `useCallback` wrapper or external state.
 
-**SSR-safe by default.** Every provider renders on the server without throwing, and every hook returns a hydration-stable "not yet available" snapshot during SSR. The wallet plugin explicitly ships a server stub (`status === 'pending'`, empty `wallets`, throwing actions) so its first render matches on both server and client. The reactive hooks (`useBalance`, `useAccount`, `useTransactionConfirmation`, `useLiveQuery`, `useSubscription`, `useRequest`) skip the reactive-store factory entirely on non-browser builds — they return `{ status: 'loading', data: undefined, isLoading: true }` without firing HTTP or opening WebSockets, then the real store kicks in on the client. This skip is load-bearing for `useRequest`: `PendingRpcRequest.reactiveStore()` auto-dispatches on creation (same semantics as `PendingRpcSubscriptionsRequest.reactiveStore()`), so not calling it on the server is what prevents a server-side fetch. Action hooks (`useSendTransaction`, `useAction`, the wallet action hooks) are already safe: they build action stores via `createActionStore(fn)` directly (which stays neutral on initiation), so nothing fires until `dispatch()` is called, which doesn't happen during SSR since it's event-triggered. We deliberately don't prefetch on the server even though we could: on-chain state moves fast enough that any prefetched value would usually mismatch the first client snapshot, and the hydration failure is worse than an extra loading flicker. For per-request clients (Next.js app router, Remix), `KitClientProvider`'s `client` prop accepts a pre-built client whose lifecycle the caller owns.
+**SSR-safe by default.** Every provider renders on the server without throwing, and every hook returns a hydration-stable "not yet available" snapshot during SSR. The wallet plugin explicitly ships a server stub (`status === 'pending'`, empty `wallets`, throwing actions) so its first render matches on both server and client. The reactive hooks (`useBalance`, `useAccount`, `useTransactionConfirmation`, `useLiveQuery`, `useSubscription`, `useRequest`) skip the reactive-store factory entirely on non-browser builds — they return `{ status: 'loading', data: undefined, isLoading: true }` without firing HTTP or opening WebSockets, then the real store kicks in on the client. This skip is load-bearing for `useRequest`: `PendingRpcRequest.reactiveStore()` auto-dispatches on creation (same semantics as `PendingRpcSubscriptionsRequest.reactiveStore()`), so not calling it on the server is what prevents a server-side fetch. Action hooks (`useSendTransaction`, `useAction`, the wallet action hooks) are already safe: they build action stores via `createReactiveActionStore(fn)` directly (which stays neutral on initiation), so nothing fires until `dispatch()` is called, which doesn't happen during SSR since it's event-triggered. We deliberately don't prefetch on the server even though we could: on-chain state moves fast enough that any prefetched value would usually mismatch the first client snapshot, and the hydration failure is worse than an extra loading flicker. For per-request clients (Next.js app router, Remix), `KitClientProvider`'s `client` prop accepts a pre-built client whose lifecycle the caller owns.
 
 **Errors are surfaced as `unknown`, narrowed with Kit helpers.** Kit throws `SolanaError` with stable error codes; the wallet plugin throws `WalletStandardError` with the same pattern. Hooks propagate errors through `LiveQueryResult.error` / `ActionState.error` / `RequestResult.error` as `unknown`, and consumers narrow in render branches via `isSolanaError(e, SOLANA_ERROR__WALLET__USER_REJECTED)` / `isWalletStandardError(e, ...)`:
 
