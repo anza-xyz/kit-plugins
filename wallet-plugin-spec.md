@@ -191,10 +191,10 @@ type ClientWithWallet = {
      * if reconnecting). Creates and caches a signer for the active account.
      * Returns all accounts from the wallet after connection.
      */
-    connect: (wallet: UiWallet) => Promise<readonly UiWalletAccount[]>;
+    connect: (wallet: UiWallet, options?: WalletActionOptions) => Promise<readonly UiWalletAccount[]>;
 
     /** Disconnect the active wallet. Calls standard:disconnect if supported. */
-    disconnect: () => Promise<void>;
+    disconnect: (options?: WalletActionOptions) => Promise<void>;
 
     /**
      * Switch to a different account within the connected wallet.
@@ -209,7 +209,7 @@ type ClientWithWallet = {
      * Calls the wallet's solana:signMessage feature directly
      * (does not go through the cached signer).
      */
-    signMessage: (message: Uint8Array) => Promise<SignatureBytes>;
+    signMessage: (message: Uint8Array, options?: WalletActionOptions) => Promise<SignatureBytes>;
 
     /**
      * Sign In With Solana (SIWS-as-connect).
@@ -224,8 +224,31 @@ type ClientWithWallet = {
      * To sign in with the already-connected wallet, pass
      * getState().connected.wallet.
      */
-    signIn(wallet: UiWallet, input: SolanaSignInInput): Promise<SolanaSignInOutput>;
+    signIn(wallet: UiWallet, input: SolanaSignInInput, options?: WalletActionOptions): Promise<SolanaSignInOutput>;
   };
+};
+
+/**
+ * Options accepted by each async wallet action.
+ *
+ * Currently only carries an `abortSignal`, but is kept as an object for
+ * consistency with the rest of the Kit ecosystem and to allow future
+ * additions without breaking the call-site shape.
+ */
+type WalletActionOptions = {
+  /**
+   * An optional AbortSignal used to cancel the operation.
+   *
+   * Cancellation is pre-call only: the plugin checks
+   * `abortSignal.throwIfAborted()` at the start of each action and bails
+   * out before invoking the wallet. Once the underlying wallet-standard
+   * call has been dispatched, its result is returned even if the signal
+   * is aborted mid-flight — the wallet's side effect (an approved
+   * signature, a live connection, a broadcast transaction) is the source
+   * of truth, and throwing here would discard real user work without
+   * undoing what the wallet already did.
+   */
+  abortSignal?: AbortSignal;
 };
 
 /**
@@ -558,7 +581,11 @@ function createWalletStore(config: WalletPluginConfig) {
 
   // -- Connection lifecycle --
 
-  async function connect(uiWallet: UiWallet): Promise<readonly UiWalletAccount[]> {
+  async function connect(
+    uiWallet: UiWallet,
+    options?: WalletActionOptions,
+  ): Promise<readonly UiWalletAccount[]> {
+    options?.abortSignal?.throwIfAborted();
     userHasSelected = true;
     reconnectCleanup?.();
     reconnectCleanup = null;
@@ -612,7 +639,8 @@ function createWalletStore(config: WalletPluginConfig) {
     }
   }
 
-  async function disconnect(): Promise<void> {
+  async function disconnect(options?: WalletActionOptions): Promise<void> {
+    options?.abortSignal?.throwIfAborted();
     if (!state.connectedWallet) return;
 
     const currentWallet = state.connectedWallet;
@@ -678,7 +706,11 @@ function createWalletStore(config: WalletPluginConfig) {
 
   // -- Message signing --
 
-  async function signMessage(message: Uint8Array): Promise<SignatureBytes> {
+  async function signMessage(
+    message: Uint8Array,
+    options?: WalletActionOptions,
+  ): Promise<SignatureBytes> {
+    options?.abortSignal?.throwIfAborted();
     const { connectedWallet, account } = state;
     if (!connectedWallet || !account) {
       throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, {
@@ -698,7 +730,12 @@ function createWalletStore(config: WalletPluginConfig) {
 
   // -- Sign In With Solana (SIWS-as-connect) --
 
-  async function signIn(wallet: UiWallet, input: SolanaSignInInput): Promise<SolanaSignInOutput> {
+  async function signIn(
+    wallet: UiWallet,
+    input: SolanaSignInInput,
+    options?: WalletActionOptions,
+  ): Promise<SolanaSignInOutput> {
+    options?.abortSignal?.throwIfAborted();
     userHasSelected = true;
     reconnectCleanup?.();
     reconnectCleanup = null;
