@@ -58,6 +58,34 @@ export type WalletState = {
 };
 
 /**
+ * Options accepted by each async wallet action.
+ *
+ * Currently only carries an `abortSignal`, but is kept as an object for
+ * consistency with the rest of the Kit ecosystem and to allow future
+ * additions without breaking the call-site shape.
+ *
+ * @see {@link WalletNamespace.connect}
+ * @see {@link WalletNamespace.disconnect}
+ * @see {@link WalletNamespace.signMessage}
+ * @see {@link WalletNamespace.signIn}
+ */
+export type WalletActionOptions = {
+    /**
+     * An optional `AbortSignal` used to cancel the operation.
+     *
+     * Cancellation is pre-call only: the plugin calls
+     * `abortSignal.throwIfAborted()` at the start of each action and bails
+     * out before invoking the wallet. Once the underlying wallet-standard
+     * call has been dispatched, its result is returned even if the signal
+     * is aborted mid-flight — the wallet's side effect (an approved
+     * signature, a live connection, a broadcast transaction) is the source
+     * of truth, and throwing here would discard real user work without
+     * undoing what the wallet already did.
+     */
+    abortSignal?: AbortSignal;
+};
+
+/**
  * A pluggable storage adapter for persisting the selected wallet account.
  *
  * Follows the Web Storage API shape (`getItem`/`setItem`/`removeItem`).
@@ -173,11 +201,20 @@ export type WalletNamespace = {
      *
      * @returns All accounts from the wallet after connection.
      * @throws The wallet's rejection error if the user declines the prompt.
+     * @throws `options.abortSignal.reason` if the signal is already aborted
+     *   when the action is called. Aborts after the wallet call has been
+     *   dispatched do not take effect.
      */
-    connect: (wallet: UiWallet) => Promise<readonly UiWalletAccount[]>;
+    connect: (wallet: UiWallet, options?: WalletActionOptions) => Promise<readonly UiWalletAccount[]>;
 
-    /** Disconnect the active wallet. Calls `standard:disconnect` if supported. */
-    disconnect: () => Promise<void>;
+    /**
+     * Disconnect the active wallet. Calls `standard:disconnect` if supported.
+     *
+     * @throws `options.abortSignal.reason` if the signal is already aborted
+     *   when the action is called. Aborts after the wallet call has been
+     *   dispatched do not take effect.
+     */
+    disconnect: (options?: WalletActionOptions) => Promise<void>;
 
     // -- State --
     /**
@@ -212,8 +249,11 @@ export type WalletNamespace = {
      *
      * @throws `WalletStandardError(WALLET_STANDARD_ERROR__FEATURES__WALLET_ACCOUNT_FEATURE_UNIMPLEMENTED)`
      *   if the wallet does not support `solana:signIn`.
+     * @throws `options.abortSignal.reason` if the signal is already aborted
+     *   when the action is called. Aborts after the wallet call has been
+     *   dispatched do not take effect.
      */
-    signIn: (wallet: UiWallet, input: SolanaSignInInput) => Promise<SolanaSignInOutput>;
+    signIn: (wallet: UiWallet, input: SolanaSignInInput, options?: WalletActionOptions) => Promise<SolanaSignInOutput>;
 
     /**
      * Sign an arbitrary message with the connected account.
@@ -225,8 +265,11 @@ export type WalletNamespace = {
      * @throws `SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED)` if no wallet is connected.
      * @throws `WalletStandardError(WALLET_STANDARD_ERROR__FEATURES__WALLET_ACCOUNT_FEATURE_UNIMPLEMENTED)`
      *   if the wallet does not support `solana:signMessage`.
+     * @throws `options.abortSignal.reason` if the signal is already aborted
+     *   when the action is called. Aborts after the wallet call has been
+     *   dispatched do not take effect.
      */
-    signMessage: (message: Uint8Array) => Promise<SignatureBytes>;
+    signMessage: (message: Uint8Array, options?: WalletActionOptions) => Promise<SignatureBytes>;
 
     /**
      * Subscribe to any wallet state change. Compatible with React's
