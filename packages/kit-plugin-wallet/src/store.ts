@@ -26,6 +26,7 @@ import {
 } from '@wallet-standard/ui-registry';
 
 import type {
+    WalletActionOptions,
     WalletNamespace,
     WalletPluginConfig,
     WalletSigner,
@@ -305,7 +306,8 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
 
     // -- Connection lifecycle ----------------------------------------------
 
-    async function connect(uiWallet: UiWallet): Promise<readonly UiWalletAccount[]> {
+    async function connect(uiWallet: UiWallet, options?: WalletActionOptions): Promise<readonly UiWalletAccount[]> {
+        options?.abortSignal?.throwIfAborted();
         userHasSelected = true;
         cancelReconnect();
         const generation = ++connectGeneration;
@@ -349,7 +351,8 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         }
     }
 
-    async function disconnect(): Promise<void> {
+    async function disconnect(options?: WalletActionOptions): Promise<void> {
+        options?.abortSignal?.throwIfAborted();
         if (!state.connectedWallet) return;
 
         const currentWallet = state.connectedWallet;
@@ -402,7 +405,8 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
 
     // -- Message signing ---------------------------------------------------
 
-    async function signMessage(message: Uint8Array): Promise<SignatureBytes> {
+    async function signMessage(message: Uint8Array, options?: WalletActionOptions): Promise<SignatureBytes> {
+        options?.abortSignal?.throwIfAborted();
         const { connectedWallet, account } = state;
         if (!connectedWallet || !account) {
             throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signMessage' });
@@ -422,7 +426,12 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
 
     // -- Sign In With Solana (SIWS-as-connect) ------------------------------
 
-    async function signIn(uiWallet: UiWallet, input: SolanaSignInInput): Promise<SolanaSignInOutput> {
+    async function signIn(
+        uiWallet: UiWallet,
+        input: SolanaSignInInput,
+        options?: WalletActionOptions,
+    ): Promise<SolanaSignInOutput> {
+        options?.abortSignal?.throwIfAborted();
         userHasSelected = true;
         cancelReconnect();
         const generation = ++connectGeneration;
