@@ -126,6 +126,24 @@ describe('useIdentity', () => {
         });
     });
 
+    it('returns null when the identity getter throws (wallet not connected)', () => {
+        // Reactive plugins expose `identity` as a throwing getter when no
+        // wallet is connected. Simulate that with Object.defineProperty.
+        const reactive: object = {};
+        Object.defineProperty(reactive, 'identity', {
+            configurable: true,
+            enumerable: true,
+            get: () => {
+                throw new Error('wallet not connected');
+            },
+        });
+        const wrapper = ({ children }: { children: ReactNode }) => (
+            <Providers extensions={reactive as { identity: TransactionSigner }}>{children}</Providers>
+        );
+        const { result } = renderHook(() => useIdentity(), { wrapper });
+        expect(result.current).toBe(null);
+    });
+
     it('re-renders when subscribeToIdentity notifies', () => {
         let current: TransactionSigner | null = makeSigner(A_ADDRESS);
         const listeners = new Set<() => void>();
@@ -142,6 +160,35 @@ describe('useIdentity', () => {
             <Providers extensions={reactive}>{children}</Providers>
         );
         const { result } = renderHook(() => useIdentity(), { wrapper });
+        expect(result.current?.address).toBe(A_ADDRESS);
+        act(() => {
+            current = makeSigner(B_ADDRESS);
+            listeners.forEach(l => l());
+        });
+        expect(result.current?.address).toBe(B_ADDRESS);
+    });
+
+    it('tracks a full null → value → null cycle (wallet disconnect/reconnect)', () => {
+        let current: TransactionSigner | null = null;
+        const listeners = new Set<() => void>();
+        const reactive = {
+            get identity() {
+                return current;
+            },
+            subscribeToIdentity: (listener: () => void) => {
+                listeners.add(listener);
+                return () => listeners.delete(listener);
+            },
+        };
+        const wrapper = ({ children }: { children: ReactNode }) => (
+            <Providers extensions={reactive}>{children}</Providers>
+        );
+        const { result } = renderHook(() => useIdentity(), { wrapper });
+        expect(result.current).toBe(null);
+        act(() => {
+            current = makeSigner(A_ADDRESS);
+            listeners.forEach(l => l());
+        });
         expect(result.current?.address).toBe(A_ADDRESS);
         act(() => {
             current = null;
