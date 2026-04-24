@@ -32,11 +32,12 @@ The library is a thin bridge over Kit's reactive primitives — it does not reim
 pnpm add @solana/kit-react @solana/kit react
 ```
 
-Optional peers — install only when you mount the matching provider:
+Optional peers — install only the ones whose providers you mount:
 
 ```shell
-pnpm add @solana/kit-plugin-signer          # for PayerProvider / IdentityProvider / SignerProvider
-pnpm add @solana/kit-plugin-instruction-plan # for RpcProvider / LiteSvmProvider (transaction sending)
+pnpm add @solana/kit-plugin-rpc      # RpcProvider, RpcConnectionProvider, SolanaMainnetRpcProvider, SolanaDevnetRpcProvider, SolanaLocalRpcProvider
+pnpm add @solana/kit-plugin-litesvm  # LiteSvmProvider
+pnpm add @solana/kit-plugin-signer   # PayerProvider, IdentityProvider, SignerProvider
 ```
 
 The library targets React 18 and 19, and ships Node, browser, and React Native bundles.

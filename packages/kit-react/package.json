@@ -46,12 +46,16 @@
     },
     "peerDependencies": {
         "@solana/kit": "^6.8.0",
-        "@solana/kit-plugin-instruction-plan": "workspace:*",
+        "@solana/kit-plugin-litesvm": "workspace:*",
+        "@solana/kit-plugin-rpc": "workspace:*",
         "@solana/kit-plugin-signer": "workspace:*",
         "react": "^18.0.0 || ^19.0.0"
     },
     "peerDependenciesMeta": {
-        "@solana/kit-plugin-instruction-plan": {
+        "@solana/kit-plugin-litesvm": {
+            "optional": true
+        },
+        "@solana/kit-plugin-rpc": {
             "optional": true
         },
         "@solana/kit-plugin-signer": {
@@ -59,13 +63,11 @@
         }
     },
     "dependencies": {
-        "@solana/kit-plugin-litesvm": "workspace:*",
-        "@solana/kit-plugin-rpc": "workspace:*",
-        "@solana/subscribable": "^6.8.0",
-        "@wallet-standard/base": "^1.1.0"
+        "@solana/subscribable": "^6.8.0"
     },
     "devDependencies": {
-        "@solana/kit-plugin-instruction-plan": "workspace:*",
+        "@solana/kit-plugin-litesvm": "workspace:*",
+        "@solana/kit-plugin-rpc": "workspace:*",
         "@solana/kit-plugin-signer": "workspace:*",
         "@testing-library/react": "^16.1.0",
         "@types/react": "^19.0.0",

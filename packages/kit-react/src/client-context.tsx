@@ -1,24 +1,32 @@
 import type { Client } from '@solana/kit';
 import { createClient } from '@solana/kit';
-import type { IdentifierString } from '@wallet-standard/base';
 import { createContext, type ReactNode, useContext, useMemo } from 'react';
 
 import { useDisposeOnUnmount } from './internal/dispose';
 
 /**
- * Known Solana chain identifiers following the wallet-standard
- * `namespace:network` convention. Prefer one of these literals so that
+ * Known Solana chain identifiers following the wallet-standard / CAIP-2
+ * `namespace:reference` convention. Prefer one of these literals so that
  * TypeScript autocompletes the correct value at call sites.
  */
 export type SolanaChain = 'solana:mainnet' | 'solana:devnet' | 'solana:testnet';
 
 /**
- * Chain identifier accepted by {@link KitClientProvider}. Solana literals
- * autocomplete; the intersection with `IdentifierString & {}` preserves
- * those literals while still accepting any wallet-standard
- * `${string}:${string}` identifier for custom or non-Solana chains.
+ * Wallet-standard / CAIP-2 namespaced chain identifier
+ * (`namespace:reference`, e.g. `'solana:mainnet'`, `'eip155:1'`). Inlined
+ * here so this package doesn't need a runtime dep on
+ * `@wallet-standard/base` for a type-only import.
  */
-export type ChainIdentifier = SolanaChain | (IdentifierString & {});
+type ChainIdentifierString = `${string}:${string}`;
+
+/**
+ * Chain identifier accepted by {@link ChainProvider} and the
+ * chain-specific RPC providers. Solana literals autocomplete; the
+ * intersection with `ChainIdentifierString & {}` preserves those literals
+ * while still accepting any `${string}:${string}` identifier for custom
+ * or non-Solana chains.
+ */
+export type ChainIdentifier = SolanaChain | (ChainIdentifierString & {});
 
 /**
  * React context carrying the Kit client.
@@ -183,7 +191,7 @@ export function useClient<TClient extends object = object>(): Client<TClient> {
  * // chain is 'solana:mainnet' | 'solana:devnet' | 'solana:testnet'
  * ```
  */
-export function useChain<T extends IdentifierString = SolanaChain>(): T {
+export function useChain<T extends ChainIdentifierString = SolanaChain>(): T {
     const chain = useContext(ChainContext);
     if (chain === null) {
         throw new Error(

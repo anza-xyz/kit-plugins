@@ -244,22 +244,16 @@ importers:
       '@solana/kit':
         specifier: ^6.8.0
         version: 6.8.0(typescript@5.9.3)
+      '@solana/subscribable':
+        specifier: ^6.8.0
+        version: 6.8.0(typescript@5.9.3)
+    devDependencies:
       '@solana/kit-plugin-litesvm':
         specifier: workspace:*
         version: link:../kit-plugin-litesvm
       '@solana/kit-plugin-rpc':
         specifier: workspace:*
         version: link:../kit-plugin-rpc
-      '@solana/subscribable':
-        specifier: ^6.8.0
-        version: 6.8.0(typescript@5.9.3)
-      '@wallet-standard/base':
-        specifier: ^1.1.0
-        version: 1.1.0
-    devDependencies:
-      '@solana/kit-plugin-instruction-plan':
-        specifier: workspace:*
-        version: link:../kit-plugin-instruction-plan
       '@solana/kit-plugin-signer':
         specifier: workspace:*
         version: link:../kit-plugin-signer
