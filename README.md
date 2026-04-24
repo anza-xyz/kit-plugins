@@ -128,6 +128,33 @@ This repo provides the following individual plugin packages. You can learn more 
 | [`@solana/kit-plugin-instruction-plan`](./packages/kit-plugin-instruction-plan) | [![npm](https://img.shields.io/npm/v/@solana/kit-plugin-instruction-plan.svg?style=flat)](https://www.npmjs.com/package/@solana/kit-plugin-instruction-plan) | Transaction planning and execution | `transactionPlanner`, `transactionPlanExecutor`, `planAndSendTransactions`                                                                                                                                                                                                  |
 | [`@solana/kit-plugin-wallet`](./packages/kit-plugin-wallet)                     | [![npm](https://img.shields.io/npm/v/@solana/kit-plugin-wallet.svg?style=flat)](https://www.npmjs.com/package/@solana/kit-plugin-wallet)                     | Browser wallet support             | `walletSigner`, `walletIdentity`, `walletPayer`, `walletWithoutSigner`                                                                                                                                                                                                      |
 
+## React Bindings
+
+For React applications, [`@solana/kit-react`](./packages/kit-react) provides a thin layer over Kit — providers for composing a client and hooks like `useBalance`, `useAccount`, `useSendTransaction`, `useSubscription`, and `useRequest`. See the [package README](./packages/kit-react/README.md) for the full surface.
+
+```sh
+pnpm install @solana/kit @solana/kit-react @solana/kit-plugin-rpc
+```
+
+```tsx
+import { KitClientProvider, SolanaMainnetRpcProvider, useBalance } from '@solana/kit-react';
+
+function BalanceCard({ owner }) {
+    const { data, status } = useBalance(owner);
+    return status === 'loading' ? <Spinner /> : <Lamports value={data} />;
+}
+
+export function App() {
+    return (
+        <KitClientProvider>
+            <SolanaMainnetRpcProvider rpcUrl="https://api.mainnet-beta.solana.com">
+                <BalanceCard owner={myAddress} />
+            </SolanaMainnetRpcProvider>
+        </KitClientProvider>
+    );
+}
+```
+
 ## Community Plugins
 
 | Package                                                                                                             | Description                                                             | Plugins                           | Maintainers                        |
