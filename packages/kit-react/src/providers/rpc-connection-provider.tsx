@@ -51,9 +51,20 @@ export function RpcConnectionProvider({
     rpcConfig,
     rpcSubscriptionsConfig,
 }: RpcConnectionProviderProps) {
+    // `satisfies Record<keyof SolanaRpcConnectionConfig<string>, unknown>`
+    // guards against drift: if Kit adds a field to the config, TypeScript
+    // flags the missing key here instead of the provider silently failing
+    // to rebuild on it.
+    const depsByKey = {
+        rpcConfig,
+        rpcSubscriptionsConfig,
+        rpcSubscriptionsUrl,
+        rpcUrl,
+    } satisfies Record<keyof SolanaRpcConnectionConfig<string>, unknown>;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     const plugins = useMemo(
         () => [solanaRpcConnection({ rpcConfig, rpcSubscriptionsConfig, rpcSubscriptionsUrl, rpcUrl })],
-        [rpcUrl, rpcSubscriptionsUrl, rpcConfig, rpcSubscriptionsConfig],
+        Object.values(depsByKey),
     );
     const tree = <PluginProvider plugins={plugins}>{children}</PluginProvider>;
     return chain ? <ChainContext.Provider value={chain}>{tree}</ChainContext.Provider> : tree;

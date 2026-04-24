@@ -15,24 +15,27 @@ const PAYER_HINT =
  * the four providers below share one canonical dep list instead of each
  * hand-spelling the same seven keys.
  *
+ * The `satisfies Record<keyof SolanaRpcConfig<string>, unknown>` guard
+ * turns drift into a type error: if Kit ever adds a field to
+ * `SolanaRpcConfig`, TypeScript flags the missing key here instead of the
+ * provider silently failing to rebuild on that field.
+ *
  * @internal
  */
 function useRpcConfigPlugin(build: () => AnyPlugin, config: Partial<SolanaRpcConfig<string>>): readonly AnyPlugin[] {
-    // `build` closes over `config`, which is the only churn source the
-    // providers care about — the explicit key list below tracks it.
+    const depsByKey = {
+        maxConcurrency: config.maxConcurrency,
+        rpcConfig: config.rpcConfig,
+        rpcSubscriptionsConfig: config.rpcSubscriptionsConfig,
+        rpcSubscriptionsUrl: config.rpcSubscriptionsUrl,
+        rpcUrl: config.rpcUrl,
+        skipPreflight: config.skipPreflight,
+        transactionConfig: config.transactionConfig,
+    } satisfies Record<keyof SolanaRpcConfig<string>, unknown>;
+    // `build` closes over `config`; `depsByKey` above is the enforced
+    // source of truth for which fields we track.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    return useMemo(
-        () => [build()],
-        [
-            config.rpcUrl,
-            config.rpcSubscriptionsUrl,
-            config.maxConcurrency,
-            config.rpcConfig,
-            config.rpcSubscriptionsConfig,
-            config.skipPreflight,
-            config.transactionConfig,
-        ],
-    );
+    return useMemo(() => [build()], Object.values(depsByKey));
 }
 
 /**

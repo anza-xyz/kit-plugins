@@ -43,6 +43,13 @@ export function LiteSvmProvider({ children, ...config }: LiteSvmProviderProps) {
         hookName: '<LiteSvmProvider>',
         providerHint: 'Mount a <WalletProvider>, <PayerProvider>, or <SignerProvider> above it.',
     });
-    const plugins = useMemo(() => [litesvm(config as LiteSvmConfig)], [config.transactionConfig]);
+    // `satisfies Record<keyof LiteSvmConfig, unknown>` guards against drift:
+    // if Kit adds a field to `LiteSvmConfig`, TypeScript flags the missing
+    // key here instead of the provider silently failing to rebuild on it.
+    const depsByKey = {
+        transactionConfig: config.transactionConfig,
+    } satisfies Record<keyof LiteSvmConfig, unknown>;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const plugins = useMemo(() => [litesvm(config as LiteSvmConfig)], Object.values(depsByKey));
     return <PluginProvider plugins={plugins}>{children}</PluginProvider>;
 }
