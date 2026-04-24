@@ -178,7 +178,7 @@ describe('RpcProvider', () => {
             );
         }
         expectingError(() => {
-            expect(() => renderHook(() => useClient(), { wrapper })).toThrow(/requires a payer/);
+            expect(() => renderHook(() => useClient(), { wrapper })).toThrow(/requires `client\.payer`/);
         });
     });
 
@@ -283,7 +283,7 @@ describe('chain-specific RPC providers', () => {
             );
         }
         expectingError(() => {
-            expect(() => renderHook(() => useClient(), { wrapper })).toThrow(/requires a payer/);
+            expect(() => renderHook(() => useClient(), { wrapper })).toThrow(/requires `client\.payer`/);
         });
     });
 });
@@ -319,7 +319,7 @@ describe.skipIf(!__NODEJS__)('LiteSvmProvider', () => {
             );
         }
         expectingError(() => {
-            expect(() => renderHook(() => useClient(), { wrapper })).toThrow(/requires a payer/);
+            expect(() => renderHook(() => useClient(), { wrapper })).toThrow(/requires `client\.payer`/);
         });
     });
 });

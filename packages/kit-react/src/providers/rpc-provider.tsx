@@ -3,8 +3,12 @@ import type { SolanaRpcConfig } from '@solana/kit-plugin-rpc';
 import { solanaDevnetRpc, solanaLocalRpc, solanaMainnetRpc, solanaRpc } from '@solana/kit-plugin-rpc';
 import { type ReactNode, useMemo } from 'react';
 
-import { ChainContext, type ChainIdentifier, useClient } from '../client-context';
+import { useClientCapability } from '../client-capability';
+import { ChainContext, type ChainIdentifier } from '../client-context';
 import { PluginProvider } from './plugin-provider';
+
+const PAYER_HINT =
+    'Mount a <WalletProvider>, <PayerProvider>, or <SignerProvider> above it, or switch to <RpcConnectionProvider> if you are not sending transactions.';
 
 /**
  * Props for {@link RpcProvider}. Extends `SolanaRpcConfig` from
@@ -53,12 +57,11 @@ export type RpcProviderProps = Readonly<
  * @see {@link SolanaLocalRpcProvider}
  */
 export function RpcProvider({ chain, children, ...config }: RpcProviderProps) {
-    const client = useClient<{ payer?: unknown }>();
-    if (!('payer' in client)) {
-        throw new Error(
-            '<RpcProvider> requires a payer on the client. Mount a <WalletProvider>, <PayerProvider>, or <SignerProvider> above it, or switch to <RpcConnectionProvider> if you are not sending transactions.',
-        );
-    }
+    useClientCapability({
+        capability: 'payer',
+        hookName: '<RpcProvider>',
+        providerHint: PAYER_HINT,
+    });
     const plugins = useMemo(
         () => [solanaRpc(config as SolanaRpcConfig<ClusterUrl>)],
         [
@@ -111,12 +114,11 @@ export type SolanaMainnetRpcProviderProps = Readonly<
  * @see {@link SolanaLocalRpcProvider}
  */
 export function SolanaMainnetRpcProvider({ children, ...config }: SolanaMainnetRpcProviderProps) {
-    const client = useClient<{ payer?: unknown }>();
-    if (!('payer' in client)) {
-        throw new Error(
-            '<SolanaMainnetRpcProvider> requires a payer on the client. Mount a <WalletProvider>, <PayerProvider>, or <SignerProvider> above it, or switch to <RpcConnectionProvider> if you are not sending transactions.',
-        );
-    }
+    useClientCapability({
+        capability: 'payer',
+        hookName: '<SolanaMainnetRpcProvider>',
+        providerHint: PAYER_HINT,
+    });
     const plugins = useMemo(
         () => [solanaMainnetRpc(config)],
         [
@@ -171,12 +173,11 @@ export type SolanaDevnetRpcProviderProps = Readonly<
  * @see {@link SolanaLocalRpcProvider}
  */
 export function SolanaDevnetRpcProvider({ children, ...config }: SolanaDevnetRpcProviderProps) {
-    const client = useClient<{ payer?: unknown }>();
-    if (!('payer' in client)) {
-        throw new Error(
-            '<SolanaDevnetRpcProvider> requires a payer on the client. Mount a <WalletProvider>, <PayerProvider>, or <SignerProvider> above it, or switch to <RpcConnectionProvider> if you are not sending transactions.',
-        );
-    }
+    useClientCapability({
+        capability: 'payer',
+        hookName: '<SolanaDevnetRpcProvider>',
+        providerHint: PAYER_HINT,
+    });
     const plugins = useMemo(
         () => [solanaDevnetRpc(config)],
         [
@@ -243,12 +244,11 @@ export type SolanaLocalRpcProviderProps = Readonly<
  * @see {@link SolanaDevnetRpcProvider}
  */
 export function SolanaLocalRpcProvider({ chain, children, ...config }: SolanaLocalRpcProviderProps) {
-    const client = useClient<{ payer?: unknown }>();
-    if (!('payer' in client)) {
-        throw new Error(
-            '<SolanaLocalRpcProvider> requires a payer on the client. Mount a <WalletProvider>, <PayerProvider>, or <SignerProvider> above it, or switch to <RpcConnectionProvider> if you are not sending transactions.',
-        );
-    }
+    useClientCapability({
+        capability: 'payer',
+        hookName: '<SolanaLocalRpcProvider>',
+        providerHint: PAYER_HINT,
+    });
     const plugins = useMemo(
         () => [solanaLocalRpc(config)],
         [

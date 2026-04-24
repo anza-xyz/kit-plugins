@@ -1,7 +1,7 @@
 import { litesvm, type LiteSvmConfig } from '@solana/kit-plugin-litesvm';
 import { type ReactNode, useMemo } from 'react';
 
-import { useClient } from '../client-context';
+import { useClientCapability } from '../client-capability';
 import { PluginProvider } from './plugin-provider';
 
 /**
@@ -38,12 +38,11 @@ export type LiteSvmProviderProps = Readonly<
  * @see {@link RpcProvider}
  */
 export function LiteSvmProvider({ children, ...config }: LiteSvmProviderProps) {
-    const client = useClient<{ payer?: unknown }>();
-    if (!('payer' in client)) {
-        throw new Error(
-            '<LiteSvmProvider> requires a payer on the client. Mount a <WalletProvider>, <PayerProvider>, or <SignerProvider> above it.',
-        );
-    }
+    useClientCapability({
+        capability: 'payer',
+        hookName: '<LiteSvmProvider>',
+        providerHint: 'Mount a <WalletProvider>, <PayerProvider>, or <SignerProvider> above it.',
+    });
     const plugins = useMemo(() => [litesvm(config as LiteSvmConfig)], [config.transactionConfig]);
     return <PluginProvider plugins={plugins}>{children}</PluginProvider>;
 }
