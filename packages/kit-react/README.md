@@ -13,6 +13,7 @@ The library is a thin bridge over Kit's reactive primitives — it does not reim
 ## Contents
 
 - [Installation](#installation)
+    - [ESLint — `react-hooks/exhaustive-deps`](#eslint--react-hooksexhaustive-deps)
 - [Quick start](#quick-start)
 - [Providers](#providers)
 - [Hooks](#hooks)
@@ -39,6 +40,21 @@ pnpm add @solana/kit-plugin-instruction-plan # for RpcProvider / LiteSvmProvider
 ```
 
 The library targets React 18 and 19, and ships Node, browser, and React Native bundles.
+
+### ESLint — `react-hooks/exhaustive-deps`
+
+`useLiveData`, `useSubscription`, `useRequest`, and `useAction` each take a `deps` argument that matches the convention of React's built-in hooks, but ESLint's `react-hooks/exhaustive-deps` rule only lints its own. Add them to `additionalHooks` so the rule verifies your deps lists too:
+
+```json
+{
+    "rules": {
+        "react-hooks/exhaustive-deps": [
+            "warn",
+            { "additionalHooks": "(useLiveData|useSubscription|useRequest|useAction)" }
+        ]
+    }
+}
+```
 
 ## Quick start
 
