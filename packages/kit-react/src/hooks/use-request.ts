@@ -1,21 +1,29 @@
+import type { PendingRpcRequest } from '@solana/kit';
 import type { DependencyList } from 'react';
 
 import { useLiveStore } from '../internal/live-store';
 import { disabledActionStore, type RequestResult, useRequestResult } from '../internal/request-result';
-import type { ReactiveActionStore } from '../kit-prereqs';
+import { type ReactiveActionStore, reactiveStoreFromPendingRequest } from '../kit-prereqs';
 
 /**
- * Anything that produces a `ReactiveActionStore<[], T>` via `.reactiveStore()`.
+ * Anything that produces a `ReactiveActionStore<[], T>` via `.reactiveStore()`,
+ * or a `PendingRpcRequest<T>` that the hook wraps internally.
  *
- * `PendingRpcRequest<T>` satisfies this by design; plugin-authored
- * pending objects that expose the same method plug in without
- * modification.
+ * Accepting both shapes means `useRequest(() => client.rpc.getEpochInfo())`
+ * works today — `PendingRpcRequest<T>` is adapted via an internal shim
+ * (see `kit-prereqs/pending-rpc-request.ts`). Plugin-authored pending
+ * objects that expose `.reactiveStore()` plug in without wrapping. Once
+ * Kit ships a native `.reactiveStore()` on `PendingRpcRequest`, the union
+ * collapses to the second branch — the general `{ reactiveStore() }`
+ * shape that any source (Kit, plugin-authored, or user-built) satisfies.
  *
  * @typeParam T - The value resolved by each dispatch.
  */
-export type ReactiveActionSource<T> = {
-    reactiveStore(): ReactiveActionStore<[], T>;
-};
+export type ReactiveActionSource<T> =
+    | PendingRpcRequest<T>
+    | {
+          reactiveStore(): ReactiveActionStore<[], T>;
+      };
 
 /**
  * Fires a one-shot request on mount and whenever `deps` change.
@@ -52,7 +60,11 @@ export function useRequest<T>(
         signal => {
             const pending = factory(signal);
             if (pending === null) return disabledActionStore<T>();
-            return pending.reactiveStore();
+            // TODO(kit#1555): once Kit ships `.reactiveStore()` on
+            // `PendingRpcRequest`, collapse this branch — both shapes of
+            // `ReactiveActionSource` will satisfy the native-method arm.
+            if ('reactiveStore' in pending) return pending.reactiveStore();
+            return reactiveStoreFromPendingRequest(pending);
         },
         () => disabledActionStore<T>(),
         deps,

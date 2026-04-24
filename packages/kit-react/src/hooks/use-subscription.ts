@@ -1,23 +1,34 @@
+import type { PendingRpcSubscriptionsRequest } from '@solana/kit';
 import type { DependencyList } from 'react';
 
 import type { LiveQueryResult } from '../internal/live-query-result';
 import { disabledLiveStore, nullLiveStore, useLiveStore } from '../internal/live-store';
 import { type UnwrapRpcResponse, useSubscriptionResult } from '../internal/subscription-result';
-import type { ReactiveStreamStore } from '../kit-prereqs';
+import { reactiveStoreFromPendingSubscriptionsRequest, type ReactiveStreamStore } from '../kit-prereqs';
 
 /**
  * Anything that produces a `ReactiveStreamStore<T>` via
- * `.reactiveStore({ abortSignal })`.
+ * `.reactiveStore({ abortSignal })`, or a `PendingRpcSubscriptionsRequest<T>`
+ * that the hook wraps internally.
  *
- * `PendingRpcSubscriptionsRequest<T>` satisfies this by design;
- * plugin-authored streaming objects that follow the same convention plug
- * in without modification.
+ * Accepting both shapes means
+ * `useSubscription(() => client.rpcSubscriptions.slotNotifications())`
+ * works today — `PendingRpcSubscriptionsRequest<T>` is adapted via an
+ * internal shim (see `kit-prereqs/pending-rpc-subs-request.ts`).
+ * Plugin-authored streaming objects that already expose `.reactiveStore()`
+ * plug in without wrapping. Once Kit ships a native sync
+ * `.reactiveStore()` on `PendingRpcSubscriptionsRequest`, the union
+ * collapses to the second branch — the general
+ * `{ reactiveStore({ abortSignal }) }` shape that any source (Kit,
+ * plugin-authored, or user-built) satisfies.
  *
  * @typeParam T - The notification value type emitted by the stream.
  */
-export type ReactiveStreamSource<T> = {
-    reactiveStore(options: { abortSignal: AbortSignal }): ReactiveStreamStore<T>;
-};
+export type ReactiveStreamSource<T> =
+    | PendingRpcSubscriptionsRequest<T>
+    | {
+          reactiveStore(options: { abortSignal: AbortSignal }): ReactiveStreamStore<T>;
+      };
 
 /**
  * Subscribes to a stream and surfaces the latest notification in the same
@@ -56,7 +67,10 @@ export function useSubscription<T>(
         signal => {
             const pending = factory(signal);
             if (pending === null) return disabledLiveStore<T>();
-            return pending.reactiveStore({ abortSignal: signal });
+            // TODO(kit#1553): once Kit ships a sync `.reactiveStore()` on
+            // `PendingRpcSubscriptionsRequest`, collapse this branch.
+            if ('reactiveStore' in pending) return pending.reactiveStore({ abortSignal: signal });
+            return reactiveStoreFromPendingSubscriptionsRequest(pending, { abortSignal: signal });
         },
         () => nullLiveStore<T>(),
         deps,

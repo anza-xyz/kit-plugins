@@ -145,6 +145,50 @@ describe.skipIf(!IS_LIVE)('useSubscription (live-client)', () => {
         expect(result.current.status).toBe('retrying');
         expect(result.current.data).toBe(7); // stale value preserved
     });
+
+    // TODO(kit#1553): delete this test when Kit ships a sync `.reactiveStore()`
+    // on `PendingRpcSubscriptionsRequest` and the
+    // `reactiveStoreFromPendingSubscriptionsRequest` shim is removed. It
+    // exercises the adapter path specifically; the native
+    // `{ reactiveStore({ abortSignal }) }` path is already covered by the
+    // tests above that use `fakeStreamStore`.
+    it('accepts a raw PendingRpcSubscriptionsRequest and wraps it via the shim', async () => {
+        // Fake PendingRpcSubscriptionsRequest — has the async `.reactive()`
+        // method (plus `.subscribe()` for type conformance) but no sync
+        // `.reactiveStore()`. The hook should detect the missing sync
+        // method and go through `reactiveStoreFromPendingSubscriptionsRequest`.
+        const listeners = new Set<() => void>();
+        let currentValue: number | undefined;
+        const innerStore = {
+            getError: () => undefined,
+            getState: () => currentValue,
+            subscribe: (l: () => void) => {
+                listeners.add(l);
+                return () => {
+                    listeners.delete(l);
+                };
+            },
+        };
+        const reactive = vi.fn((_opts: { abortSignal: AbortSignal }) => Promise.resolve(innerStore));
+        const pending = {
+            reactive,
+            // `subscribe` is part of PendingRpcSubscriptionsRequest's type but
+            // the shim only ever calls `.reactive()`.
+            subscribe: vi.fn(),
+        } as unknown as import('@solana/kit').PendingRpcSubscriptionsRequest<number>;
+        const { result } = renderHook(() => useSubscription(() => pending, []), { wrapper });
+        expect(result.current.status).toBe('loading');
+        expect(reactive).toHaveBeenCalledTimes(1);
+        await act(async () => {
+            await Promise.resolve();
+        });
+        act(() => {
+            currentValue = 99;
+            listeners.forEach(l => l());
+        });
+        expect(result.current.status).toBe('loaded');
+        expect(result.current.data).toBe(99);
+    });
 });
 
 describe.skipIf(IS_LIVE)('useSubscription (SSR / node)', () => {
