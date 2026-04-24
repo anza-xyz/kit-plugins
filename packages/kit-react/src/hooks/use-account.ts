@@ -11,6 +11,7 @@ import type {
 import { decodeAccount, parseBase64RpcAccount } from '@solana/kit';
 
 import { useClientCapability } from '../client-capability';
+import { useIdentityChurnWarning } from '../dev-warnings';
 import type { LiveQueryResult } from '../internal/live-query-result';
 import { createLiveDataSpec, useLiveData } from './use-live-data';
 
@@ -102,6 +103,14 @@ export function useAccount<TData extends object>(
         capability: ['rpc', 'rpcSubscriptions'],
         hookName: 'useAccount',
         providerHint: 'Mount <RpcProvider> or <RpcConnectionProvider>.',
+    });
+    // `decoder` feeds into the `useLiveData` dep list, so an inline
+    // `getMintDecoder()` on every render would rebuild the store each time.
+    // Fire the dev-only identity-churn warning to flag that footgun.
+    useIdentityChurnWarning(decoder, {
+        propName: 'decoder',
+        providerName: 'useAccount',
+        remedy: 'Memoize the decoder at the module level (e.g. `const MINT_DECODER = getMintDecoder()`) or wrap in `useMemo`.',
     });
     return useLiveData(
         () => (address ? createAccountLiveData(client, address, decoder) : null),

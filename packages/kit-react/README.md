@@ -293,9 +293,13 @@ All three accept `null` to disable — the hook returns `status: 'disabled'`, `i
 // SOL balance — live.
 const { data, status, error, retry, slot } = useBalance(address);
 
-// Account data — raw encoded bytes or decoded.
+// Account data — raw encoded bytes or decoded. The `decoder` participates in
+// the internal dep list, so memoize it (module-level constant or `useMemo`)
+// rather than calling `getMintDecoder()` inline on every render — a dev-only
+// warning fires after a few re-renders if you don't.
+const MINT_DECODER = getMintDecoder();
 const { data: raw } = useAccount(mintAddress);
-const { data: decoded } = useAccount(mintAddress, getMintDecoder());
+const { data: decoded } = useAccount(mintAddress, MINT_DECODER);
 
 // Transaction confirmation status — combines getSignatureStatuses + signatureNotifications.
 const { data, status } = useTransactionConfirmation(signature, { commitment: 'confirmed' });
