@@ -1,8 +1,8 @@
 import { createClient, extendClient } from '@solana/kit';
 import { describe, expect, it, vi } from 'vitest';
 
-import { walletPayer, walletSigner, walletWithoutSigner } from '../src';
-import { createMockAccount, createMockUiWallet, mockSigner, registerWallet } from './_setup';
+import { walletIdentity, walletPayer, walletSigner, walletWithoutSigner } from '../src';
+import { createMockAccount, createMockUiWallet, createSignerMock, mockSigner, registerWallet } from './_setup';
 
 describe.skipIf(!__BROWSER__)('walletWithoutSigner plugin (browser)', () => {
     it('adds wallet namespace to client', () => {
@@ -112,6 +112,128 @@ describe.skipIf(!__BROWSER__)('walletSigner plugin (browser)', () => {
         const client = createClient().use(walletSigner({ chain: 'solana:mainnet', storage: null }));
         expect(() => client.payer).toThrow('No signing wallet connected');
         expect(() => client.identity).toThrow('No signing wallet connected');
+    });
+});
+
+describe.skipIf(!__BROWSER__)('subscribeToPayer / subscribeToIdentity filtering', () => {
+    it('subscribeToPayer fires only when the signer identity changes', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            features: ['standard:connect', 'standard:disconnect', 'standard:events'],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        const client = createClient().use(walletPayer({ chain: 'solana:mainnet', storage: null }));
+        const listener = vi.fn();
+        client.subscribeToPayer(listener);
+
+        // Wallet discovery (registering a second wallet) must not trigger.
+        registerWallet(createMockUiWallet({ name: 'OtherWallet' }));
+        expect(listener).not.toHaveBeenCalled();
+
+        // Connect flips signer from null → mockSigner.
+        await client.wallet.connect(mockWallet);
+        expect(listener).toHaveBeenCalledTimes(1);
+
+        // Disconnect flips signer from mockSigner → null.
+        await client.wallet.disconnect();
+        expect(listener).toHaveBeenCalledTimes(2);
+    });
+
+    it('subscribeToIdentity fires only when the signer identity changes', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            features: ['standard:connect', 'standard:disconnect', 'standard:events'],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        const client = createClient().use(walletIdentity({ chain: 'solana:mainnet', storage: null }));
+        const listener = vi.fn();
+        client.subscribeToIdentity(listener);
+
+        registerWallet(createMockUiWallet({ name: 'OtherWallet' }));
+        expect(listener).not.toHaveBeenCalled();
+
+        await client.wallet.connect(mockWallet);
+        expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it('walletSigner fires both subscriptions on signer change', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            features: ['standard:connect', 'standard:events'],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        const client = createClient().use(walletSigner({ chain: 'solana:mainnet', storage: null }));
+        const payerListener = vi.fn();
+        const identityListener = vi.fn();
+        client.subscribeToPayer(payerListener);
+        client.subscribeToIdentity(identityListener);
+
+        await client.wallet.connect(mockWallet);
+
+        expect(payerListener).toHaveBeenCalledTimes(1);
+        expect(identityListener).toHaveBeenCalledTimes(1);
+    });
+
+    it('walletSigner fires both subscriptions on selectAccount', async () => {
+        const account1 = createMockAccount();
+        const account2 = createMockAccount('Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ');
+        const mockWallet = createMockUiWallet({
+            accounts: [account1, account2],
+            features: ['standard:connect', 'standard:events'],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        // Return a distinct signer reference per account so the subscription
+        // filter (which compares signer identity) observes a real change.
+        const signer1 = { ...mockSigner, address: account1.address };
+        const signer2 = { ...mockSigner, address: account2.address };
+        createSignerMock.mockImplementation((account: unknown) =>
+            (account as { address: string }).address === account2.address ? signer2 : signer1,
+        );
+
+        const client = createClient().use(walletSigner({ chain: 'solana:mainnet', storage: null }));
+        await client.wallet.connect(mockWallet);
+
+        const payerListener = vi.fn();
+        const identityListener = vi.fn();
+        client.subscribeToPayer(payerListener);
+        client.subscribeToIdentity(identityListener);
+
+        client.wallet.selectAccount(account2);
+
+        expect(payerListener).toHaveBeenCalledTimes(1);
+        expect(identityListener).toHaveBeenCalledTimes(1);
+    });
+
+    it('unsubscribe stops further notifications', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            features: ['standard:connect', 'standard:disconnect', 'standard:events'],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        const client = createClient().use(walletPayer({ chain: 'solana:mainnet', storage: null }));
+        const listener = vi.fn();
+        const unsubscribe = client.subscribeToPayer(listener);
+
+        await client.wallet.connect(mockWallet);
+        expect(listener).toHaveBeenCalledTimes(1);
+
+        unsubscribe();
+        await client.wallet.disconnect();
+        expect(listener).toHaveBeenCalledTimes(1);
     });
 });
 
