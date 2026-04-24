@@ -5,10 +5,35 @@ import { type ReactNode, useMemo } from 'react';
 
 import { useClientCapability } from '../client-capability';
 import { ChainContext, type ChainIdentifier } from '../client-context';
-import { PluginProvider } from './plugin-provider';
+import { type AnyPlugin, PluginProvider } from './plugin-provider';
 
 const PAYER_HINT =
     'Mount a <WalletProvider>, <PayerProvider>, or <SignerProvider> above it, or switch to <RpcConnectionProvider> if you are not sending transactions.';
+
+/**
+ * Memoizes a single-plugin array keyed on every `SolanaRpcConfig` field, so
+ * the four providers below share one canonical dep list instead of each
+ * hand-spelling the same seven keys.
+ *
+ * @internal
+ */
+function useRpcConfigPlugin(build: () => AnyPlugin, config: Partial<SolanaRpcConfig<string>>): readonly AnyPlugin[] {
+    // `build` closes over `config`, which is the only churn source the
+    // providers care about — the explicit key list below tracks it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return useMemo(
+        () => [build()],
+        [
+            config.rpcUrl,
+            config.rpcSubscriptionsUrl,
+            config.maxConcurrency,
+            config.rpcConfig,
+            config.rpcSubscriptionsConfig,
+            config.skipPreflight,
+            config.transactionConfig,
+        ],
+    );
+}
 
 /**
  * Props for {@link RpcProvider}. Extends `SolanaRpcConfig` from
@@ -62,18 +87,7 @@ export function RpcProvider({ chain, children, ...config }: RpcProviderProps) {
         hookName: '<RpcProvider>',
         providerHint: PAYER_HINT,
     });
-    const plugins = useMemo(
-        () => [solanaRpc(config as SolanaRpcConfig<ClusterUrl>)],
-        [
-            config.rpcUrl,
-            config.rpcSubscriptionsUrl,
-            config.maxConcurrency,
-            config.rpcConfig,
-            config.rpcSubscriptionsConfig,
-            config.skipPreflight,
-            config.transactionConfig,
-        ],
-    );
+    const plugins = useRpcConfigPlugin(() => solanaRpc(config as SolanaRpcConfig<ClusterUrl>), config);
     const tree = <PluginProvider plugins={plugins}>{children}</PluginProvider>;
     return chain ? <ChainContext.Provider value={chain}>{tree}</ChainContext.Provider> : tree;
 }
@@ -119,18 +133,7 @@ export function SolanaMainnetRpcProvider({ children, ...config }: SolanaMainnetR
         hookName: '<SolanaMainnetRpcProvider>',
         providerHint: PAYER_HINT,
     });
-    const plugins = useMemo(
-        () => [solanaMainnetRpc(config)],
-        [
-            config.rpcUrl,
-            config.rpcSubscriptionsUrl,
-            config.maxConcurrency,
-            config.rpcConfig,
-            config.rpcSubscriptionsConfig,
-            config.skipPreflight,
-            config.transactionConfig,
-        ],
-    );
+    const plugins = useRpcConfigPlugin(() => solanaMainnetRpc(config), config);
     return (
         <ChainContext.Provider value="solana:mainnet">
             <PluginProvider plugins={plugins}>{children}</PluginProvider>
@@ -178,18 +181,7 @@ export function SolanaDevnetRpcProvider({ children, ...config }: SolanaDevnetRpc
         hookName: '<SolanaDevnetRpcProvider>',
         providerHint: PAYER_HINT,
     });
-    const plugins = useMemo(
-        () => [solanaDevnetRpc(config)],
-        [
-            config.rpcUrl,
-            config.rpcSubscriptionsUrl,
-            config.maxConcurrency,
-            config.rpcConfig,
-            config.rpcSubscriptionsConfig,
-            config.skipPreflight,
-            config.transactionConfig,
-        ],
-    );
+    const plugins = useRpcConfigPlugin(() => solanaDevnetRpc(config), config);
     return (
         <ChainContext.Provider value="solana:devnet">
             <PluginProvider plugins={plugins}>{children}</PluginProvider>
@@ -249,18 +241,7 @@ export function SolanaLocalRpcProvider({ chain, children, ...config }: SolanaLoc
         hookName: '<SolanaLocalRpcProvider>',
         providerHint: PAYER_HINT,
     });
-    const plugins = useMemo(
-        () => [solanaLocalRpc(config)],
-        [
-            config.rpcUrl,
-            config.rpcSubscriptionsUrl,
-            config.maxConcurrency,
-            config.rpcConfig,
-            config.rpcSubscriptionsConfig,
-            config.skipPreflight,
-            config.transactionConfig,
-        ],
-    );
+    const plugins = useRpcConfigPlugin(() => solanaLocalRpc(config), config);
     const tree = <PluginProvider plugins={plugins}>{children}</PluginProvider>;
     return chain ? <ChainContext.Provider value={chain}>{tree}</ChainContext.Provider> : tree;
 }
