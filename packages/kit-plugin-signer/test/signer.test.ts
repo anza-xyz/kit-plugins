@@ -31,3 +31,35 @@ describe('identity', () => {
         expect(client.identity).toBe(mySigner);
     });
 });
+
+describe('override behavior', () => {
+    it('allows payer() to override a payer previously set by signer()', async () => {
+        const userSigner = await generateKeyPairSigner();
+        const feePayer = await generateKeyPairSigner();
+
+        const client = createClient().use(signer(userSigner)).use(payer(feePayer));
+
+        expect(client.identity).toBe(userSigner);
+        expect(client.payer).toBe(feePayer);
+    });
+
+    it('allows identity() to override an identity previously set by signer()', async () => {
+        const originalSigner = await generateKeyPairSigner();
+        const newIdentity = await generateKeyPairSigner();
+
+        const client = createClient().use(signer(originalSigner)).use(identity(newIdentity));
+
+        expect(client.payer).toBe(originalSigner);
+        expect(client.identity).toBe(newIdentity);
+    });
+
+    it('allows signer() to override both fields set by an earlier signer()', async () => {
+        const originalSigner = await generateKeyPairSigner();
+        const replacementSigner = await generateKeyPairSigner();
+
+        const client = createClient().use(signer(originalSigner)).use(signer(replacementSigner));
+
+        expect(client.payer).toBe(replacementSigner);
+        expect(client.identity).toBe(replacementSigner);
+    });
+});
