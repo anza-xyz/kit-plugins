@@ -89,7 +89,7 @@ export function useTransactionConfirmation(
     const client = useClientCapability<ConfirmationClient>({
         capability: ['rpc', 'rpcSubscriptions'],
         hookName: 'useTransactionConfirmation',
-        providerHint: 'Mount <RpcProvider> or <RpcConnectionProvider>.',
+        providerHint: 'Install `solanaRpc()` or `solanaRpcConnection()` on the client.',
     });
     const commitment = options?.commitment ?? 'confirmed';
     return useLiveData(

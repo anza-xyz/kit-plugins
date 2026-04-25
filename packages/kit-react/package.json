@@ -1,7 +1,7 @@
 {
     "name": "@solana/kit-react",
     "version": "0.1.0",
-    "description": "React bindings for Kit: providers, signer hooks, and live on-chain data hooks",
+    "description": "React bindings for Kit: a client-first provider plus live on-chain data, RPC, and transaction hooks",
     "exports": {
         "types": "./dist/types/index.d.ts",
         "react-native": "./dist/index.react-native.mjs",
@@ -46,29 +46,12 @@
     },
     "peerDependencies": {
         "@solana/kit": "^6.8.0",
-        "@solana/kit-plugin-litesvm": "workspace:*",
-        "@solana/kit-plugin-rpc": "workspace:*",
-        "@solana/kit-plugin-signer": "workspace:*",
         "react": "^18.0.0 || ^19.0.0"
-    },
-    "peerDependenciesMeta": {
-        "@solana/kit-plugin-litesvm": {
-            "optional": true
-        },
-        "@solana/kit-plugin-rpc": {
-            "optional": true
-        },
-        "@solana/kit-plugin-signer": {
-            "optional": true
-        }
     },
     "dependencies": {
         "@solana/subscribable": "^6.8.0"
     },
     "devDependencies": {
-        "@solana/kit-plugin-litesvm": "workspace:*",
-        "@solana/kit-plugin-rpc": "workspace:*",
-        "@solana/kit-plugin-signer": "workspace:*",
         "@testing-library/react": "^16.1.0",
         "@types/react": "^19.0.0",
         "@types/react-dom": "^19.0.0",

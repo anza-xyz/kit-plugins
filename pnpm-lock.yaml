@@ -248,15 +248,6 @@ importers:
         specifier: ^6.8.0
         version: 6.8.0(typescript@5.9.3)
     devDependencies:
-      '@solana/kit-plugin-litesvm':
-        specifier: workspace:*
-        version: link:../kit-plugin-litesvm
-      '@solana/kit-plugin-rpc':
-        specifier: workspace:*
-        version: link:../kit-plugin-rpc
-      '@solana/kit-plugin-signer':
-        specifier: workspace:*
-        version: link:../kit-plugin-signer
       '@testing-library/react':
         specifier: ^16.1.0
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)

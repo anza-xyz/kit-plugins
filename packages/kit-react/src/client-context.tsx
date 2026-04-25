@@ -1,8 +1,7 @@
 import type { Client } from '@solana/kit';
-import { createClient } from '@solana/kit';
-import { createContext, type ReactNode, useContext, useMemo } from 'react';
+import { createContext, type ReactNode, useContext } from 'react';
 
-import { useDisposeOnUnmount } from './internal/dispose';
+import { usePromise } from './internal/use-promise';
 
 /**
  * Known Solana chain identifiers following the wallet-standard / CAIP-2
@@ -20,20 +19,18 @@ export type SolanaChain = 'solana:mainnet' | 'solana:devnet' | 'solana:testnet';
 type ChainIdentifierString = `${string}:${string}`;
 
 /**
- * Chain identifier accepted by {@link ChainProvider} and the
- * chain-specific RPC providers. Solana literals autocomplete; the
- * intersection with `ChainIdentifierString & {}` preserves those literals
- * while still accepting any `${string}:${string}` identifier for custom
- * or non-Solana chains.
+ * Chain identifier accepted by {@link KitClientProvider}. Solana literals
+ * autocomplete; the intersection with `ChainIdentifierString & {}`
+ * preserves those literals while still accepting any `${string}:${string}`
+ * identifier for custom or non-Solana chains.
  */
 export type ChainIdentifier = SolanaChain | (ChainIdentifierString & {});
 
 /**
  * React context carrying the Kit client.
  *
- * Exposed so that third-party providers can compose on top of an existing
- * context. Most consumers should reach for {@link useClient} or a named
- * hook instead.
+ * Exposed so advanced consumers can compose on top of an existing context.
+ * Most callers should reach for {@link useClient} or a named hook instead.
  *
  * @see {@link useClient}
  */
@@ -44,8 +41,6 @@ ClientContext.displayName = 'KitClientContext';
  * React context carrying the chain identifier configured on the nearest
  * {@link KitClientProvider}.
  *
- * Consumers should prefer {@link useChain}.
- *
  * @see {@link useChain}
  */
 export const ChainContext = createContext<ChainIdentifier | null>(null);
@@ -55,91 +50,75 @@ ChainContext.displayName = 'KitChainContext';
  * Props for {@link KitClientProvider}.
  */
 export type KitClientProviderProps = Readonly<{
-    children?: ReactNode;
     /**
-     * Optional pre-built Kit client. When omitted, a fresh `createClient()`
-     * is used and disposed on unmount. When provided, the caller owns
-     * disposal — the provider does not call `Symbol.dispose`.
+     * A Kit client, or a promise resolving to one. When a promise is
+     * passed, the provider suspends via the nearest `<Suspense>` boundary
+     * until it resolves (React 19's `use(promise)` on 19, a thrown-promise
+     * shim on 18). The promise must be stable across renders — wrap it in
+     * `useMemo` or hoist it to module scope.
      */
-    client?: Client<object>;
+    client: Client<object> | Promise<Client<object>>;
+    /**
+     * Optional chain identifier to publish to the subtree. Wallet-aware
+     * descendants read it via {@link useChain}.
+     */
+    chain?: ChainIdentifier;
+    children?: ReactNode;
 }>;
 
 /**
  * Root provider for `@solana/kit-react`.
  *
- * Seeds a Kit client into context. Every hook in this library requires a
- * {@link KitClientProvider} ancestor.
+ * Publishes a caller-owned Kit client to the subtree. Every hook in this
+ * library requires a {@link KitClientProvider} ancestor. The client is
+ * built outside React via `createClient().use(...)`; pass the result (or a
+ * `Promise` of one when any installed plugin is async) as the `client`
+ * prop. The provider itself does no composition, lifecycle management, or
+ * disposal — that all belongs to the caller.
  *
- * Chain is a separate concern, published by chain-specific RPC providers
- * (e.g. {@link SolanaMainnetRpcProvider}), wallet providers, or — when
- * neither applies — an explicit {@link ChainProvider}. Wallet-aware code
- * reads it via {@link useChain}, which throws if no ancestor has set it.
+ * When `client` is a promise, the provider suspends until it resolves, so
+ * a `<Suspense>` boundary must be mounted above.
  *
- * @param props - Optional pre-built client and children.
+ * @param props - The Kit client (sync or async), optional chain, and children.
  * @return A React element that publishes the Kit client to its subtree.
  *
  * @example
  * ```tsx
- * <KitClientProvider>
- *     <SolanaMainnetRpcProvider rpcUrl="https://api.mainnet-beta.solana.com">
- *         <App />
- *     </SolanaMainnetRpcProvider>
- * </KitClientProvider>
+ * import { createClient } from '@solana/kit';
+ * import { solanaMainnetRpc } from '@solana/kit-plugin-rpc';
+ * import { walletSigner } from '@solana/kit-plugin-wallet';
+ * import { KitClientProvider } from '@solana/kit-react';
+ *
+ * const client = createClient()
+ *     .use(walletSigner({ chain: 'solana:mainnet' }))
+ *     .use(solanaMainnetRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
+ *
+ * export function App() {
+ *     return (
+ *         <KitClientProvider client={client} chain="solana:mainnet">
+ *             <Shell />
+ *         </KitClientProvider>
+ *     );
+ * }
  * ```
  *
  * @see {@link useClient}
- * @see {@link ChainProvider}
  * @see {@link useChain}
  */
-export function KitClientProvider({ children, client: providedClient }: KitClientProviderProps) {
-    const ownedClient = useMemo(() => {
-        if (providedClient) return null;
-        return createClient();
-    }, [providedClient]);
-    const client = providedClient ?? ownedClient;
-    useDisposeOnUnmount(client ?? {}, ownedClient != null);
-    // `client` is always defined at this point — `ownedClient` is created
-    // in the `useMemo` whenever `providedClient` is null.
-    return <ClientContext.Provider value={client}>{children}</ClientContext.Provider>;
+export function KitClientProvider({ chain, children, client }: KitClientProviderProps) {
+    const resolved = isPromiseLike(client) ? usePromise(client) : client;
+    const tree = <ClientContext.Provider value={resolved}>{children}</ClientContext.Provider>;
+    return chain ? <ChainContext.Provider value={chain}>{tree}</ChainContext.Provider> : tree;
 }
 
-/**
- * Props for {@link ChainProvider}.
- */
-export type ChainProviderProps = Readonly<{
-    /** The chain identifier to publish to the subtree. */
-    chain: ChainIdentifier;
-    children?: ReactNode;
-}>;
-
-/**
- * Publishes a chain identifier to the subtree.
- *
- * Most apps never need this directly. Chain-specific RPC providers such
- * as {@link SolanaMainnetRpcProvider} publish their cluster implicitly,
- * and wallet providers publish the connected wallet's chain. Mount
- * `ChainProvider` only when you need to declare a chain without either —
- * e.g. a custom RPC URL for a fork that wallets should still treat as
- * mainnet, or a read-only app that wants chain metadata for UI.
- *
- * When mounted, `ChainProvider` overrides any chain set by an ancestor.
- *
- * @param props - The chain identifier and children.
- * @return A React element that publishes the chain to its subtree.
- *
- * @example
- * ```tsx
- * <ChainProvider chain="solana:mainnet">
- *     <RpcConnectionProvider rpcUrl="https://my-fork.example.com">
- *         <App />
- *     </RpcConnectionProvider>
- * </ChainProvider>
- * ```
- *
- * @see {@link useChain}
- */
-export function ChainProvider({ chain, children }: ChainProviderProps) {
-    return <ChainContext.Provider value={chain}>{children}</ChainContext.Provider>;
+function isPromiseLike<T>(value: T | Promise<T>): value is Promise<T> {
+    if (value instanceof Promise) return true;
+    // Handle realm-crossing promises (a `Promise` instantiated in a different
+    // global, e.g. an iframe or a test runner that swaps globalThis) by
+    // duck-typing the `.then` method as a fallback. A plain Kit client is an
+    // object built via `extendClient`, which never installs `then`, so this
+    // is unambiguous in practice.
+    return typeof (value as { then?: unknown }).then === 'function';
 }
 
 /**
@@ -173,17 +152,15 @@ export function useClient<TClient extends object = object>(): Client<TClient> {
 /**
  * Reads the chain identifier from context.
  *
- * Chain is published by chain-specific providers such as
- * `<SolanaMainnetRpcProvider>`, by wallet providers, or by an explicit
- * {@link ChainProvider}. If nothing has published a chain, this throws —
- * reaching for chain outside wallet-aware code is a programmer error,
- * not a runtime branch.
+ * The chain is published by the nearest {@link KitClientProvider} via its
+ * `chain` prop. Wallet-aware code reaches for this; plain read paths that
+ * don't care about cluster can ignore it.
  *
  * @typeParam T - Widen the return type when your provider is configured
  *                with a custom chain identifier. Defaults to the narrow
  *                {@link SolanaChain} union so callers get autocomplete.
- * @return The chain identifier published by the nearest provider.
- * @throws An `Error` if no chain has been published by any ancestor.
+ * @return The chain identifier published by {@link KitClientProvider}.
+ * @throws An `Error` if no chain has been published.
  *
  * @example
  * ```tsx
@@ -194,9 +171,7 @@ export function useClient<TClient extends object = object>(): Client<TClient> {
 export function useChain<T extends ChainIdentifierString = SolanaChain>(): T {
     const chain = useContext(ChainContext);
     if (chain === null) {
-        throw new Error(
-            'useChain() requires a chain to be set. Mount a chain-specific provider such as <SolanaMainnetRpcProvider>, a wallet provider, or <ChainProvider>.',
-        );
+        throw new Error('useChain() requires a chain to be set via the `chain` prop on <KitClientProvider>.');
     }
     return chain as T;
 }

@@ -38,7 +38,7 @@ export function useSendTransaction(): ActionResult<SendTransactionArgs, SendTran
         capability: 'sendTransaction',
         hookName: 'useSendTransaction',
         providerHint:
-            'Mount <RpcProvider> or <LiteSvmProvider> (or another provider that installs transaction execution).',
+            'Install `solanaRpc()` or `litesvm()` on the client (or another plugin that installs transaction execution).',
     });
     return useAction(
         (signal, input, config) => client.sendTransaction(input, { ...config, abortSignal: signal }),
@@ -72,7 +72,7 @@ export function useSendTransactions(): ActionResult<SendTransactionsArgs, SendTr
     const client = useClientCapability<ClientWithTransactionSending>({
         capability: 'sendTransactions',
         hookName: 'useSendTransactions',
-        providerHint: 'Mount <RpcProvider> or <LiteSvmProvider>.',
+        providerHint: 'Install `solanaRpc()` or `litesvm()` on the client.',
     });
     return useAction(
         (signal, input, config) => client.sendTransactions(input, { ...config, abortSignal: signal }),

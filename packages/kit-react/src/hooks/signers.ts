@@ -1,8 +1,26 @@
 import type { TransactionSigner } from '@solana/kit';
-import type { ClientWithSubscribeToIdentity, ClientWithSubscribeToPayer } from '@solana/kit-plugin-signer';
 import { useSyncExternalStore } from 'react';
 
 import { useClientCapability } from '../client-capability';
+
+/**
+ * Duck-type a reactive payer publisher. Plugins (e.g. wallet plugins) that
+ * reassign `client.payer` over time install a sibling `subscribeToPayer`
+ * so wallet-agnostic hooks can stay in sync without naming the producing
+ * plugin. Structural-only; kept local so `kit-react` does not require a
+ * runtime dep on any specific plugin.
+ */
+type ClientWithSubscribeToPayer = {
+    readonly subscribeToPayer: (listener: () => void) => () => void;
+};
+
+/**
+ * Duck-type a reactive identity publisher. See {@link ClientWithSubscribeToPayer}
+ * for the rationale.
+ */
+type ClientWithSubscribeToIdentity = {
+    readonly subscribeToIdentity: (listener: () => void) => () => void;
+};
 
 const NOOP_SUBSCRIBE: (listener: () => void) => () => void = () => () => {};
 
@@ -28,9 +46,9 @@ function readOptional<T>(read: () => T): NonNullable<T> | null {
  * available (e.g. wallet not yet connected).
  *
  * Re-renders reactively when the installing plugin advertises the
- * `subscribeToPayer` convention. Static plugins like
- * {@link PayerProvider} / {@link SignerProvider} install a fixed signer;
- * this hook simply returns it.
+ * `subscribeToPayer` convention (wallet plugins do this). Static plugins
+ * such as `payer()` or `signer()` from `@solana/kit-plugin-signer`
+ * install a fixed signer; this hook simply returns it.
  *
  * @return The current `TransactionSigner` on `client.payer`, or `null`
  *         when unavailable.
@@ -51,7 +69,7 @@ export function usePayer(): TransactionSigner | null {
     const client = useClientCapability<Partial<ClientWithSubscribeToPayer> & { payer: TransactionSigner }>({
         capability: 'payer',
         hookName: 'usePayer',
-        providerHint: 'Mount a <PayerProvider>, <SignerProvider>, or a wallet provider that installs a payer.',
+        providerHint: 'Install `payer()`, `signer()`, or a wallet plugin (e.g. `walletSigner()`) on the client.',
     });
     const subscribe = client.subscribeToPayer ?? NOOP_SUBSCRIBE;
     const getSnapshot = () => readOptional(() => client.payer);
@@ -64,9 +82,10 @@ export function usePayer(): TransactionSigner | null {
  * available (e.g. wallet not yet connected).
  *
  * Re-renders reactively when the installing plugin advertises the
- * `subscribeToIdentity` convention. Static plugins like
- * {@link IdentityProvider} / {@link SignerProvider} install a fixed
- * signer; this hook simply returns it.
+ * `subscribeToIdentity` convention (wallet plugins do this). Static
+ * plugins such as `identity()` or `signer()` from
+ * `@solana/kit-plugin-signer` install a fixed signer; this hook simply
+ * returns it.
  *
  * @return The current `TransactionSigner` on `client.identity`, or `null`
  *         when unavailable.
@@ -87,7 +106,7 @@ export function useIdentity(): TransactionSigner | null {
     const client = useClientCapability<Partial<ClientWithSubscribeToIdentity> & { identity: TransactionSigner }>({
         capability: 'identity',
         hookName: 'useIdentity',
-        providerHint: 'Mount an <IdentityProvider>, <SignerProvider>, or a wallet provider that installs an identity.',
+        providerHint: 'Install `identity()`, `signer()`, or a wallet plugin (e.g. `walletSigner()`) on the client.',
     });
     const subscribe = client.subscribeToIdentity ?? NOOP_SUBSCRIBE;
     const getSnapshot = () => readOptional(() => client.identity);

@@ -1,9 +1,9 @@
-import type { ClientPlugin } from '@solana/kit';
-import { extendClient } from '@solana/kit';
+import type { Client, ClientPlugin } from '@solana/kit';
+import { createClient, extendClient } from '@solana/kit';
 import type { ReactNode } from 'react';
+import { useMemo } from 'react';
 
 import { KitClientProvider } from '../src/client-context';
-import { PluginProvider } from '../src/providers/plugin-provider';
 
 /**
  * Build a `ClientPlugin` that extends the client with the given properties.
@@ -15,18 +15,21 @@ export function mockPlugin<T extends object>(extensions: T): ClientPlugin<object
 }
 
 /**
- * Wrap children in a `KitClientProvider` plus (optionally) a
- * `PluginProvider` installing the supplied extensions. Call sites in tests
- * can pass the extensions inline instead of constructing a full plugin
- * chain.
+ * Wrap children in a `KitClientProvider` whose client has the supplied
+ * extensions installed. Each call to {@link Providers} builds a fresh
+ * client, memoized across re-renders of the same wrapper instance so hooks
+ * that close over `client` identity stay stable.
  */
 export function Providers({ children, extensions }: { children: ReactNode; extensions?: Record<string, unknown> }) {
-    const inner = extensions ? (
-        <PluginProvider plugins={[mockPlugin(extensions)]}>{children}</PluginProvider>
-    ) : (
-        children
+    const client = useMemo<Client<object>>(
+        () => (extensions ? createClient().use(mockPlugin(extensions)) : createClient()),
+        // The test callers either pass a stable reference or explicitly
+        // want a fresh client per wrapper mount; either way the memo
+        // dependency is the raw extensions reference.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [extensions],
     );
-    return <KitClientProvider>{inner}</KitClientProvider>;
+    return <KitClientProvider client={client}>{children}</KitClientProvider>;
 }
 
 /**

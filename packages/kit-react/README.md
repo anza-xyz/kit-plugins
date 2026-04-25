@@ -1,11 +1,12 @@
 # `@solana/kit-react`
 
-React bindings for [Solana Kit](https://github.com/anza-xyz/kit). Providers compose a Kit client for the subtree; hooks expose live on-chain data, one-shot RPC reads, and transaction-sending flows through the same `{ data, error, status, ... }` vocabulary consumers already expect from `react-query` or `swr`.
+React bindings for [Solana Kit](https://github.com/anza-xyz/kit). You build a Kit client with `.use()` the way you already do, hand it to a single provider, and pick up hooks that expose live on-chain data, one-shot RPC reads, and transaction-sending flows through the same `{ data, error, status, ... }` vocabulary consumers already expect from `react-query` or `swr`.
 
 The library is a thin bridge over Kit's reactive primitives — it does not reimplement state machines, fetch policies, or abort semantics. Every lifecycle concern (retry, supersede, stale-while-revalidate, slot dedup) lives in Kit and surfaces through `useSyncExternalStore`.
 
-- **Composable providers.** Nest providers to build the Kit plugin chain — each maps to a Kit plugin, nesting order is plugin order.
+- **Client-first.** Compose your Kit client with `createClient().use(...)` outside React; `KitClientProvider` distributes it to the subtree. Any Kit plugin works without a React wrapper.
 - **Subscription-backed live data.** Reactive hooks combine an RPC fetch with a matching subscription and dedupe by slot — no polling, no stale-data flicker.
+- **Async-ready.** Pass a `Promise<Client>` to handle async plugins; the provider suspends via `<Suspense>` using React 19's `use(promise)` (or a built-in shim on React 18).
 - **Cache-library agnostic.** Core hooks work on their own; follow-up packages will bridge into SWR and TanStack Query for apps that want shared caches.
 - **Headless.** No UI. Wallet pickers, modals, and connect buttons belong in higher-level libraries.
 - **SSR-safe.** Every hook returns a hydration-stable "not yet available" snapshot during server render; the live store kicks in on the client.
@@ -15,7 +16,9 @@ The library is a thin bridge over Kit's reactive primitives — it does not reim
 - [Installation](#installation)
     - [ESLint — `react-hooks/exhaustive-deps`](#eslint--react-hooksexhaustive-deps)
 - [Quick start](#quick-start)
-- [Providers](#providers)
+- [`KitClientProvider`](#kitclientprovider)
+    - [Dynamic clients](#dynamic-clients)
+    - [Async plugins (Suspense)](#async-plugins-suspense)
 - [Hooks](#hooks)
     - [One-shot reads](#one-shot-reads)
     - [Subscriptions](#subscriptions)
@@ -32,12 +35,13 @@ The library is a thin bridge over Kit's reactive primitives — it does not reim
 pnpm add @solana/kit-react @solana/kit react
 ```
 
-Optional peers — install only the ones whose providers you mount:
+Install whichever Kit plugins your client needs as regular direct dependencies:
 
 ```shell
-pnpm add @solana/kit-plugin-rpc      # RpcProvider, RpcConnectionProvider, SolanaMainnetRpcProvider, SolanaDevnetRpcProvider, SolanaLocalRpcProvider
-pnpm add @solana/kit-plugin-litesvm  # LiteSvmProvider
-pnpm add @solana/kit-plugin-signer   # PayerProvider, IdentityProvider, SignerProvider
+pnpm add @solana/kit-plugin-rpc        # client.rpc / client.rpcSubscriptions / transaction sending
+pnpm add @solana/kit-plugin-wallet     # wallet discovery + connection (browser wallets)
+pnpm add @solana/kit-plugin-signer     # static payer / identity / signer (relayers, test keypairs)
+pnpm add @solana/kit-plugin-litesvm    # in-process SVM for tests / local dev
 ```
 
 The library targets React 18 and 19, and ships Node, browser, and React Native bundles.
@@ -59,11 +63,17 @@ The library targets React 18 and 19, and ships Node, browser, and React Native b
 
 ## Quick start
 
-A read-only dashboard — just an RPC connection, no wallet or payer:
+A wallet-enabled mainnet dApp — build the client once at module scope, hand it to the provider:
 
 ```tsx
-import { address } from '@solana/kit';
-import { KitClientProvider, RpcConnectionProvider, useBalance } from '@solana/kit-react';
+import { createClient } from '@solana/kit';
+import { solanaMainnetRpc } from '@solana/kit-plugin-rpc';
+import { walletSigner } from '@solana/kit-plugin-wallet';
+import { KitClientProvider, useBalance } from '@solana/kit-react';
+
+const client = createClient()
+    .use(walletSigner({ chain: 'solana:mainnet' }))
+    .use(solanaMainnetRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
 
 function BalanceCard({ owner }: { owner: Address }) {
     const { data, status, error, retry } = useBalance(owner);
@@ -74,150 +84,137 @@ function BalanceCard({ owner }: { owner: Address }) {
 
 export function App() {
     return (
-        <KitClientProvider>
-            <RpcConnectionProvider rpcUrl="https://api.mainnet-beta.solana.com">
-                <BalanceCard owner={address('FnHyam9w4NZoWR6mKN1CuGBritdsEWZQa4Z4oawLZGxa')} />
-            </RpcConnectionProvider>
+        <KitClientProvider client={client} chain="solana:mainnet">
+            <BalanceCard owner={address('FnHyam9w4NZoWR6mKN1CuGBritdsEWZQa4Z4oawLZGxa')} />
         </KitClientProvider>
     );
 }
 ```
 
-Sending a transaction — requires a payer and a full RPC provider. Using a chain-specific provider (`SolanaDevnetRpcProvider`) also publishes the chain automatically:
+A read-only dashboard — just an RPC connection, no wallet:
 
 ```tsx
-import { getTransferInstruction } from '@solana-program/system';
-import { KitClientProvider, SignerProvider, SolanaDevnetRpcProvider, useSendTransaction } from '@solana/kit-react';
+import { createClient } from '@solana/kit';
+import { solanaRpcConnection } from '@solana/kit-plugin-rpc';
+import { KitClientProvider } from '@solana/kit-react';
 
-function Transfer({ source, destination, amount }: TransferProps) {
-    const { send, isRunning, data, error, reset } = useSendTransaction();
+const client = createClient().use(solanaRpcConnection({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
+
+export function App() {
     return (
-        <>
-            <button disabled={isRunning} onClick={() => send(getTransferInstruction({ source, destination, amount }))}>
-                {isRunning ? 'Sending…' : 'Send'}
-            </button>
-            {error ? <ErrorBanner error={error} onDismiss={reset} /> : null}
-            {data ? <Confirmation signature={data.context.signature} /> : null}
-        </>
+        <KitClientProvider client={client} chain="solana:mainnet">
+            <Dashboard />
+        </KitClientProvider>
+    );
+}
+```
+
+A relayer flow — static payer with a wallet-backed identity:
+
+```tsx
+import { createClient } from '@solana/kit';
+import { payer } from '@solana/kit-plugin-signer';
+import { solanaMainnetRpc } from '@solana/kit-plugin-rpc';
+import { walletIdentity } from '@solana/kit-plugin-wallet';
+
+const client = createClient()
+    .use(payer(relayerKeypair))
+    .use(walletIdentity({ chain: 'solana:mainnet' }))
+    .use(solanaMainnetRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
+```
+
+## `KitClientProvider`
+
+Root provider. Publishes a caller-owned Kit client to the subtree. Every hook in this library needs one as an ancestor.
+
+```tsx
+<KitClientProvider client={client} chain="solana:mainnet">
+    <App />
+</KitClientProvider>
+```
+
+Props:
+
+- `client` — a Kit client (`Client<object>`) or a promise that resolves to one. When a promise is passed, the provider suspends via the nearest `<Suspense>` boundary until it resolves. The client (or promise) must be stable across renders — build it at module scope or wrap it in `useMemo`.
+- `chain` _(optional)_ — a wallet-standard `ChainIdentifier` (e.g. `"solana:mainnet"`, `"solana:devnet"`, or any `${namespace}:${network}`). `useChain()` reads this from context.
+
+The provider does **not** create, extend, or dispose clients. Composition (`.use(solanaRpc(...))`, `.use(walletSigner(...))`, etc.) happens in plain Kit; the provider distributes the result.
+
+### Disposal
+
+Module-scope clients in long-running SPAs typically don't need explicit disposal — the client lives for the lifetime of the page. But Kit clients implement `Symbol.dispose`, so when you do need cleanup (per-request clients in SSR, integration tests that mount/unmount, dynamic clients you're replacing in `useMemo`), call it after the subtree no longer uses the client:
+
+```tsx
+useEffect(() => {
+    return () => {
+        client[Symbol.dispose]();
+    };
+}, [client]);
+```
+
+This matters most for plugins with subscriptions or storage listeners (e.g. `walletSigner`'s wallet-standard registry handlers, `walletSigner`'s `localStorage` writes). For purely RPC-based clients there's nothing to release.
+
+### Dynamic clients
+
+When a config changes at runtime (chain toggle, RPC URL change, relayer rotation), rebuild the client in `useMemo` and pass the new reference:
+
+```tsx
+function App() {
+    const [chain, setChain] = useState<SolanaChain>('solana:mainnet');
+
+    const client = useMemo(() => {
+        const rpcUrl =
+            chain === 'solana:mainnet' ? 'https://api.mainnet-beta.solana.com' : 'https://api.devnet.solana.com';
+        return createClient().use(walletSigner({ chain })).use(solanaRpc({ rpcUrl })).use(planAndSendTransactions());
+    }, [chain]);
+
+    return (
+        <KitClientProvider client={client} chain={chain}>
+            <ClusterToggle value={chain} onChange={setChain} />
+            <Shell />
+        </KitClientProvider>
+    );
+}
+```
+
+Wallet state is **not** one of these cases. The wallet plugins keep the client identity stable as wallets connect, disconnect, and switch accounts — internal state updates, and `usePayer` / `useIdentity` / any wallet hook subscribes to that state via `useSyncExternalStore`. Don't rebuild the client on wallet events.
+
+### Async plugins (Suspense)
+
+When a plugin's `.use()` returns a promise, the whole `createClient().use(...)` chain returns `Promise<Client>`. Hand it straight to `KitClientProvider` and mount `<Suspense>` above:
+
+```tsx
+import { Suspense, useMemo } from 'react';
+
+function Root() {
+    const clientPromise = useMemo(
+        () =>
+            createClient()
+                .use(
+                    someAsyncPlugin({
+                        /* … */
+                    }),
+                )
+                .use(solanaMainnetRpc({ rpcUrl })),
+        [],
+    );
+    return (
+        <KitClientProvider client={clientPromise} chain="solana:mainnet">
+            <Shell />
+        </KitClientProvider>
     );
 }
 
 export function App() {
     return (
-        <KitClientProvider>
-            <SignerProvider signer={mySigner}>
-                <SolanaDevnetRpcProvider>
-                    <Transfer {...props} />
-                </SolanaDevnetRpcProvider>
-            </SignerProvider>
-        </KitClientProvider>
+        <Suspense fallback={<Splash />}>
+            <Root />
+        </Suspense>
     );
 }
 ```
 
-## Providers
-
-Every hook needs a [`KitClientProvider`](#kitclientprovider) ancestor. Everything else is additive — nesting order is the plugin chain order, and each provider maps to one Kit plugin.
-
-### `KitClientProvider`
-
-Root provider. Seeds a Kit client. Every other provider and hook needs one of these above it.
-
-```tsx
-<KitClientProvider>{children}</KitClientProvider>
-```
-
-Props:
-
-- `client` _(optional)_ — a pre-built Kit client. When provided the provider uses it as-is and the caller owns disposal. When omitted the provider calls `createClient()` and disposes it on unmount.
-
-Chain is handled separately — see [`ChainProvider`](#chainprovider) and the chain-specific RPC providers below. Calling `useChain()` when no ancestor has set a chain throws.
-
-### `ChainProvider`
-
-Publishes a `ChainIdentifier` to the subtree. Most apps never mount this directly — chain-specific RPC providers and wallet providers publish the chain implicitly. Use `ChainProvider` when you need to declare a chain without either, e.g. a custom RPC URL for a fork that wallets should still treat as mainnet.
-
-```tsx
-<ChainProvider chain="solana:mainnet">
-    <RpcConnectionProvider rpcUrl="https://my-fork.example.com">{children}</RpcConnectionProvider>
-</ChainProvider>
-```
-
-`"solana:mainnet"`, `"solana:devnet"`, and `"solana:testnet"` autocomplete; any other wallet-standard `${namespace}:${network}` string is accepted for L2s or non-Solana chains. A `ChainProvider` inside another chain context overrides it.
-
-### `RpcConnectionProvider`
-
-Installs `client.rpc` and `client.rpcSubscriptions`. The lightest provider — no payer required, no transaction sending. Right for explorers, dashboards, watchers, and server scripts.
-
-```tsx
-// subscriptions URL derived by default (rpcUrl with http→ws); override with `rpcSubscriptionsUrl`.
-<RpcConnectionProvider rpcUrl="https://api.mainnet-beta.solana.com" />
-```
-
-### `RpcProvider`
-
-Full transaction-capable stack: RPC, subscriptions, transaction planning, transaction execution. Requires a `client.payer` — mount a `SignerProvider`, `PayerProvider`, or wallet provider above.
-
-```tsx
-<SignerProvider signer={testSigner}>
-    <RpcProvider rpcUrl="https://api.devnet.solana.com" chain="solana:devnet">
-        {children}
-    </RpcProvider>
-</SignerProvider>
-```
-
-Accepts every field from `@solana/kit-plugin-rpc`'s `SolanaRpcConfig` — `rpcUrl`, `rpcSubscriptionsUrl`, `maxConcurrency`, `rpcConfig`, `rpcSubscriptionsConfig`, `skipPreflight`, `transactionConfig` — plus an optional `chain` that, when set, overrides the chain from any ancestor `KitClientProvider`.
-
-### `SolanaMainnetRpcProvider`, `SolanaDevnetRpcProvider`, `SolanaLocalRpcProvider`
-
-Chain-specific variants of `RpcProvider`. Each wraps the corresponding `solanaRpc` bundle plugin and implicitly publishes its cluster identifier via `useChain()` so wallet-aware descendants don't need a chain set at the root. Mainnet narrows the RPC type to `MainnetUrl`; devnet and local default their URLs and install `client.airdrop`.
-
-```tsx
-// No `chain` prop needed on KitClientProvider — the mainnet provider sets it.
-<KitClientProvider>
-    <SignerProvider signer={mySigner}>
-        <SolanaMainnetRpcProvider rpcUrl="https://api.mainnet-beta.solana.com">{children}</SolanaMainnetRpcProvider>
-    </SignerProvider>
-</KitClientProvider>
-```
-
-Mainnet and devnet publish `"solana:mainnet"` / `"solana:devnet"`. Local doesn't publish a chain by default (no canonical CAIP-2 identifier for local validators); pass `chain` explicitly if wallet-aware descendants need it.
-
-### `LiteSvmProvider`
-
-Drop-in replacement for `RpcProvider` in tests and local dev — backed by an in-process LiteSVM instance instead of a remote node. Same capabilities, same requirement for an ancestor payer.
-
-```tsx
-<SignerProvider signer={testSigner}>
-    <LiteSvmProvider>{children}</LiteSvmProvider>
-</SignerProvider>
-```
-
-### `PayerProvider`, `IdentityProvider`, `SignerProvider`
-
-Thin wrappers around `@solana/kit-plugin-signer`. Install a static signer on the client for flows that aren't wallet-backed (relayer, CLI script, test keypair).
-
-```tsx
-<PayerProvider payer={relayerSigner}>{children}</PayerProvider>       // sets client.payer
-<IdentityProvider identity={userSigner}>{children}</IdentityProvider> // sets client.identity
-<SignerProvider signer={signerForBoth}>{children}</SignerProvider>    // sets both (common case)
-```
-
-### `PluginProvider`
-
-Escape hatch — installs an ordered list of Kit plugins in the subtree. Use when a plugin doesn't ship a purpose-built React provider:
-
-```tsx
-import { dasPlugin } from '@my-org/kit-plugin-das';
-import { useMemo } from 'react';
-
-function DasProvider({ endpoint, children }: { endpoint: string; children: ReactNode }) {
-    const plugins = useMemo(() => [dasPlugin({ endpoint })], [endpoint]);
-    return <PluginProvider plugins={plugins}>{children}</PluginProvider>;
-}
-```
-
-The `plugins` array's reference identity drives when the provider rebuilds the client — memoize it, as above, so the subtree only rebuilds when a plugin config meaningfully changes. In development, the provider warns if the array identity churns on every render.
+On React 19 this uses the built-in `React.use(promise)`; on React 18 a tiny thrown-promise shim inside the provider gives the same contract. The promise must be stable across renders — pass a `useMemo`'d or module-scope value, never `new Promise(...)` inline.
 
 ## Hooks
 
@@ -345,9 +342,9 @@ const payer = usePayer(); // TransactionSigner | null
 const identity = useIdentity(); // TransactionSigner | null
 ```
 
-Both return `null` when no signer is currently available (e.g. a wallet-backed payer with no wallet connected). Both throw if no payer/identity plugin is installed at all — that's a mount-time configuration bug, so it surfaces loudly.
+Both return `null` when no signer is currently available (e.g. a wallet-backed payer with no wallet connected). Both throw if no payer/identity plugin is installed on the client at all — that's a mount-time configuration bug, so it surfaces loudly.
 
-These hooks are reactive if the installing plugin is — they re-render whenever the underlying signer changes.
+These hooks are reactive if the installing plugin is — wallet plugins (`walletSigner`, `walletPayer`, `walletIdentity`) publish a `subscribeToPayer` / `subscribeToIdentity` sibling that the hooks subscribe to, so the returned signer tracks connect / disconnect / account switch without any client rebuild. Static plugins (`payer()`, `identity()`, `signer()` from `@solana/kit-plugin-signer`) install a fixed signer; the hook simply returns it.
 
 ### Client access
 
@@ -359,7 +356,7 @@ const client = useClient<ClientWithRpc>(); // caller-declared widening; pure cas
 const chain = useChain(); // ChainIdentifier
 ```
 
-`useClientCapability` is the same pattern with a runtime-checked missing-plugin error. Prefer it over `useClient<T>()` when writing hooks whose users should see an explicit "this hook needs `client.rpc`. Mount `<RpcConnectionProvider>`." message rather than a cryptic call-site crash:
+`useClientCapability` is the same pattern with a runtime-checked missing-plugin error. Prefer it over `useClient<T>()` when writing hooks whose users should see an explicit "this hook needs `client.rpc`. Install `solanaRpc()` on the client." message rather than a cryptic call-site crash:
 
 ```tsx
 import type { ClientWithRpc, GetEpochInfoApi } from '@solana/kit';
@@ -369,7 +366,7 @@ export function useEpochInfo() {
     const client = useClientCapability<ClientWithRpc<GetEpochInfoApi>>({
         capability: 'rpc',
         hookName: 'useEpochInfo',
-        providerHint: 'Mount <RpcProvider> or <RpcConnectionProvider>.',
+        providerHint: 'Install `solanaRpc()` or `solanaRpcConnection()` on the client.',
     });
     return useRequest(() => client.rpc.getEpochInfo(), [client]);
 }

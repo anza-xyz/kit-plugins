@@ -4,11 +4,11 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { KitClientProvider } from '../src/client-context';
+import { Providers } from './helpers';
 import { useAction } from '../src/hooks/use-action';
 
 function wrapper({ children }: { children: React.ReactNode }) {
-    return <KitClientProvider>{children}</KitClientProvider>;
+    return <Providers>{children}</Providers>;
 }
 
 describe('useAction', () => {

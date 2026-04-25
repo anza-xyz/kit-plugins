@@ -17,7 +17,7 @@ describe('useClientCapability', () => {
                 useClientCapability<{ rpc: { send: () => void } }>({
                     capability: 'rpc',
                     hookName: 'useFakeHook',
-                    providerHint: 'Mount <RpcProvider>.',
+                    providerHint: 'Install `solanaRpc()` on the client.',
                 }),
             { wrapper },
         );
@@ -33,11 +33,11 @@ describe('useClientCapability', () => {
                         useClientCapability({
                             capability: 'rpc',
                             hookName: 'useFakeHook',
-                            providerHint: 'Mount <RpcProvider>.',
+                            providerHint: 'Install `solanaRpc()` on the client.',
                         }),
                     { wrapper },
                 ),
-            ).toThrow(/useFakeHook.*client\.rpc.*Mount <RpcProvider>/s);
+            ).toThrow(/useFakeHook.*client\.rpc.*solanaRpc/s);
         });
     });
 

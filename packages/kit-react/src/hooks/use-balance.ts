@@ -59,7 +59,7 @@ export function useBalance(address: Address | null): LiveQueryResult<Lamports> {
     const client = useClientCapability<BalanceClient>({
         capability: ['rpc', 'rpcSubscriptions'],
         hookName: 'useBalance',
-        providerHint: 'Mount <RpcProvider> or <RpcConnectionProvider>.',
+        providerHint: 'Install `solanaRpc()` or `solanaRpcConnection()` on the client.',
     });
     return useLiveData(() => (address ? createBalanceLiveData(client, address) : null), [client, address]);
 }

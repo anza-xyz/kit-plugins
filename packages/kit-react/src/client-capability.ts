@@ -42,7 +42,7 @@ export type UseClientCapabilityOptions = Readonly<{
  *     const client = useClientCapability<ClientWithRpc<GetEpochInfoApi>>({
  *         capability: 'rpc',
  *         hookName: 'useEpochInfo',
- *         providerHint: 'Mount <RpcProvider> or <RpcConnectionProvider>.',
+ *         providerHint: 'Install `solanaRpc()` or `solanaRpcConnection()` on the client.',
  *     });
  *     return useRequest(() => client.rpc.getEpochInfo(), [client]);
  * }

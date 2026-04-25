@@ -34,7 +34,7 @@ export function usePlanTransaction(): ActionResult<PlanTransactionArgs, PlanTran
     const client = useClientCapability<ClientWithTransactionPlanning>({
         capability: 'planTransaction',
         hookName: 'usePlanTransaction',
-        providerHint: 'Mount <RpcProvider> or <LiteSvmProvider>.',
+        providerHint: 'Install `solanaRpc()` or `litesvm()` on the client.',
     });
     return useAction(
         (signal, input, config) => client.planTransaction(input, { ...config, abortSignal: signal }),
@@ -67,7 +67,7 @@ export function usePlanTransactions(): ActionResult<PlanTransactionsArgs, PlanTr
     const client = useClientCapability<ClientWithTransactionPlanning>({
         capability: 'planTransactions',
         hookName: 'usePlanTransactions',
-        providerHint: 'Mount <RpcProvider> or <LiteSvmProvider>.',
+        providerHint: 'Install `solanaRpc()` or `litesvm()` on the client.',
     });
     return useAction(
         (signal, input, config) => client.planTransactions(input, { ...config, abortSignal: signal }),
