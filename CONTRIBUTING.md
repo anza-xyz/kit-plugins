@@ -20,6 +20,7 @@ This is a monorepo managed with [pnpm](https://pnpm.io/) and [Turborepo](https:/
 | [`@solana/kit-plugin-litesvm`](./packages/kit-plugin-litesvm)                   | LiteSVM support plugin.                                        |
 | [`@solana/kit-plugin-instruction-plan`](./packages/kit-plugin-instruction-plan) | Transaction planning and execution plugins.                    |
 | [`@solana/kit-plugin-wallet`](./packages/kit-plugin-wallet)                     | Browser wallet support plugins.                                 |
+| [`@solana/kit-react`](./packages/kit-react)                                     | React bindings for Solana Kit — providers and hooks.            |
 
 The umbrella package (`@solana/kit-plugins`) is deprecated. It re-exports everything from the individual plugin packages via `export *` statements for backward compatibility, but consumers should import from the individual `kit-plugin-*` packages directly.
 

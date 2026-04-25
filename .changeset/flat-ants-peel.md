@@ -1,0 +1,5 @@
+---
+'@solana/kit-react': minor
+---
+
+Add `@solana/kit-react` — React bindings for Kit. A single `KitClientProvider` distributes a caller-built Kit client to the subtree; plugin composition happens in plain Kit via `createClient().use(...)` so any Kit plugin works without a React-specific wrapper. The provider accepts `Client | Promise<Client>`, suspending via the nearest `<Suspense>` boundary when given a promise (`React.use(promise)` on 19, a thrown-promise shim on 18). Ships live-data hooks (`useBalance`, `useAccount`, `useTransactionConfirmation`), generic data hooks (`useLiveData`, `useSubscription`, `useRequest`), action hooks (`useAction`, `useSendTransaction(s)`, `usePlanTransaction(s)`), signer hooks (`usePayer`, `useIdentity`), and the `useClient` / `useChain` / `useClientCapability` escape hatches.
