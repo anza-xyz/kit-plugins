@@ -71,9 +71,12 @@ importers:
       '@solana/kit':
         specifier: ^6.8.0
         version: 6.8.0(typescript@5.9.3)
-      '@solana/kit-client-rpc':
+      '@solana/kit-plugin-rpc':
         specifier: workspace:*
-        version: link:../../packages/kit-client-rpc
+        version: link:../../packages/kit-plugin-rpc
+      '@solana/kit-plugin-signer':
+        specifier: workspace:*
+        version: link:../../packages/kit-plugin-signer
 
   examples/transfer-lamports:
     dependencies:
@@ -83,9 +86,12 @@ importers:
       '@solana/kit':
         specifier: ^6.8.0
         version: 6.8.0(typescript@5.9.3)
-      '@solana/kit-client-rpc':
+      '@solana/kit-plugin-rpc':
         specifier: workspace:*
-        version: link:../../packages/kit-client-rpc
+        version: link:../../packages/kit-plugin-rpc
+      '@solana/kit-plugin-signer':
+        specifier: workspace:*
+        version: link:../../packages/kit-plugin-signer
 
   packages/kit-client-litesvm:
     dependencies:

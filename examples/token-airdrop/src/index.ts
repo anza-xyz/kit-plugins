@@ -1,12 +1,15 @@
 import {
+    createClient,
     flattenTransactionPlanResult,
     generateKeyPairSigner,
     isInstructionWithData,
+    lamports,
     parallelInstructionPlan,
     passthroughFailedTransactionPlanExecution,
     sequentialInstructionPlan,
 } from '@solana/kit';
-import { createLocalClient } from '@solana/kit-client-rpc';
+import { solanaLocalRpc } from '@solana/kit-plugin-rpc';
+import { airdropSigner, generatedSigner } from '@solana/kit-plugin-signer';
 import {
     getSystemErrorMessage,
     isSystemError,
@@ -25,7 +28,10 @@ import {
 // Use `pnpm start --fail` to make the example fail and see error handling
 const shouldFail = process.argv.includes('--fail');
 
-const client = await createLocalClient();
+const client = await createClient()
+    .use(generatedSigner())
+    .use(solanaLocalRpc())
+    .use(airdropSigner(lamports(100_000_000_000n)));
 const { payer } = client;
 
 // Generate 100 random recipient addresses

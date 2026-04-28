@@ -29,7 +29,7 @@ The client must have a `payer` set before applying this plugin.
 ```ts
 import { createClient } from '@solana/kit';
 import { litesvm } from '@solana/kit-plugin-litesvm';
-import { payer } from '@solana/kit-plugin-payer';
+import { payer } from '@solana/kit-plugin-signer';
 
 const client = createClient().use(payer(myPayer)).use(litesvm());
 ```
@@ -142,7 +142,7 @@ import {
     litesvmTransactionPlanner,
     litesvmTransactionPlanExecutor,
 } from '@solana/kit-plugin-litesvm';
-import { generatedPayer } from '@solana/kit-plugin-payer';
+import { generatedPayer } from '@solana/kit-plugin-signer';
 
 const client = await createClient()
     .use(litesvmConnection())
@@ -180,7 +180,7 @@ import {
     litesvmTransactionPlanner,
     litesvmTransactionPlanExecutor,
 } from '@solana/kit-plugin-litesvm';
-import { generatedPayer } from '@solana/kit-plugin-payer';
+import { generatedPayer } from '@solana/kit-plugin-signer';
 
 const client = await createClient()
     .use(litesvmConnection())

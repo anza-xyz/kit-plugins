@@ -26,7 +26,7 @@ The client must have a `payer` set before applying this plugin.
 ```ts
 import { createClient } from '@solana/kit';
 import { solanaRpc } from '@solana/kit-plugin-rpc';
-import { payer } from '@solana/kit-plugin-payer';
+import { payer } from '@solana/kit-plugin-signer';
 
 const client = createClient()
     .use(payer(myPayer))
@@ -63,7 +63,7 @@ A convenience wrapper around `solanaRpc` that types the connection as a mainnet 
 ```ts
 import { createClient } from '@solana/kit';
 import { solanaMainnetRpc } from '@solana/kit-plugin-rpc';
-import { payer } from '@solana/kit-plugin-payer';
+import { payer } from '@solana/kit-plugin-signer';
 
 const client = createClient()
     .use(payer(myPayer))
@@ -83,7 +83,7 @@ A convenience wrapper around `solanaRpc` that defaults to the public devnet endp
 ```ts
 import { createClient } from '@solana/kit';
 import { solanaDevnetRpc } from '@solana/kit-plugin-rpc';
-import { payerFromFile } from '@solana/kit-plugin-payer';
+import { payerFromFile } from '@solana/kit-plugin-signer';
 
 const client = createClient().use(payerFromFile('~/.config/solana/id.json')).use(solanaDevnetRpc());
 ```
@@ -106,7 +106,7 @@ A convenience wrapper around `solanaRpc` that defaults to `http://127.0.0.1:8899
 ```ts
 import { createClient } from '@solana/kit';
 import { solanaLocalRpc } from '@solana/kit-plugin-rpc';
-import { payerFromFile } from '@solana/kit-plugin-payer';
+import { payerFromFile } from '@solana/kit-plugin-signer';
 
 const client = createClient().use(payerFromFile('~/.config/solana/id.json')).use(solanaLocalRpc());
 ```
@@ -231,7 +231,7 @@ The client must have a `payer` set before applying this plugin.
 ```ts
 import { createClient } from '@solana/kit';
 import { solanaRpcConnection, rpcTransactionPlanner, rpcTransactionPlanExecutor } from '@solana/kit-plugin-rpc';
-import { generatedPayer } from '@solana/kit-plugin-payer';
+import { generatedPayer } from '@solana/kit-plugin-signer';
 
 const client = await createClient()
     .use(solanaRpcConnection({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
@@ -265,7 +265,7 @@ This plugin requires `rpc` and `rpcSubscriptions` to be configured on the client
 ```ts
 import { createClient } from '@solana/kit';
 import { solanaRpcConnection, rpcTransactionPlanner, rpcTransactionPlanExecutor } from '@solana/kit-plugin-rpc';
-import { generatedPayer } from '@solana/kit-plugin-payer';
+import { generatedPayer } from '@solana/kit-plugin-signer';
 
 const client = await createClient()
     .use(solanaRpcConnection({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))

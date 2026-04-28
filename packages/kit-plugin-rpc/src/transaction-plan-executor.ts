@@ -39,7 +39,7 @@ const MAX_COMPUTE_UNIT_LIMIT = 1_400_000;
  * ```ts
  * import { createClient } from '@solana/kit';
  * import { solanaRpcConnection, rpcTransactionPlanner, rpcTransactionPlanExecutor } from '@solana/kit-plugin-rpc';
- * import { generatedPayer } from '@solana/kit-plugin-payer';
+ * import { generatedPayer } from '@solana/kit-plugin-signer';
  *
  * const client = await createClient()
  *     .use(solanaRpcConnection({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))

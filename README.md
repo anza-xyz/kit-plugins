@@ -21,13 +21,13 @@ A library for [Solana Kit](https://github.com/anza-xyz/kit) that helps you **bui
 Use the `solanaRpc` bundle plugin to set up a full Solana RPC client with transaction planning and execution.
 
 ```sh
-pnpm install @solana/kit @solana/kit-plugin-rpc @solana/kit-plugin-payer
+pnpm install @solana/kit @solana/kit-plugin-rpc @solana/kit-plugin-signer
 ```
 
 ```ts
 import { createClient } from '@solana/kit';
 import { solanaRpc } from '@solana/kit-plugin-rpc';
-import { payer } from '@solana/kit-plugin-payer';
+import { payer } from '@solana/kit-plugin-signer';
 
 const client = createClient()
     .use(payer(myProductionSigner))
@@ -45,13 +45,13 @@ For mainnet type safety (preventing accidental use of devnet-only features like 
 Use `solanaLocalRpc` which defaults to `http://127.0.0.1:8899` and includes airdrop support.
 
 ```sh
-pnpm install @solana/kit @solana/kit-plugin-rpc @solana/kit-plugin-payer
+pnpm install @solana/kit @solana/kit-plugin-rpc @solana/kit-plugin-signer
 ```
 
 ```ts
 import { createClient } from '@solana/kit';
 import { solanaLocalRpc } from '@solana/kit-plugin-rpc';
-import { payerFromFile } from '@solana/kit-plugin-payer';
+import { payerFromFile } from '@solana/kit-plugin-signer';
 
 const client = createClient().use(payerFromFile('~/.config/solana/id.json')).use(solanaLocalRpc());
 
@@ -67,13 +67,13 @@ For devnet, use `solanaDevnetRpc` which defaults to `https://api.devnet.solana.c
 Use the `litesvm` bundle plugin for fast local blockchain simulation without a network connection.
 
 ```sh
-pnpm install @solana/kit @solana/kit-plugin-litesvm @solana/kit-plugin-payer
+pnpm install @solana/kit @solana/kit-plugin-litesvm @solana/kit-plugin-signer
 ```
 
 ```ts
 import { createClient, lamports } from '@solana/kit';
 import { litesvm } from '@solana/kit-plugin-litesvm';
-import { generatedPayer } from '@solana/kit-plugin-payer';
+import { generatedPayer } from '@solana/kit-plugin-signer';
 
 const client = await createClient().use(generatedPayer()).use(litesvm());
 
@@ -102,7 +102,7 @@ import {
     rpcTransactionPlanner,
     rpcTransactionPlanExecutor,
 } from '@solana/kit-plugin-rpc';
-import { payerFromFile } from '@solana/kit-plugin-payer';
+import { payerFromFile } from '@solana/kit-plugin-signer';
 import { planAndSendTransactions } from '@solana/kit-plugin-instruction-plan';
 
 const client = await createClient()
@@ -120,12 +120,12 @@ Note that since core plugin interfaces are defined in `@solana/kit` itself, you'
 
 This repo provides the following individual plugin packages. You can learn more about each package by following the links to their READMEs below.
 
-| Package                                                                         | Version                                                                                                                                                      | Description                        | Plugins                                                                                                                                                                                  |
-| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`@solana/kit-plugin-rpc`](./packages/kit-plugin-rpc)                           | [![npm](https://img.shields.io/npm/v/@solana/kit-plugin-rpc.svg?style=flat)](https://www.npmjs.com/package/@solana/kit-plugin-rpc)                           | Connect to Solana clusters         | `solanaRpc`, `solanaMainnetRpc`, `solanaDevnetRpc`, `solanaLocalRpc`, `solanaRpcConnection`, `rpcAirdrop`, `rpcGetMinimumBalance`, `rpcTransactionPlanner`, `rpcTransactionPlanExecutor` |
-| [`@solana/kit-plugin-payer`](./packages/kit-plugin-payer)                       | [![npm](https://img.shields.io/npm/v/@solana/kit-plugin-payer.svg?style=flat)](https://www.npmjs.com/package/@solana/kit-plugin-payer)                       | Manage transaction fee payers      | `payer`, `payerFromFile`, `generatedPayer`, `generatedPayerWithSol`                                                                                                                      |
-| [`@solana/kit-plugin-litesvm`](./packages/kit-plugin-litesvm)                   | [![npm](https://img.shields.io/npm/v/@solana/kit-plugin-litesvm.svg?style=flat)](https://www.npmjs.com/package/@solana/kit-plugin-litesvm)                   | LiteSVM support                    | `litesvm`, `litesvmConnection`, `litesvmAirdrop`, `litesvmGetMinimumBalance`, `litesvmTransactionPlanner`, `litesvmTransactionPlanExecutor`                                              |
-| [`@solana/kit-plugin-instruction-plan`](./packages/kit-plugin-instruction-plan) | [![npm](https://img.shields.io/npm/v/@solana/kit-plugin-instruction-plan.svg?style=flat)](https://www.npmjs.com/package/@solana/kit-plugin-instruction-plan) | Transaction planning and execution | `transactionPlanner`, `transactionPlanExecutor`, `planAndSendTransactions`                                                                                                               |
+| Package                                                                         | Version                                                                                                                                                      | Description                         | Plugins                                                                                                                                                                                                                                                                           |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`@solana/kit-plugin-rpc`](./packages/kit-plugin-rpc)                           | [![npm](https://img.shields.io/npm/v/@solana/kit-plugin-rpc.svg?style=flat)](https://www.npmjs.com/package/@solana/kit-plugin-rpc)                           | Connect to Solana clusters          | `solanaRpc`, `solanaMainnetRpc`, `solanaDevnetRpc`, `solanaLocalRpc`, `solanaRpcConnection`, `rpcAirdrop`, `rpcGetMinimumBalance`, `rpcTransactionPlanner`, `rpcTransactionPlanExecutor`                                                                                          |
+| [`@solana/kit-plugin-signer`](./packages/kit-plugin-signer)                     | [![npm](https://img.shields.io/npm/v/@solana/kit-plugin-signer.svg?style=flat)](https://www.npmjs.com/package/@solana/kit-plugin-signer)                     | Signer, payer, and identity plugins | `signer`, `payer`, `identity`, `signerFromFile`, `payerFromFile`, `identityFromFile`, `generatedSigner`, `generatedPayer`, `generatedIdentity`, `generatedSignerWithSol`, `generatedPayerWithSol`, `generatedIdentityWithSol`, `airdropSigner`, `airdropPayer`, `airdropIdentity` |
+| [`@solana/kit-plugin-litesvm`](./packages/kit-plugin-litesvm)                   | [![npm](https://img.shields.io/npm/v/@solana/kit-plugin-litesvm.svg?style=flat)](https://www.npmjs.com/package/@solana/kit-plugin-litesvm)                   | LiteSVM support                     | `litesvm`, `litesvmConnection`, `litesvmAirdrop`, `litesvmGetMinimumBalance`, `litesvmTransactionPlanner`, `litesvmTransactionPlanExecutor`                                                                                                                                       |
+| [`@solana/kit-plugin-instruction-plan`](./packages/kit-plugin-instruction-plan) | [![npm](https://img.shields.io/npm/v/@solana/kit-plugin-instruction-plan.svg?style=flat)](https://www.npmjs.com/package/@solana/kit-plugin-instruction-plan) | Transaction planning and execution  | `transactionPlanner`, `transactionPlanExecutor`, `planAndSendTransactions`                                                                                                                                                                                                        |
 
 ## Community Plugins
 

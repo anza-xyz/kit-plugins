@@ -36,7 +36,7 @@ Before presenting changes for review, verify locally:
 - `pnpm test` passes (type checking + unit tests across all environments).
 - `pnpm build` succeeds and does not produce uncommitted changes in the working tree.
 
-Running these in the relevant package directory (e.g. `pnpm test:unit` in `packages/kit-plugin-payer`) is sufficient for focused changes.
+Running these in the relevant package directory (e.g. `pnpm test:unit` in `packages/kit-plugin-signer`) is sufficient for focused changes.
 
 <!-- skills-inject:start -->
 
