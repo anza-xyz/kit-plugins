@@ -1,4 +1,5 @@
 import {
+    createClient,
     generateKeyPairSigner,
     getFirstFailedSingleTransactionPlanResult,
     isInstructionWithData,
@@ -7,7 +8,8 @@ import {
     SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN,
     type TransactionPlanResult,
 } from '@solana/kit';
-import { createLocalClient } from '@solana/kit-client-rpc';
+import { solanaLocalRpc } from '@solana/kit-plugin-rpc';
+import { airdropSigner, generatedSigner } from '@solana/kit-plugin-signer';
 import {
     getSystemErrorMessage,
     getTransferSolInstruction,
@@ -19,7 +21,10 @@ import {
 // Use `pnpm start --fail` to make the example fail and see error handling
 const shouldFail = process.argv.includes('--fail');
 
-const client = await createLocalClient();
+const client = await createClient()
+    .use(generatedSigner())
+    .use(solanaLocalRpc())
+    .use(airdropSigner(lamports(100_000_000_000n)));
 
 // Generate a random recipient address
 const destinationAccountAddress = (await generateKeyPairSigner()).address;

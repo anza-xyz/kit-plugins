@@ -8,19 +8,14 @@ Thank you for your interest in contributing to Kit Plugins! This guide covers ev
 
 This is a monorepo managed with [pnpm](https://pnpm.io/) and [Turborepo](https://turbo.build/). It contains the following packages:
 
-| Package                                                                         | Description                                                    |
-| ------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| [`@solana/kit-plugins`](./packages/kit-plugins)                                 | **(deprecated)** Umbrella package that re-exports all plugins. |
-| [`@solana/kit-client-rpc`](./packages/kit-client-rpc)                           | Pre-configured RPC client factory.                             |
-| [`@solana/kit-client-litesvm`](./packages/kit-client-litesvm)                   | Pre-configured LiteSVM client factory.                         |
-| [`@solana/kit-plugin-rpc`](./packages/kit-plugin-rpc)                           | RPC connection plugins.                                        |
-| [`@solana/kit-plugin-payer`](./packages/kit-plugin-payer)                       | Transaction fee payer plugins.                                 |
-| [`@solana/kit-plugin-signer`](./packages/kit-plugin-signer)                     | Signer, payer, and identity plugins.                           |
-| [`@solana/kit-plugin-airdrop`](./packages/kit-plugin-airdrop)                   | SOL airdrop plugin.                                            |
-| [`@solana/kit-plugin-litesvm`](./packages/kit-plugin-litesvm)                   | LiteSVM support plugin.                                        |
-| [`@solana/kit-plugin-instruction-plan`](./packages/kit-plugin-instruction-plan) | Transaction planning and execution plugins.                    |
+| Package                                                                         | Description                                 |
+| ------------------------------------------------------------------------------- | ------------------------------------------- |
+| [`@solana/kit-plugin-rpc`](./packages/kit-plugin-rpc)                           | RPC connection plugins.                     |
+| [`@solana/kit-plugin-signer`](./packages/kit-plugin-signer)                     | Signer, payer, and identity plugins.        |
+| [`@solana/kit-plugin-litesvm`](./packages/kit-plugin-litesvm)                   | LiteSVM support plugin.                     |
+| [`@solana/kit-plugin-instruction-plan`](./packages/kit-plugin-instruction-plan) | Transaction planning and execution plugins. |
 
-The umbrella package (`@solana/kit-plugins`) is deprecated. It re-exports everything from the individual plugin packages via `export *` statements for backward compatibility, but consumers should import from the individual `kit-plugin-*` packages directly.
+The repo also contains a deprecated umbrella package (`@solana/kit-plugins`) and several deprecated single-purpose packages (`@solana/kit-plugin-payer`, `@solana/kit-plugin-airdrop`, `@solana/kit-client-rpc`, `@solana/kit-client-litesvm`). They re-export from the active packages via `export *` for backward compatibility, but new code should import from the individual `kit-plugin-*` packages above directly.
 
 ## Getting started
 
@@ -48,10 +43,10 @@ You can also run commands within individual packages:
 
 ```sh
 # Run unit tests for a specific package.
-pnpm test:unit --filter @solana/kit-plugin-payer
+pnpm test:unit --filter @solana/kit-plugin-signer
 
 # Or navigate to the package directory.
-cd packages/kit-plugin-payer
+cd packages/kit-plugin-signer
 pnpm test:unit   # Unit tests only.
 pnpm test:types  # Type checking only.
 pnpm build       # Build only this package.
@@ -128,7 +123,7 @@ Any PR that should trigger a new package release must include a [changeset](http
 
 ```md
 ---
-'@solana/kit-plugin-payer': minor
+'@solana/kit-plugin-signer': minor
 ---
 
 Add `payerOrGeneratedPayer` plugin that uses an explicit payer when provided, or generates a new one funded with 100 SOL via airdrop as a fallback.

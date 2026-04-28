@@ -23,7 +23,7 @@ import { getSolanaErrorFromLiteSvmFailure, isFailedTransaction } from './transac
  * ```ts
  * import { createClient } from '@solana/kit';
  * import { litesvmConnection, litesvmTransactionPlanner, litesvmTransactionPlanExecutor } from '@solana/kit-plugin-litesvm';
- * import { generatedPayer } from '@solana/kit-plugin-payer';
+ * import { generatedPayer } from '@solana/kit-plugin-signer';
  *
  * const client = await createClient()
  *     .use(litesvmConnection())

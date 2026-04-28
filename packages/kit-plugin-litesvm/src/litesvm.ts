@@ -30,7 +30,7 @@ export type LiteSvmConfig = {
  * ```ts
  * import { createClient } from '@solana/kit';
  * import { litesvm } from '@solana/kit-plugin-litesvm';
- * import { payer } from '@solana/kit-plugin-payer';
+ * import { payer } from '@solana/kit-plugin-signer';
  *
  * const client = createClient()
  *     .use(payer(myPayer))

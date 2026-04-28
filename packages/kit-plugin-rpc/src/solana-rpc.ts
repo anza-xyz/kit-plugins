@@ -98,7 +98,7 @@ export type SolanaRpcConfig<TClusterUrl extends ClusterUrl = ClusterUrl> = Solan
  * ```ts
  * import { createClient } from '@solana/kit';
  * import { solanaRpc } from '@solana/kit-plugin-rpc';
- * import { payer } from '@solana/kit-plugin-payer';
+ * import { payer } from '@solana/kit-plugin-signer';
  *
  * const client = createClient()
  *     .use(payer(myPayer))
@@ -135,7 +135,7 @@ export function solanaRpc<TClusterUrl extends ClusterUrl>(config: SolanaRpcConfi
  * ```ts
  * import { createClient } from '@solana/kit';
  * import { solanaMainnetRpc } from '@solana/kit-plugin-rpc';
- * import { payer } from '@solana/kit-plugin-payer';
+ * import { payer } from '@solana/kit-plugin-signer';
  *
  * const client = createClient()
  *     .use(payer(myPayer))
@@ -167,7 +167,7 @@ export function solanaMainnetRpc(config: SolanaRpcConfig<string>) {
  * ```ts
  * import { createClient } from '@solana/kit';
  * import { solanaDevnetRpc } from '@solana/kit-plugin-rpc';
- * import { payerFromFile } from '@solana/kit-plugin-payer';
+ * import { payerFromFile } from '@solana/kit-plugin-signer';
  *
  * const client = createClient()
  *     .use(payerFromFile("~/.config/solana/id.json"))
@@ -206,7 +206,7 @@ export function solanaDevnetRpc(config?: Partial<SolanaRpcConfig<string>>) {
  * ```ts
  * import { createClient } from '@solana/kit';
  * import { solanaLocalRpc } from '@solana/kit-plugin-rpc';
- * import { payerFromFile } from '@solana/kit-plugin-payer';
+ * import { payerFromFile } from '@solana/kit-plugin-signer';
  *
  * const client = createClient()
  *     .use(payerFromFile("~/.config/solana/id.json"))
