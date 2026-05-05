@@ -2,6 +2,7 @@ import { createClient, createSolanaRpc, createSolanaRpcSubscriptions, mainnet, T
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 import {
+    rpc,
     rpcConnection,
     rpcSubscriptionsConnection,
     solanaDevnetRpc,
@@ -65,8 +66,33 @@ describe('solanaRpcConnection', () => {
     });
 
     it('also derives ws:// from http:// for unsecured endpoints', () => {
+        createClient().use(solanaRpcConnection({ rpcUrl: 'http://example.local:8080' }));
+        expect(createSolanaRpcSubscriptions).toHaveBeenCalledWith('ws://example.local:8080', undefined);
+    });
+
+    it('rewrites the canonical local validator RPC port (8899 -> 8900) when deriving the WebSocket URL', () => {
         createClient().use(solanaRpcConnection({ rpcUrl: 'http://127.0.0.1:8899' }));
-        expect(createSolanaRpcSubscriptions).toHaveBeenCalledWith('ws://127.0.0.1:8899', undefined);
+        expect(createSolanaRpcSubscriptions).toHaveBeenCalledWith('ws://127.0.0.1:8900', undefined);
+    });
+
+    it('also rewrites 8899 -> 8900 for the localhost hostname', () => {
+        createClient().use(solanaRpcConnection({ rpcUrl: 'http://localhost:8899' }));
+        expect(createSolanaRpcSubscriptions).toHaveBeenCalledWith('ws://localhost:8900', undefined);
+    });
+
+    it('preserves non-default localhost ports', () => {
+        createClient().use(solanaRpcConnection({ rpcUrl: 'http://127.0.0.1:9000' }));
+        expect(createSolanaRpcSubscriptions).toHaveBeenCalledWith('ws://127.0.0.1:9000', undefined);
+    });
+
+    it('does not rewrite the port for https://127.0.0.1:8899 (allowlist is exact-string http only)', () => {
+        createClient().use(solanaRpcConnection({ rpcUrl: 'https://127.0.0.1:8899' }));
+        expect(createSolanaRpcSubscriptions).toHaveBeenCalledWith('wss://127.0.0.1:8899', undefined);
+    });
+
+    it('derives wss:// from https:// for mainnet input', () => {
+        createClient().use(solanaRpcConnection({ rpcUrl: mainnet('https://api.mainnet-beta.solana.com') }));
+        expect(createSolanaRpcSubscriptions).toHaveBeenCalledWith('wss://api.mainnet-beta.solana.com', undefined);
     });
 
     it('accepts an explicit rpcSubscriptionsUrl', () => {
@@ -94,6 +120,13 @@ describe('solanaRpcConnection', () => {
             'wss://api.mainnet-beta.solana.com',
             rpcSubscriptionsConfig,
         );
+    });
+});
+
+describe('rpc (deprecated)', () => {
+    it('rewrites the canonical local validator RPC port (8899 -> 8900) when deriving the WebSocket URL', () => {
+        createClient().use(rpc('http://127.0.0.1:8899'));
+        expect(createSolanaRpcSubscriptions).toHaveBeenCalledWith('ws://127.0.0.1:8900', undefined);
     });
 });
 

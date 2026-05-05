@@ -38,7 +38,7 @@ const client = createClient()
 All options are provided via a `SolanaRpcConfig` object:
 
 - `rpcUrl` **(required)**: URL of the Solana RPC endpoint.
-- `rpcSubscriptionsUrl`: URL of the RPC Subscriptions endpoint. Defaults to the `rpcUrl` with the protocol changed from `http` to `ws`.
+- `rpcSubscriptionsUrl`: URL of the RPC Subscriptions endpoint. Defaults to the `rpcUrl` with the protocol changed from `http` to `ws`. As a convenience, the exact strings `http://127.0.0.1:8899` and `http://localhost:8899` (the canonical local validator RPC endpoints) are rewritten to port `8900`. The match is exact-string only — any other host, scheme, or port (including `https://localhost:8899` or `http://0.0.0.0:8899`) is left untouched. Pass `rpcSubscriptionsUrl` explicitly when your RPC and WebSocket endpoints use different ports.
 - `rpcConfig`: Optional configuration forwarded to `createSolanaRpc`.
 - `rpcSubscriptionsConfig`: Optional configuration forwarded to `createSolanaRpcSubscriptions`.
 - `transactionConfig`: Options to configure how transaction messages are created. See `rpcTransactionPlanner` options below.
@@ -146,7 +146,7 @@ const client = createClient().use(solanaRpcConnection({ rpcUrl: mainnet('https:/
 All options are provided via a `SolanaRpcConnectionConfig` object:
 
 - `rpcUrl` **(required)**: URL of the Solana RPC endpoint.
-- `rpcSubscriptionsUrl`: URL of the RPC Subscriptions endpoint. Defaults to the `rpcUrl` with the protocol changed from `http` to `ws`.
+- `rpcSubscriptionsUrl`: URL of the RPC Subscriptions endpoint. Defaults to the `rpcUrl` with the protocol changed from `http` to `ws`. As a convenience, the exact strings `http://127.0.0.1:8899` and `http://localhost:8899` (the canonical local validator RPC endpoints) are rewritten to port `8900`. The match is exact-string only — any other host, scheme, or port (including `https://localhost:8899` or `http://0.0.0.0:8899`) is left untouched. Pass `rpcSubscriptionsUrl` explicitly when your RPC and WebSocket endpoints use different ports.
 - `rpcConfig`: Optional configuration forwarded to `createSolanaRpc`.
 - `rpcSubscriptionsConfig`: Optional configuration forwarded to `createSolanaRpcSubscriptions`.
 

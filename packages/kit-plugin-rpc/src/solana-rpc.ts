@@ -190,6 +190,24 @@ export function solanaDevnetRpc(config?: Partial<SolanaRpcConfig<string>>) {
         );
 }
 
+const LOCAL_VALIDATOR_RPC_URL = 'http://127.0.0.1:8899';
+const LOCAL_VALIDATOR_RPC_SUBSCRIPTIONS_URL = 'ws://127.0.0.1:8900';
+
+// Lookup table for canonical solana-test-validator RPC endpoints, whose
+// WebSocket listens on port 8900 rather than the RPC port 8899. The match is
+// intentionally exact-string (not a hostname/port heuristic) to avoid silently
+// rewriting user-customized validator setups that happen to use port 8899 —
+// anything not in this table falls through to a plain protocol swap in
+// {@link deriveRpcSubscriptionsUrl}.
+const LOCAL_VALIDATOR_RPC_SUBSCRIPTIONS_URLS: { readonly [rpcUrl: string]: string } = {
+    [LOCAL_VALIDATOR_RPC_URL]: LOCAL_VALIDATOR_RPC_SUBSCRIPTIONS_URL,
+    'http://localhost:8899': 'ws://localhost:8900',
+};
+
+function deriveRpcSubscriptionsUrl(rpcUrl: string): string {
+    return LOCAL_VALIDATOR_RPC_SUBSCRIPTIONS_URLS[rpcUrl] ?? rpcUrl.replace(/^http/, 'ws');
+}
+
 /**
  * Enhances a client with a full Solana local validator RPC setup.
  *
@@ -223,8 +241,8 @@ export function solanaLocalRpc(config?: Partial<SolanaRpcConfig<string>>) {
             client,
             solanaRpc({
                 ...config,
-                rpcSubscriptionsUrl: config?.rpcSubscriptionsUrl ?? 'ws://127.0.0.1:8900',
-                rpcUrl: config?.rpcUrl ?? 'http://127.0.0.1:8899',
+                rpcSubscriptionsUrl: config?.rpcSubscriptionsUrl ?? LOCAL_VALIDATOR_RPC_SUBSCRIPTIONS_URL,
+                rpcUrl: config?.rpcUrl ?? LOCAL_VALIDATOR_RPC_URL,
             }),
             rpcAirdrop(),
         );
@@ -237,7 +255,14 @@ export function solanaLocalRpc(config?: Partial<SolanaRpcConfig<string>>) {
  * This plugin creates both a Solana RPC using {@link createSolanaRpc} and Solana
  * RPC Subscriptions using {@link createSolanaRpcSubscriptions}, then installs
  * them on the client. When `rpcSubscriptionsUrl` is omitted, it is derived from
- * `rpcUrl` by swapping the `http`/`https` protocol for `ws`/`wss`.
+ * `rpcUrl` by swapping the `http`/`https` protocol for `ws`/`wss`. As a
+ * convenience, the exact strings `http://127.0.0.1:8899` and
+ * `http://localhost:8899` (the canonical `solana-test-validator` RPC
+ * endpoints) are rewritten to their matching subscriptions port `8900`. The
+ * match is exact-string only — any other host, scheme, or port (including
+ * `https://localhost:8899` or `http://0.0.0.0:8899`) is left untouched. Pass
+ * `rpcSubscriptionsUrl` explicitly when your RPC and WebSocket endpoints use
+ * different ports.
  *
  * @param config - Configuration describing the RPC and subscriptions endpoints.
  * @return A plugin that adds `client.rpc` and `client.rpcSubscriptions`.
@@ -269,7 +294,7 @@ export function solanaLocalRpc(config?: Partial<SolanaRpcConfig<string>>) {
  */
 export function solanaRpcConnection<TClusterUrl extends ClusterUrl>(config: SolanaRpcConnectionConfig<TClusterUrl>) {
     const rpc = createSolanaRpc<TClusterUrl>(config.rpcUrl, config.rpcConfig);
-    const rpcSubscriptionsUrl = config.rpcSubscriptionsUrl ?? (config.rpcUrl.replace(/^http/, 'ws') as TClusterUrl);
+    const rpcSubscriptionsUrl = config.rpcSubscriptionsUrl ?? (deriveRpcSubscriptionsUrl(config.rpcUrl) as TClusterUrl);
     const rpcSubscriptions = createSolanaRpcSubscriptions<TClusterUrl>(
         rpcSubscriptionsUrl,
         config.rpcSubscriptionsConfig,
@@ -335,7 +360,7 @@ export function rpc<TClusterUrl extends ClusterUrl>(
     rpcSubscriptionsConfig?: DefaultRpcSubscriptionsChannelConfig<TClusterUrl>,
 ) {
     const rpc = createSolanaRpc(url);
-    const rpcSubscriptionsUrl = rpcSubscriptionsConfig?.url ?? url.replace(/^http/, 'ws');
+    const rpcSubscriptionsUrl = rpcSubscriptionsConfig?.url ?? deriveRpcSubscriptionsUrl(url);
     const rpcSubscriptions = createSolanaRpcSubscriptions(rpcSubscriptionsUrl, rpcSubscriptionsConfig);
     return <T extends object>(client: T) => extendClient(client, { rpc, rpcSubscriptions });
 }
@@ -358,5 +383,8 @@ export function rpc<TClusterUrl extends ClusterUrl>(
  * ```
  */
 export function localhostRpc(url?: string, rpcSubscriptionsConfig?: DefaultRpcSubscriptionsChannelConfig<string>) {
-    return rpc<string>(url ?? 'http://127.0.0.1:8899', rpcSubscriptionsConfig ?? { url: 'ws://127.0.0.1:8900' });
+    return rpc<string>(
+        url ?? LOCAL_VALIDATOR_RPC_URL,
+        rpcSubscriptionsConfig ?? { url: LOCAL_VALIDATOR_RPC_SUBSCRIPTIONS_URL },
+    );
 }
