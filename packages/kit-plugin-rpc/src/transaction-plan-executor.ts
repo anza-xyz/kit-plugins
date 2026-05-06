@@ -128,7 +128,7 @@ export function rpcTransactionPlanExecutor(
                 });
                 return signedTransaction;
             }, config.maxConcurrency ?? 10),
-        } as TransactionPlanExecutorConfig);
+        } satisfies TransactionPlanExecutorConfig);
 
         return extendClient(client, { transactionPlanExecutor });
     };

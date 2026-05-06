@@ -30,7 +30,7 @@ import {
  */
 export function rpcGetMinimumBalance() {
     return <T extends ClientWithRpc<GetMinimumBalanceForRentExemptionApi>>(client: T) => {
-        return extendClient(client, <ClientWithGetMinimumBalance>{
+        return extendClient<T, ClientWithGetMinimumBalance>(client, {
             getMinimumBalance: async (space: number, config?: GetMinimumBalanceConfig) => {
                 if (config?.withoutHeader) {
                     const headerBalance = await client.rpc.getMinimumBalanceForRentExemption(0n).send();

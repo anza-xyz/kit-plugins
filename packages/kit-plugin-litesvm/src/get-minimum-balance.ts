@@ -34,7 +34,7 @@ type LiteSVMClient = {
  */
 export function litesvmGetMinimumBalance() {
     return <T extends LiteSVMClient>(client: T) => {
-        return extendClient(client, <ClientWithGetMinimumBalance>{
+        return extendClient<T, ClientWithGetMinimumBalance>(client, {
             getMinimumBalance: (space: number, config?: GetMinimumBalanceConfig) => {
                 if (config?.withoutHeader) {
                     const headerBalance = client.svm.minimumBalanceForRentExemption(0n);

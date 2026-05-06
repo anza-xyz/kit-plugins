@@ -39,7 +39,7 @@ type LiteSVMClient = {
 export function litesvmAirdrop() {
     return <T extends LiteSVMClient>(client: T) => {
         const base58Decoder = getBase58Decoder();
-        return extendClient(client, <ClientWithAirdrop>{
+        return extendClient<T, ClientWithAirdrop>(client, {
             airdrop: (address: Address, amount: Lamports) => {
                 const result = client.svm.airdrop(address, amount);
                 if (result == null) {
