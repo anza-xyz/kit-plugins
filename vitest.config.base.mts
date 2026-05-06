@@ -16,7 +16,6 @@ export function getVitestConfig(platform: Platform) {
             __TEST__: 'true',
             __VERSION__: `"${env.npm_package_version}"`,
         },
-        ssr: requiresBrowserBuild ? { noExternal: [/@solana\/(?!.*@loris-sandbox\/litesvm-kit)/] } : undefined,
         resolve: {
             conditions:
                 platform === 'browser'
@@ -25,9 +24,10 @@ export function getVitestConfig(platform: Platform) {
                       ? ['react-native', 'import', 'module', 'default']
                       : ['node', 'import', 'require', 'default'],
         },
+        ssr: requiresBrowserBuild ? { noExternal: [/@solana\/(?!.*@loris-sandbox\/litesvm-kit)/] } : undefined,
         test: {
-            name: platform,
             environment: requiresBrowserBuild ? 'happy-dom' : 'node',
+            name: platform,
             setupFiles: requiresBrowserBuild ? ['../../vitest.setup-browser.mts'] : undefined,
         },
     });

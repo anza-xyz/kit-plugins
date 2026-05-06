@@ -4,7 +4,7 @@ globalThis.WebSocket = require('ws');
 // Ensure isSecureContext is true for browser tests
 if (typeof globalThis.isSecureContext === 'undefined') {
     Object.defineProperty(globalThis, 'isSecureContext', {
-        value: true,
         configurable: true,
+        value: true,
     });
 }
