@@ -1,3 +1,4 @@
+import { getTransferSolInstruction } from '@solana-program/system';
 import {
     Address,
     appendTransactionMessageInstruction,
@@ -17,7 +18,6 @@ import {
     SOLANA_ERROR__TRANSACTION_ERROR__ACCOUNT_NOT_FOUND,
     SolanaError,
 } from '@solana/kit';
-import { getTransferSolInstruction } from '@solana-program/system';
 import type { FailedTransactionMetadata, LiteSVM, TransactionMetadata } from 'litesvm';
 import { describe, expect, it, vi } from 'vitest';
 

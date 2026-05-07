@@ -2,6 +2,35 @@
     "name": "@solana/kit-client-rpc",
     "version": "0.11.1",
     "description": "Pre-configured RPC clients for Solana Kit",
+    "keywords": [
+        "client",
+        "kit",
+        "rpc",
+        "solana"
+    ],
+    "bugs": {
+        "url": "http://github.com/anza-xyz/kit-plugins/issues"
+    },
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/anza-xyz/kit-plugins"
+    },
+    "files": [
+        "./dist/types",
+        "./dist/index.*",
+        "./src/"
+    ],
+    "type": "commonjs",
+    "sideEffects": false,
+    "main": "./dist/index.node.cjs",
+    "module": "./dist/index.node.mjs",
+    "browser": {
+        "./dist/index.node.cjs": "./dist/index.browser.cjs",
+        "./dist/index.node.mjs": "./dist/index.browser.mjs"
+    },
+    "types": "./dist/types/index.d.ts",
+    "react-native": "./dist/index.react-native.mjs",
     "exports": {
         "types": "./dist/types/index.d.ts",
         "react-native": "./dist/index.react-native.mjs",
@@ -14,27 +43,6 @@
             "require": "./dist/index.node.cjs"
         }
     },
-    "browser": {
-        "./dist/index.node.cjs": "./dist/index.browser.cjs",
-        "./dist/index.node.mjs": "./dist/index.browser.mjs"
-    },
-    "main": "./dist/index.node.cjs",
-    "module": "./dist/index.node.mjs",
-    "react-native": "./dist/index.react-native.mjs",
-    "types": "./dist/types/index.d.ts",
-    "type": "commonjs",
-    "files": [
-        "./dist/types",
-        "./dist/index.*",
-        "./src/"
-    ],
-    "sideEffects": false,
-    "keywords": [
-        "solana",
-        "kit",
-        "client",
-        "rpc"
-    ],
     "scripts": {
         "build": "rimraf dist && tsup && tsc -p ./tsconfig.declarations.json",
         "dev": "vitest --project node",
@@ -43,21 +51,13 @@
         "test:types": "tsc --noEmit",
         "test:unit": "vitest run"
     },
-    "peerDependencies": {
-        "@solana/kit": "^6.8.0"
-    },
     "dependencies": {
         "@solana/kit-plugin-instruction-plan": "workspace:*",
         "@solana/kit-plugin-payer": "workspace:*",
         "@solana/kit-plugin-rpc": "workspace:*"
     },
-    "license": "MIT",
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/anza-xyz/kit-plugins"
-    },
-    "bugs": {
-        "url": "http://github.com/anza-xyz/kit-plugins/issues"
+    "peerDependencies": {
+        "@solana/kit": "^6.8.0"
     },
     "browserslist": [
         "supports bigint and not dead",

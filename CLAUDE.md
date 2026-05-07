@@ -32,7 +32,7 @@ This project includes the following skills in `.claude/skills/`. Use them when r
 
 Before presenting changes for review, verify locally:
 
-- `pnpm lint` passes (Oxlint + Prettier).
+- `pnpm lint` passes (Oxlint + Oxfmt).
 - `pnpm test` passes (type checking + unit tests across all environments).
 - `pnpm build` succeeds and does not produce uncommitted changes in the working tree.
 

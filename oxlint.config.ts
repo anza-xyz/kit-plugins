@@ -1,6 +1,5 @@
-import { defineConfig } from 'oxlint';
-
 import solanaConfig from '@solana-config/oxc/oxlint';
+import { defineConfig } from 'oxlint';
 
 export default defineConfig({
     extends: [solanaConfig],
