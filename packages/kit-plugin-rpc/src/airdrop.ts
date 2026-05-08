@@ -30,7 +30,7 @@ type RpcClient = {
 export function rpcAirdrop() {
     return <T extends RpcClient>(client: T) => {
         const airdropInternal = airdropFactory({ rpc: client.rpc, rpcSubscriptions: client.rpcSubscriptions });
-        return extendClient(client, <ClientWithAirdrop>{
+        return extendClient<T, ClientWithAirdrop>(client, {
             airdrop: (address: Address, amount: Lamports, abortSignal?: AbortSignal) =>
                 airdropInternal({ abortSignal, commitment: 'confirmed', lamports: amount, recipientAddress: address }),
         });
