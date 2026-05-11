@@ -2,6 +2,37 @@
     "name": "@solana/kit-plugin-signer",
     "version": "0.10.0",
     "description": "Signer helpers for Kit clients",
+    "keywords": [
+        "identity",
+        "kit",
+        "payer",
+        "plugin",
+        "signer",
+        "solana"
+    ],
+    "bugs": {
+        "url": "http://github.com/anza-xyz/kit-plugins/issues"
+    },
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/anza-xyz/kit-plugins"
+    },
+    "files": [
+        "./dist/types",
+        "./dist/index.*",
+        "./src/"
+    ],
+    "type": "commonjs",
+    "sideEffects": false,
+    "main": "./dist/index.node.cjs",
+    "module": "./dist/index.node.mjs",
+    "browser": {
+        "./dist/index.node.cjs": "./dist/index.browser.cjs",
+        "./dist/index.node.mjs": "./dist/index.browser.mjs"
+    },
+    "types": "./dist/types/index.d.ts",
+    "react-native": "./dist/index.react-native.mjs",
     "exports": {
         "types": "./dist/types/index.d.ts",
         "react-native": "./dist/index.react-native.mjs",
@@ -14,29 +45,6 @@
             "require": "./dist/index.node.cjs"
         }
     },
-    "browser": {
-        "./dist/index.node.cjs": "./dist/index.browser.cjs",
-        "./dist/index.node.mjs": "./dist/index.browser.mjs"
-    },
-    "main": "./dist/index.node.cjs",
-    "module": "./dist/index.node.mjs",
-    "react-native": "./dist/index.react-native.mjs",
-    "types": "./dist/types/index.d.ts",
-    "type": "commonjs",
-    "files": [
-        "./dist/types",
-        "./dist/index.*",
-        "./src/"
-    ],
-    "sideEffects": false,
-    "keywords": [
-        "solana",
-        "kit",
-        "plugin",
-        "signer",
-        "payer",
-        "identity"
-    ],
     "scripts": {
         "build": "rimraf dist && tsup && tsc -p ./tsconfig.declarations.json",
         "dev": "vitest --project node",
@@ -47,14 +55,6 @@
     },
     "peerDependencies": {
         "@solana/kit": "^6.8.0"
-    },
-    "license": "MIT",
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/anza-xyz/kit-plugins"
-    },
-    "bugs": {
-        "url": "http://github.com/anza-xyz/kit-plugins/issues"
     },
     "browserslist": [
         "supports bigint and not dead",

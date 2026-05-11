@@ -1,16 +1,4 @@
 import {
-    createClient,
-    flattenTransactionPlanResult,
-    generateKeyPairSigner,
-    isInstructionWithData,
-    lamports,
-    parallelInstructionPlan,
-    passthroughFailedTransactionPlanExecution,
-    sequentialInstructionPlan,
-} from '@solana/kit';
-import { solanaLocalRpc } from '@solana/kit-plugin-rpc';
-import { airdropSigner, generatedSigner } from '@solana/kit-plugin-signer';
-import {
     getSystemErrorMessage,
     isSystemError,
     parseSystemInstruction,
@@ -24,6 +12,18 @@ import {
     parseTokenInstruction,
     TokenInstruction,
 } from '@solana-program/token';
+import {
+    createClient,
+    flattenTransactionPlanResult,
+    generateKeyPairSigner,
+    isInstructionWithData,
+    lamports,
+    parallelInstructionPlan,
+    passthroughFailedTransactionPlanExecution,
+    sequentialInstructionPlan,
+} from '@solana/kit';
+import { solanaLocalRpc } from '@solana/kit-plugin-rpc';
+import { airdropSigner, generatedSigner } from '@solana/kit-plugin-signer';
 
 // Use `pnpm start --fail` to make the example fail and see error handling
 const shouldFail = process.argv.includes('--fail');

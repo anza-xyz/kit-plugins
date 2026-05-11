@@ -1,4 +1,11 @@
 import {
+    getSystemErrorMessage,
+    getTransferSolInstruction,
+    isSystemError,
+    parseSystemInstruction,
+    SystemInstruction,
+} from '@solana-program/system';
+import {
     createClient,
     generateKeyPairSigner,
     getFirstFailedSingleTransactionPlanResult,
@@ -10,13 +17,6 @@ import {
 } from '@solana/kit';
 import { solanaLocalRpc } from '@solana/kit-plugin-rpc';
 import { airdropSigner, generatedSigner } from '@solana/kit-plugin-signer';
-import {
-    getSystemErrorMessage,
-    getTransferSolInstruction,
-    isSystemError,
-    parseSystemInstruction,
-    SystemInstruction,
-} from '@solana-program/system';
 
 // Use `pnpm start --fail` to make the example fail and see error handling
 const shouldFail = process.argv.includes('--fail');
