@@ -1,6 +1,12 @@
 .changeset/
 .github/workflows/PULL_REQUEST_TEMPLATE.md
 
+# Skills are sourced from an upstream repository and managed by the skills tool.
+# Their formatting is controlled upstream, so we don't want local Prettier to
+# fight with whatever the sync produces.
+.agents/
+skills-lock.json
+
 declarations/
 dist/
 doc/

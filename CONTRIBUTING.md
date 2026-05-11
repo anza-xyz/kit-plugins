@@ -50,8 +50,9 @@ cd packages/kit-plugin-signer
 pnpm test:unit   # Unit tests only.
 pnpm test:types  # Type checking only.
 pnpm build       # Build only this package.
-pnpm lint        # Lint only this package.
 ```
+
+Linting (Oxlint and Prettier) is run on the whole repo at once via `pnpm lint` from the workspace root — it's fast enough that per-package iteration isn't usually needed.
 
 ## Code standards
 
@@ -143,7 +144,7 @@ For the full changeset guide, see [`.claude/skills/changesets/SKILL.md`](./.clau
 
 The CI pipeline runs on every pull request and checks:
 
-1. **Linting** (`pnpm lint`) — ESLint and Prettier.
+1. **Linting** (`pnpm lint`) — Oxlint (with type-aware rules) and Prettier.
 2. **Tests** (`pnpm test`) — Type checking, tree-shakability, and unit tests across all environments.
 3. **Clean working directory** — Build artifacts must not produce uncommitted changes.
 

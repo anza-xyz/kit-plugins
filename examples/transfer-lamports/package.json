@@ -10,8 +10,6 @@
     "type": "module",
     "scripts": {
         "build": "rimraf dist && tsup && tsc -p ./tsconfig.declarations.json",
-        "lint": "eslint . && prettier --check .",
-        "lint:fix": "eslint --fix . && prettier --write .",
         "test": "pnpm test:types ",
         "test:types": "tsc --noEmit",
         "start": "node src/index.ts"
