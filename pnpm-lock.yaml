@@ -63,8 +63,8 @@ importers:
   examples/token-airdrop:
     dependencies:
       '@solana-program/system':
-        specifier: ^0.12.0
-        version: 0.12.0(@solana/kit@6.9.0(typescript@6.0.3))
+        specifier: ^0.12.1
+        version: 0.12.1(@solana/kit@6.9.0(typescript@6.0.3))
       '@solana-program/token':
         specifier: ^0.13.0
         version: 0.13.0(@solana/kit@6.9.0(typescript@6.0.3))
@@ -81,8 +81,8 @@ importers:
   examples/transfer-lamports:
     dependencies:
       '@solana-program/system':
-        specifier: ^0.12.0
-        version: 0.12.0(@solana/kit@6.9.0(typescript@6.0.3))
+        specifier: ^0.12.1
+        version: 0.12.1(@solana/kit@6.9.0(typescript@6.0.3))
       '@solana/kit':
         specifier: ^6.9.0
         version: 6.9.0(typescript@6.0.3)
@@ -155,8 +155,8 @@ importers:
         version: 1.1.0(typescript@6.0.3)
     devDependencies:
       '@solana-program/system':
-        specifier: ^0.12.0
-        version: 0.12.0(@solana/kit@6.9.0(typescript@6.0.3))
+        specifier: ^0.12.1
+        version: 0.12.1(@solana/kit@6.9.0(typescript@6.0.3))
 
   packages/kit-plugin-payer:
     dependencies:
@@ -1142,8 +1142,8 @@ packages:
       oxlint:
         optional: true
 
-  '@solana-program/system@0.12.0':
-    resolution: {integrity: sha512-ZnAAWeGVMWNtJhw3GdifI2HnhZ0A0H0qs8tBkcFvxp/8wIavvO+GOM4Jd0N22u2+Lni2zcwvcrxrsxj6Mjphng==}
+  '@solana-program/system@0.12.1':
+    resolution: {integrity: sha512-atn3PTTu6bG1cOvDY50JPaysWFdpPu03U/tanS0ikpINqnBZL5wEQvep8mx4Qkt18XUUp8DXvPjnzmVULUWCwQ==}
     peerDependencies:
       '@solana/kit': ^6.9.0
 
@@ -3093,13 +3093,13 @@ snapshots:
       oxfmt: 0.52.0
       oxlint: 1.67.0(oxlint-tsgolint@0.23.0)
 
-  '@solana-program/system@0.12.0(@solana/kit@6.9.0(typescript@6.0.3))':
+  '@solana-program/system@0.12.1(@solana/kit@6.9.0(typescript@6.0.3))':
     dependencies:
       '@solana/kit': 6.9.0(typescript@6.0.3)
 
   '@solana-program/token@0.13.0(@solana/kit@6.9.0(typescript@6.0.3))':
     dependencies:
-      '@solana-program/system': 0.12.0(@solana/kit@6.9.0(typescript@6.0.3))
+      '@solana-program/system': 0.12.1(@solana/kit@6.9.0(typescript@6.0.3))
       '@solana/kit': 6.9.0(typescript@6.0.3)
 
   '@solana/accounts@6.9.0(typescript@6.0.3)':
@@ -3965,7 +3965,7 @@ snapshots:
 
   litesvm@1.1.0(typescript@6.0.3):
     dependencies:
-      '@solana-program/system': 0.12.0(@solana/kit@6.9.0(typescript@6.0.3))
+      '@solana-program/system': 0.12.1(@solana/kit@6.9.0(typescript@6.0.3))
       '@solana-program/token': 0.13.0(@solana/kit@6.9.0(typescript@6.0.3))
       '@solana/kit': 6.9.0(typescript@6.0.3)
     optionalDependencies:
