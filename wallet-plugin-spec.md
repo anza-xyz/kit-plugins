@@ -14,18 +14,18 @@ This spec builds on two changes that must land first:
 
 ```json
 {
-  "peerDependencies": {
-    "@solana/kit": "^6.x"
-  },
-  "dependencies": {
-    "@solana/wallet-account-signer": "^1.x",
-    "@wallet-standard/app": "^1.x",
-    "@wallet-standard/base": "^1.x",
-    "@wallet-standard/features": "^1.x",
-    "@wallet-standard/ui": "^1.x",
-    "@wallet-standard/ui-features": "^1.x",
-    "@wallet-standard/ui-registry": "^1.x"
-  }
+    "peerDependencies": {
+        "@solana/kit": "^6.x"
+    },
+    "dependencies": {
+        "@solana/wallet-account-signer": "^1.x",
+        "@wallet-standard/app": "^1.x",
+        "@wallet-standard/base": "^1.x",
+        "@wallet-standard/features": "^1.x",
+        "@wallet-standard/ui": "^1.x",
+        "@wallet-standard/ui-features": "^1.x",
+        "@wallet-standard/ui-registry": "^1.x"
+    }
 }
 ```
 
@@ -41,10 +41,10 @@ A framework-agnostic Kit plugin that manages wallet discovery, connection lifecy
 import { walletSigner } from '@solana/kit-plugin-wallet';
 
 const client = createClient()
-  .use(rpc('https://api.mainnet-beta.solana.com'))
-  .use(walletSigner({ chain: 'solana:mainnet' }))
-  .use(systemProgram())
-  .use(planAndSendTransactions());
+    .use(rpc('https://api.mainnet-beta.solana.com'))
+    .use(walletSigner({ chain: 'solana:mainnet' }))
+    .use(systemProgram())
+    .use(planAndSendTransactions());
 
 // Server: status === 'pending', client.payer / client.identity throw
 // Browser: auto-connect fires, client.payer / client.identity become wallet signer
@@ -111,9 +111,9 @@ import { walletSigner } from '@solana/kit-plugin-wallet';
 import { planAndSendTransactions } from '@solana/kit-plugin-instruction-plan';
 
 const client = createClient()
-  .use(rpc('https://api.mainnet-beta.solana.com'))
-  .use(walletSigner({ chain: 'solana:mainnet' }))
-  .use(planAndSendTransactions());
+    .use(rpc('https://api.mainnet-beta.solana.com'))
+    .use(walletSigner({ chain: 'solana:mainnet' }))
+    .use(planAndSendTransactions());
 
 // No wallet connected -> client.payer / client.identity throw
 // Wallet connected    -> client.payer / client.identity return wallet signer
@@ -133,29 +133,29 @@ import { walletSigner, walletIdentity, walletPayer, walletWithoutSigner } from '
 
 // Wallet as payer and identity — most dApps
 const client = createClient()
-  .use(rpc('https://api.mainnet-beta.solana.com'))
-  .use(walletSigner({ chain: 'solana:mainnet' }))
-  .use(planAndSendTransactions());
+    .use(rpc('https://api.mainnet-beta.solana.com'))
+    .use(walletSigner({ chain: 'solana:mainnet' }))
+    .use(planAndSendTransactions());
 
 // Wallet as identity only — relayer pays fees
 const client = createClient()
-  .use(rpc('https://api.mainnet-beta.solana.com'))
-  .use(payer(relayerKeypair))
-  .use(walletIdentity({ chain: 'solana:mainnet' }))
-  .use(planAndSendTransactions());
+    .use(rpc('https://api.mainnet-beta.solana.com'))
+    .use(payer(relayerKeypair))
+    .use(walletIdentity({ chain: 'solana:mainnet' }))
+    .use(planAndSendTransactions());
 
 // Wallet as payer only
 const client = createClient()
-  .use(rpc('https://api.mainnet-beta.solana.com'))
-  .use(walletPayer({ chain: 'solana:mainnet' }))
-  .use(planAndSendTransactions());
+    .use(rpc('https://api.mainnet-beta.solana.com'))
+    .use(walletPayer({ chain: 'solana:mainnet' }))
+    .use(planAndSendTransactions());
 
 // Wallet without signer — manual signer use
 const client = createClient()
-  .use(rpc('https://api.mainnet-beta.solana.com'))
-  .use(payer(backendKeypair))
-  .use(walletWithoutSigner({ chain: 'solana:mainnet' }))
-  .use(planAndSendTransactions());
+    .use(rpc('https://api.mainnet-beta.solana.com'))
+    .use(payer(backendKeypair))
+    .use(walletWithoutSigner({ chain: 'solana:mainnet' }))
+    .use(planAndSendTransactions());
 // client.payer is TransactionSigner (from payer plugin, untouched)
 // client.wallet.getState().connected?.signer for manual use
 ```
@@ -166,66 +166,66 @@ Both `wallet` and `walletAsPayer` add the `wallet` namespace to the client. `wal
 
 ```typescript
 type ClientWithWallet = {
-  wallet: {
-    // -- State --
+    wallet: {
+        // -- State --
 
-    /**
-     * Subscribe to any wallet state change. Compatible with React's
-     * useSyncExternalStore and similar framework primitives.
-     * Returns an unsubscribe function.
-     */
-    subscribe: (listener: () => void) => () => void;
+        /**
+         * Subscribe to any wallet state change. Compatible with React's
+         * useSyncExternalStore and similar framework primitives.
+         * Returns an unsubscribe function.
+         */
+        subscribe: (listener: () => void) => () => void;
 
-    /**
-     * Get the current wallet state. Referentially stable
-     * when unchanged — a new object is only created when a
-     * state field actually changes.
-     */
-    getState: () => WalletState;
+        /**
+         * Get the current wallet state. Referentially stable
+         * when unchanged — a new object is only created when a
+         * state field actually changes.
+         */
+        getState: () => WalletState;
 
-    // -- Actions --
+        // -- Actions --
 
-    /**
-     * Connect to a wallet. Calls standard:connect on the wallet, then
-     * selects the first newly authorized account (or the first account
-     * if reconnecting). Creates and caches a signer for the active account.
-     * Returns all accounts from the wallet after connection.
-     */
-    connect: (wallet: UiWallet, options?: WalletActionOptions) => Promise<readonly UiWalletAccount[]>;
+        /**
+         * Connect to a wallet. Calls standard:connect on the wallet, then
+         * selects the first newly authorized account (or the first account
+         * if reconnecting). Creates and caches a signer for the active account.
+         * Returns all accounts from the wallet after connection.
+         */
+        connect: (wallet: UiWallet, options?: WalletActionOptions) => Promise<readonly UiWalletAccount[]>;
 
-    /** Disconnect the active wallet. Calls standard:disconnect if supported. */
-    disconnect: (options?: WalletActionOptions) => Promise<void>;
+        /** Disconnect the active wallet. Calls standard:disconnect if supported. */
+        disconnect: (options?: WalletActionOptions) => Promise<void>;
 
-    /**
-     * Switch to a different account within the connected wallet.
-     * Creates and caches a new signer for the selected account.
-     */
-    selectAccount: (account: UiWalletAccount) => void;
+        /**
+         * Switch to a different account within the connected wallet.
+         * Creates and caches a new signer for the selected account.
+         */
+        selectAccount: (account: UiWalletAccount) => void;
 
-    /**
-     * Sign an arbitrary message with the connected account.
-     * Throws if no account is connected or if the wallet does not
-     * support the solana:signMessage feature.
-     * Calls the wallet's solana:signMessage feature directly
-     * (does not go through the cached signer).
-     */
-    signMessage: (message: Uint8Array, options?: WalletActionOptions) => Promise<SignatureBytes>;
+        /**
+         * Sign an arbitrary message with the connected account.
+         * Throws if no account is connected or if the wallet does not
+         * support the solana:signMessage feature.
+         * Calls the wallet's solana:signMessage feature directly
+         * (does not go through the cached signer).
+         */
+        signMessage: (message: Uint8Array, options?: WalletActionOptions) => Promise<SignatureBytes>;
 
-    /**
-     * Sign In With Solana (SIWS-as-connect).
-     *
-     * Connects the wallet, calls solana:signIn, sets the returned
-     * account as active, and creates a signer. After completion, the
-     * client is in the same state as if connect() had been called.
-     *
-     * All fields on SolanaSignInInput are optional — pass {} if no
-     * sign-in customization is needed.
-     *
-     * To sign in with the already-connected wallet, pass
-     * getState().connected.wallet.
-     */
-    signIn(wallet: UiWallet, input: SolanaSignInInput, options?: WalletActionOptions): Promise<SolanaSignInOutput>;
-  };
+        /**
+         * Sign In With Solana (SIWS-as-connect).
+         *
+         * Connects the wallet, calls solana:signIn, sets the returned
+         * account as active, and creates a signer. After completion, the
+         * client is in the same state as if connect() had been called.
+         *
+         * All fields on SolanaSignInInput are optional — pass {} if no
+         * sign-in customization is needed.
+         *
+         * To sign in with the already-connected wallet, pass
+         * getState().connected.wallet.
+         */
+        signIn(wallet: UiWallet, input: SolanaSignInInput, options?: WalletActionOptions): Promise<SolanaSignInOutput>;
+    };
 };
 
 /**
@@ -236,19 +236,19 @@ type ClientWithWallet = {
  * additions without breaking the call-site shape.
  */
 type WalletActionOptions = {
-  /**
-   * An optional AbortSignal used to cancel the operation.
-   *
-   * Cancellation is pre-call only: the plugin checks
-   * `abortSignal.throwIfAborted()` at the start of each action and bails
-   * out before invoking the wallet. Once the underlying wallet-standard
-   * call has been dispatched, its result is returned even if the signal
-   * is aborted mid-flight — the wallet's side effect (an approved
-   * signature, a live connection, a broadcast transaction) is the source
-   * of truth, and throwing here would discard real user work without
-   * undoing what the wallet already did.
-   */
-  abortSignal?: AbortSignal;
+    /**
+     * An optional AbortSignal used to cancel the operation.
+     *
+     * Cancellation is pre-call only: the plugin checks
+     * `abortSignal.throwIfAborted()` at the start of each action and bails
+     * out before invoking the wallet. Once the underlying wallet-standard
+     * call has been dispatched, its result is returned even if the signal
+     * is aborted mid-flight — the wallet's side effect (an approved
+     * signature, a live connection, a broadcast transaction) is the source
+     * of truth, and throwing here would discard real user work without
+     * undoing what the wallet already did.
+     */
+    abortSignal?: AbortSignal;
 };
 
 /**
@@ -258,45 +258,44 @@ type WalletActionOptions = {
  * or SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE when read-only.
  */
 
-export function walletSigner(config: WalletPluginConfig):
-    <T extends object>(client: T) => T & ClientWithWallet & ClientWithPayer & ClientWithIdentity;
+export function walletSigner(
+    config: WalletPluginConfig,
+): <T extends object>(client: T) => T & ClientWithWallet & ClientWithPayer & ClientWithIdentity;
 
-export function walletIdentity(config: WalletPluginConfig):
-    <T extends object>(client: T) => T & ClientWithWallet & ClientWithIdentity;
+export function walletIdentity(
+    config: WalletPluginConfig,
+): <T extends object>(client: T) => T & ClientWithWallet & ClientWithIdentity;
 
-export function walletPayer(config: WalletPluginConfig):
-    <T extends object>(client: T) => T & ClientWithWallet & ClientWithPayer;
+export function walletPayer(
+    config: WalletPluginConfig,
+): <T extends object>(client: T) => T & ClientWithWallet & ClientWithPayer;
 
-export function walletWithoutSigner(config: WalletPluginConfig):
-    <T extends object>(client: T) => T & ClientWithWallet;
+export function walletWithoutSigner(config: WalletPluginConfig): <T extends object>(client: T) => T & ClientWithWallet;
 
 type WalletStatus =
-  | 'pending'        // not yet initialized (SSR, or browser before first storage/registry check)
-  | 'disconnected'   // initialized, no wallet connected
-  | 'connecting'     // user-initiated connection in progress
-  | 'connected'      // wallet connected, account + signer active
-  | 'disconnecting'  // user-initiated disconnection in progress
-  | 'reconnecting';  // auto-connect in progress (restoring previous session)
+    | 'pending' // not yet initialized (SSR, or browser before first storage/registry check)
+    | 'disconnected' // initialized, no wallet connected
+    | 'connecting' // user-initiated connection in progress
+    | 'connected' // wallet connected, account + signer active
+    | 'disconnecting' // user-initiated disconnection in progress
+    | 'reconnecting'; // auto-connect in progress (restoring previous session)
 
 type WalletState = {
-  wallets: readonly UiWallet[];
-  connected: {
-    wallet: UiWallet;
-    account: UiWalletAccount;
-    /** The signer for the active account, or null for read-only wallets. */
-    signer: TransactionSigner | (MessageSigner & TransactionSigner) | null;
-  } | null;
-  status: WalletStatus;
+    wallets: readonly UiWallet[];
+    connected: {
+        wallet: UiWallet;
+        account: UiWalletAccount;
+        /** The signer for the active account, or null for read-only wallets. */
+        signer: TransactionSigner | (MessageSigner & TransactionSigner) | null;
+    } | null;
+    status: WalletStatus;
 };
 ```
 
 All wallet state is accessed via `getState()`. The returned object is frozen and memoized — a new reference is only created when a field actually changes (checked via reference equality in `setState`). This ensures `useSyncExternalStore` only triggers re-renders when something meaningful changed.
 
 ```tsx
-const { connected, status, wallets } = useSyncExternalStore(
-    client.wallet.subscribe,
-    client.wallet.getState,
-);
+const { connected, status, wallets } = useSyncExternalStore(client.wallet.subscribe, client.wallet.getState);
 
 if (status === 'pending') return null;
 if (!connected) return <ConnectButton wallets={wallets} />;
@@ -325,19 +324,19 @@ client[Symbol.dispose]();
 
 // With using syntax (TypeScript 5.2+)
 {
-  using client = createEmptyClient()
-    .use(rpc('https://...'))
-    .use(wallet({ chain: 'solana:mainnet' }))
-    .use(planAndSendTransactions());
+    using client = createEmptyClient()
+        .use(rpc('https://...'))
+        .use(wallet({ chain: 'solana:mainnet' }))
+        .use(planAndSendTransactions());
 } // cleanup runs automatically
 
 // In React
 useEffect(() => {
-  const client = createEmptyClient()
-    .use(rpc('https://...'))
-    .use(wallet({ chain: 'solana:mainnet' }));
-  setClient(client);
-  return () => client[Symbol.dispose]();
+    const client = createEmptyClient()
+        .use(rpc('https://...'))
+        .use(wallet({ chain: 'solana:mainnet' }));
+    setClient(client);
+    return () => client[Symbol.dispose]();
 }, []);
 ```
 
@@ -351,15 +350,13 @@ Cleanup unsubscribes from wallet-standard registry events, any active wallet's `
 import { extendClient, withCleanup } from '@solana/kit';
 import { createSignerFromWalletAccount } from '@solana/wallet-account-signer';
 import {
-  SolanaError,
-  SOLANA_ERROR__WALLET__NOT_CONNECTED,
-  SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED,
-  SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE,
+    SolanaError,
+    SOLANA_ERROR__WALLET__NOT_CONNECTED,
+    SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED,
+    SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE,
 } from '@solana/errors';
 import { getWallets } from '@wallet-standard/app';
-import {
-  getOrCreateUiWalletForStandardWallet_DO_NOT_USE_OR_YOU_WILL_BE_FIRED,
-} from '@wallet-standard/ui-registry';
+import { getOrCreateUiWalletForStandardWallet_DO_NOT_USE_OR_YOU_WILL_BE_FIRED } from '@wallet-standard/ui-registry';
 import { getWalletFeature } from '@wallet-standard/ui-features';
 
 import type { UiWallet, UiWalletAccount } from '@wallet-standard/ui';
@@ -368,38 +365,46 @@ import type { TransactionSigner, MessageSigner, SolanaChain } from '@solana/kit'
 
 // Internal helper — defines a throwing signer getter on the additions object.
 function defineSignerGetter(additions, property, store) {
-  Object.defineProperty(additions, property, {
-    get() {
-      const state = store.getState();
-      if (!state.connected) {
-        throw new SolanaError(SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED, { status: state.status });
-      }
-      if (!state.connected.signer) {
-        throw new SolanaError(SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE);
-      }
-      return state.connected.signer;
-    },
-    enumerable: true,
-    configurable: true,
-  });
+    Object.defineProperty(additions, property, {
+        get() {
+            const state = store.getState();
+            if (!state.connected) {
+                throw new SolanaError(SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED, { status: state.status });
+            }
+            if (!state.connected.signer) {
+                throw new SolanaError(SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE);
+            }
+            return state.connected.signer;
+        },
+        enumerable: true,
+        configurable: true,
+    });
 }
 
 // Internal helper — creates a wallet plugin with the given signer properties.
 function createPlugin(config, signerProperties) {
-  return (client) => {
-    const store = createWalletStore(config);
-    const additions = { wallet: store };
-    for (const prop of signerProperties) {
-      defineSignerGetter(additions, prop, store);
-    }
-    return withCleanup(extendClient(client, additions), () => store.destroy());
-  };
+    return client => {
+        const store = createWalletStore(config);
+        const additions = { wallet: store };
+        for (const prop of signerProperties) {
+            defineSignerGetter(additions, prop, store);
+        }
+        return withCleanup(extendClient(client, additions), () => store.destroy());
+    };
 }
 
-export function walletSigner(config) { return createPlugin(config, ['payer', 'identity']); }
-export function walletIdentity(config) { return createPlugin(config, ['identity']); }
-export function walletPayer(config) { return createPlugin(config, ['payer']); }
-export function walletWithoutSigner(config) { return createPlugin(config, []); }
+export function walletSigner(config) {
+    return createPlugin(config, ['payer', 'identity']);
+}
+export function walletIdentity(config) {
+    return createPlugin(config, ['identity']);
+}
+export function walletPayer(config) {
+    return createPlugin(config, ['payer']);
+}
+export function walletWithoutSigner(config) {
+    return createPlugin(config, []);
+}
 ```
 
 ### Internal store
@@ -410,16 +415,16 @@ The store is a plain object with state management -- no external dependencies. I
 
 ```typescript
 type WalletStoreState = {
-  wallets: readonly UiWallet[];
-  connectedWallet: UiWallet | null;
-  account: UiWalletAccount | null;
-  /**
-   * Cached signer derived from the active account via
-   * createSignerFromWalletAccount(). May include MessageSigner
-   * if the wallet supports solana:signMessage.
-   */
-  signer: TransactionSigner | (MessageSigner & TransactionSigner) | null;
-  status: WalletStatus;
+    wallets: readonly UiWallet[];
+    connectedWallet: UiWallet | null;
+    account: UiWalletAccount | null;
+    /**
+     * Cached signer derived from the active account via
+     * createSignerFromWalletAccount(). May include MessageSigner
+     * if the wallet supports solana:signMessage.
+     */
+    signer: TransactionSigner | (MessageSigner & TransactionSigner) | null;
+    status: WalletStatus;
 };
 ```
 
@@ -427,596 +432,589 @@ type WalletStoreState = {
 
 ```typescript
 function createWalletStore(config: WalletPluginConfig) {
-  // __BROWSER__ is a compile-time constant replaced by the build system.
-  // Tree-shaking removes the server/browser branches from each build target.
+    // __BROWSER__ is a compile-time constant replaced by the build system.
+    // Tree-shaking removes the server/browser branches from each build target.
 
-  let state: WalletStoreState = {
-    wallets: [],
-    connectedWallet: null,
-    account: null,
-    signer: null,
-    status: 'pending',
-  };
-
-  let snapshot: WalletState = deriveSnapshot(state);
-  const listeners = new Set<() => void>();
-  let walletEventsCleanup: (() => void) | null = null;
-  let reconnectCleanup: (() => void) | null = null;
-
-  // Tracks whether the user has made an explicit selection (connect or selectAccount).
-  // When true, auto-restore from storage will not override the user's choice.
-  let userHasSelected = false;
-
-  // Resolve storage: default to localStorage in browser, null to disable.
-  // On the server (__BROWSER__ === false), this code is unreachable —
-  // the SSR guard returns early before we get here.
-  const storage = config.storage === null
-    ? null
-    : config.storage ?? localStorage;
-  const storageKey = config.storageKey ?? 'kit-wallet';
-
-  // -- State management --
-
-  function setState(updates: Partial<WalletStoreState>) {
-    const prev = state;
-    state = { ...state, ...updates };
-
-    // Only create a new snapshot if snapshot-relevant fields changed.
-    // This ensures referential stability for useSyncExternalStore —
-    // React's Object.is comparison sees the same reference and skips
-    // the re-render when nothing meaningful changed.
-    if (
-      state.wallets !== prev.wallets ||
-      state.connectedWallet !== prev.connectedWallet ||
-      state.account !== prev.account ||
-      state.status !== prev.status ||
-      state.signer !== prev.signer
-    ) {
-      snapshot = deriveSnapshot(state);
-    }
-
-    listeners.forEach((l) => l());
-  }
-
-  function deriveSnapshot(s: WalletStoreState): WalletState {
-    return Object.freeze({
-      wallets: s.wallets,
-      connected: s.connectedWallet && s.account
-        ? Object.freeze({
-            wallet: s.connectedWallet,
-            account: s.account,
-            signer: s.signer,
-          })
-        : null,
-      status: s.status,
-    });
-  }
-
-  // -- SSR guard: on the server, return an inert stub --
-
-  if (!__BROWSER__) {
-    return {
-      subscribe: (listener: () => void) => {
-        listeners.add(listener);
-        return () => listeners.delete(listener);
-      },
-      getState: () => snapshot,
-      connect: () => { throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'connect' }); },
-      disconnect: () => Promise.resolve(),
-      selectAccount: () => { throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'selectAccount' }); },
-      signMessage: () => { throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signMessage' }); },
-      signIn: () => { throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signIn' }); }, // wallet arg ignored on server
-      destroy: () => {},
-    };
-  }
-
-  // -- Browser-only initialization below this point --
-
-  // -- Signer creation (resilient to read-only wallets and custom chains) --
-
-  function tryCreateSigner(
-    account: UiWalletAccount,
-  ): TransactionSigner | (MessageSigner & TransactionSigner) | null {
-    try {
-      // `config.chain` widens to `SolanaChain | (IdentifierString & {})` for
-      // the custom-chain escape hatch. `createSignerFromWalletAccount` types
-      // only `SolanaChain`, but at runtime it throws when the account doesn't
-      // support the chain — which we catch below. Non-Solana chains therefore
-      // degrade to `signer: null`, matching the read-only-wallet contract.
-      return createSignerFromWalletAccount(account, config.chain as SolanaChain);
-    } catch {
-      // Wallet doesn't support signing (read-only / watch wallet, or a
-      // non-Solana chain). Connection proceeds without a signer — the account
-      // is still usable for discovery, display, and persistence.
-      return null;
-    }
-  }
-
-  // -- Wallet discovery --
-
-  const registry = getWallets();
-
-  function filterWallet(wallet: Wallet): boolean {
-    const uiWallet =
-      getOrCreateUiWalletForStandardWallet_DO_NOT_USE_OR_YOU_WILL_BE_FIRED(wallet);
-    const supportsChain = uiWallet.chains.includes(config.chain);
-    const supportsConnect = uiWallet.features.includes('standard:connect');
-    if (!supportsChain || !supportsConnect) return false;
-    // Apply custom filter if provided
-    return config.filter ? config.filter(uiWallet) : true;
-  }
-
-  function buildWalletList(): readonly UiWallet[] {
-    return Object.freeze(
-      registry.get()
-        .filter(filterWallet)
-        .map(getOrCreateUiWalletForStandardWallet_DO_NOT_USE_OR_YOU_WILL_BE_FIRED),
-    );
-  }
-
-  setState({ wallets: buildWalletList() });
-
-  const unsubRegister = registry.on('register', () => {
-    setState({ wallets: buildWalletList() });
-  });
-  const unsubUnregister = registry.on('unregister', () => {
-    const newWallets = buildWalletList();
-    const updates: Partial<WalletStoreState> = { wallets: newWallets };
-
-    if (
-      state.connectedWallet &&
-      !newWallets.some((w) => w.name === state.connectedWallet!.name)
-    ) {
-      walletEventsCleanup?.();
-      walletEventsCleanup = null;
-      updates.connectedWallet = null;
-      updates.account = null;
-      updates.signer = null;
-      updates.status = 'disconnected';
-      storage?.removeItem(storageKey);
-    }
-
-    setState(updates);
-  });
-
-  // -- Connection lifecycle --
-
-  async function connect(
-    uiWallet: UiWallet,
-    options?: WalletActionOptions,
-  ): Promise<readonly UiWalletAccount[]> {
-    options?.abortSignal?.throwIfAborted();
-    userHasSelected = true;
-    reconnectCleanup?.();
-    reconnectCleanup = null;
-    setState({ status: 'connecting' });
-
-    try {
-      const connectFeature = getWalletFeature(uiWallet, 'standard:connect') as
-        StandardConnectFeature['standard:connect'];
-
-      // Snapshot existing accounts before connect — the wallet may
-      // already have some accounts visible.
-      const existingAccounts = [...uiWallet.accounts];
-
-      await connectFeature.connect();
-
-      // Refresh UiWallet to get updated accounts after connect.
-      // UiWallet handles are immutable snapshots — the pre-connect
-      // handle won't reflect newly authorized accounts.
-      const refreshedWallet = refreshUiWallet(uiWallet);
-      const allAccounts = refreshedWallet.accounts;
-
-      if (allAccounts.length === 0) {
-        setState({ status: 'disconnected' });
-        return allAccounts;
-      }
-
-      // Prefer the first newly authorized account. If none are new
-      // (e.g. re-connecting to an already-visible wallet), take the first.
-      const newAccount = allAccounts.find(
-        (a) => !existingAccounts.some((e) => e.address === a.address),
-      );
-      const activeAccount = newAccount ?? allAccounts[0];
-
-      const signer = tryCreateSigner(activeAccount);
-
-      walletEventsCleanup?.();
-      walletEventsCleanup = subscribeToWalletEvents(refreshedWallet);
-
-      setState({
-        connectedWallet: refreshedWallet,
-        account: activeAccount,
-        signer,
-        status: 'connected',
-      });
-
-      persistAccount(activeAccount, refreshedWallet);
-      return allAccounts;
-    } catch (error) {
-      setState({ status: 'disconnected' });
-      throw error;
-    }
-  }
-
-  async function disconnect(options?: WalletActionOptions): Promise<void> {
-    options?.abortSignal?.throwIfAborted();
-    if (!state.connectedWallet) return;
-
-    const currentWallet = state.connectedWallet;
-    setState({ status: 'disconnecting' });
-
-    try {
-      if (currentWallet && currentWallet.features.includes('standard:disconnect')) {
-        const disconnectFeature = getWalletFeature(
-          currentWallet, 'standard:disconnect',
-        ) as StandardDisconnectFeature['standard:disconnect'];
-        await disconnectFeature.disconnect();
-      }
-    } finally {
-      // Always clear local state and storage, even if standard:disconnect
-      // threw (network error, wallet bug). This is intentionally fail-safe:
-      // a broken disconnect should not leave the user in a state where they
-      // auto-reconnect into a potentially corrupt session on next page load.
-      walletEventsCleanup?.();
-      walletEventsCleanup = null;
-
-      setState({
+    let state: WalletStoreState = {
+        wallets: [],
         connectedWallet: null,
         account: null,
         signer: null,
-        status: 'disconnected',
-      });
+        status: 'pending',
+    };
 
-      storage?.removeItem(storageKey);
-    }
-  }
+    let snapshot: WalletState = deriveSnapshot(state);
+    const listeners = new Set<() => void>();
+    let walletEventsCleanup: (() => void) | null = null;
+    let reconnectCleanup: (() => void) | null = null;
 
-  /**
-   * Clear local state without calling standard:disconnect on the wallet.
-   * Used for wallet-initiated disconnections (accounts removed, chain/feature
-   * changes) where the wallet already knows it disconnected. Synchronous,
-   * so it can't race with other event handlers.
-   */
-  function disconnectLocally(): void {
-    walletEventsCleanup?.();
-    walletEventsCleanup = null;
+    // Tracks whether the user has made an explicit selection (connect or selectAccount).
+    // When true, auto-restore from storage will not override the user's choice.
+    let userHasSelected = false;
 
-    setState({
-      connectedWallet: null,
-      account: null,
-      signer: null,
-      status: 'disconnected',
-    });
+    // Resolve storage: default to localStorage in browser, null to disable.
+    // On the server (__BROWSER__ === false), this code is unreachable —
+    // the SSR guard returns early before we get here.
+    const storage = config.storage === null ? null : (config.storage ?? localStorage);
+    const storageKey = config.storageKey ?? 'kit-wallet';
 
-    storage?.removeItem(storageKey);
-  }
+    // -- State management --
 
-  function selectAccount(account: UiWalletAccount): void {
-    if (!state.connectedWallet) {
-      throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, {
-        operation: 'selectAccount',
-      });
-    }
-    userHasSelected = true;
-    const signer = tryCreateSigner(account);
-    setState({ account, signer });
-    persistAccount(account, state.connectedWallet!);
-  }
+    function setState(updates: Partial<WalletStoreState>) {
+        const prev = state;
+        state = { ...state, ...updates };
 
-  // -- Message signing --
+        // Only create a new snapshot if snapshot-relevant fields changed.
+        // This ensures referential stability for useSyncExternalStore —
+        // React's Object.is comparison sees the same reference and skips
+        // the re-render when nothing meaningful changed.
+        if (
+            state.wallets !== prev.wallets ||
+            state.connectedWallet !== prev.connectedWallet ||
+            state.account !== prev.account ||
+            state.status !== prev.status ||
+            state.signer !== prev.signer
+        ) {
+            snapshot = deriveSnapshot(state);
+        }
 
-  async function signMessage(
-    message: Uint8Array,
-    options?: WalletActionOptions,
-  ): Promise<SignatureBytes> {
-    options?.abortSignal?.throwIfAborted();
-    const { connectedWallet, account } = state;
-    if (!connectedWallet || !account) {
-      throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, {
-        operation: 'signMessage',
-      });
-    }
-    // Use the wallet feature directly rather than going through the cached
-    // signer. This decouples message signing from transaction signing —
-    // a wallet that supports solana:signMessage but not transaction signing
-    // still works. getWalletFeature throws WalletStandardError if the
-    // feature is not supported.
-    const signMessageFeature = getWalletFeature(connectedWallet, 'solana:signMessage') as
-      SolanaSignMessageFeature['solana:signMessage'];
-    const [output] = await signMessageFeature.signMessage({ account, message });
-    return output.signature;
-  }
-
-  // -- Sign In With Solana (SIWS-as-connect) --
-
-  async function signIn(
-    wallet: UiWallet,
-    input: SolanaSignInInput,
-    options?: WalletActionOptions,
-  ): Promise<SolanaSignInOutput> {
-    options?.abortSignal?.throwIfAborted();
-    userHasSelected = true;
-    reconnectCleanup?.();
-    reconnectCleanup = null;
-
-    const signInFeature = getWalletFeature(wallet, 'solana:signIn') as
-      SolanaSignInFeature['solana:signIn'];
-    const [result] = await signInFeature.signIn(input);
-
-    // Set up full connection state using the account from the sign-in response.
-    const account = result.account;
-    const signer = tryCreateSigner(account);
-
-    walletEventsCleanup?.();
-    walletEventsCleanup = subscribeToWalletEvents(wallet);
-
-    setState({
-      connectedWallet: wallet,
-      account,
-      signer,
-      status: 'connected',
-    });
-
-    persistAccount(account, wallet);
-    return result;
-  }
-
-  // -- Wallet-initiated events --
-
-  // UiWallet handles are immutable snapshots. After a connect or change
-  // event the handle may be stale. Refresh by round-tripping through the
-  // underlying raw wallet to get the latest UiWallet.
-  function refreshUiWallet(staleUiWallet: UiWallet): UiWallet {
-    const rawWallet = getWalletForHandle_DO_NOT_USE_OR_YOU_WILL_BE_FIRED(staleUiWallet);
-    return getOrCreateUiWalletForStandardWallet_DO_NOT_USE_OR_YOU_WILL_BE_FIRED(rawWallet);
-  }
-
-  function subscribeToWalletEvents(uiWallet: UiWallet): () => void {
-    if (!uiWallet.features.includes('standard:events')) {
-      return () => {};
+        listeners.forEach(l => l());
     }
 
-    const eventsFeature = getWalletFeature(uiWallet, 'standard:events') as
-      StandardEventsFeature['standard:events'];
-
-    return eventsFeature.on('change', (properties) => {
-      if (properties.accounts) {
-        handleAccountsChanged(uiWallet);
-      }
-      if (properties.chains) {
-        handleChainsChanged(uiWallet);
-      }
-      if (properties.features) {
-        handleFeaturesChanged(uiWallet);
-      }
-    });
-  }
-
-  function handleAccountsChanged(uiWallet: UiWallet): void {
-    const refreshed = refreshUiWallet(uiWallet);
-    const newAccounts = refreshed.accounts;
-
-    if (newAccounts.length === 0) {
-      disconnectLocally();
-      return;
+    function deriveSnapshot(s: WalletStoreState): WalletState {
+        return Object.freeze({
+            wallets: s.wallets,
+            connected:
+                s.connectedWallet && s.account
+                    ? Object.freeze({
+                          wallet: s.connectedWallet,
+                          account: s.account,
+                          signer: s.signer,
+                      })
+                    : null,
+            status: s.status,
+        });
     }
 
-    const currentAddress = state.account?.address;
-    const stillPresent = currentAddress
-      ? newAccounts.find((a) => a.address === currentAddress)
-      : null;
-    const activeAccount = stillPresent ?? newAccounts[0];
+    // -- SSR guard: on the server, return an inert stub --
 
-    const signer = tryCreateSigner(activeAccount);
-    setState({ account: activeAccount, connectedWallet: refreshed, signer });
-    persistAccount(activeAccount, refreshed);
-  }
-
-  function handleChainsChanged(uiWallet: UiWallet): void {
-    const refreshed = refreshUiWallet(uiWallet);
-
-    if (!refreshed.chains.includes(config.chain)) {
-      disconnectLocally();
-      return;
-    }
-    // Chain support shifted but our chain is still valid — recreate
-    // signer in case chain-related capabilities changed.
-    if (state.account) {
-      const signer = tryCreateSigner(state.account);
-      setState({ connectedWallet: refreshed, signer });
-    }
-  }
-
-  function handleFeaturesChanged(uiWallet: UiWallet): void {
-    const refreshed = refreshUiWallet(uiWallet);
-
-    // Re-run the filter — if the wallet no longer passes, disconnect.
-    if (config.filter && !config.filter(refreshed)) {
-      disconnectLocally();
-      return;
-    }
-    // Features changed but wallet is still valid — recreate signer
-    // to pick up new capabilities or drop removed ones.
-    if (state.account) {
-      const signer = tryCreateSigner(state.account);
-      setState({ connectedWallet: refreshed, signer });
+    if (!__BROWSER__) {
+        return {
+            subscribe: (listener: () => void) => {
+                listeners.add(listener);
+                return () => listeners.delete(listener);
+            },
+            getState: () => snapshot,
+            connect: () => {
+                throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'connect' });
+            },
+            disconnect: () => Promise.resolve(),
+            selectAccount: () => {
+                throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'selectAccount' });
+            },
+            signMessage: () => {
+                throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signMessage' });
+            },
+            signIn: () => {
+                throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signIn' });
+            }, // wallet arg ignored on server
+            destroy: () => {},
+        };
     }
 
-    // Rebuild wallet list so other wallets reflect feature changes too.
+    // -- Browser-only initialization below this point --
+
+    // -- Signer creation (resilient to read-only wallets and custom chains) --
+
+    function tryCreateSigner(account: UiWalletAccount): TransactionSigner | (MessageSigner & TransactionSigner) | null {
+        try {
+            // `config.chain` widens to `SolanaChain | (IdentifierString & {})` for
+            // the custom-chain escape hatch. `createSignerFromWalletAccount` types
+            // only `SolanaChain`, but at runtime it throws when the account doesn't
+            // support the chain — which we catch below. Non-Solana chains therefore
+            // degrade to `signer: null`, matching the read-only-wallet contract.
+            return createSignerFromWalletAccount(account, config.chain as SolanaChain);
+        } catch {
+            // Wallet doesn't support signing (read-only / watch wallet, or a
+            // non-Solana chain). Connection proceeds without a signer — the account
+            // is still usable for discovery, display, and persistence.
+            return null;
+        }
+    }
+
+    // -- Wallet discovery --
+
+    const registry = getWallets();
+
+    function filterWallet(wallet: Wallet): boolean {
+        const uiWallet = getOrCreateUiWalletForStandardWallet_DO_NOT_USE_OR_YOU_WILL_BE_FIRED(wallet);
+        const supportsChain = uiWallet.chains.includes(config.chain);
+        const supportsConnect = uiWallet.features.includes('standard:connect');
+        if (!supportsChain || !supportsConnect) return false;
+        // Apply custom filter if provided
+        return config.filter ? config.filter(uiWallet) : true;
+    }
+
+    function buildWalletList(): readonly UiWallet[] {
+        return Object.freeze(
+            registry
+                .get()
+                .filter(filterWallet)
+                .map(getOrCreateUiWalletForStandardWallet_DO_NOT_USE_OR_YOU_WILL_BE_FIRED),
+        );
+    }
+
     setState({ wallets: buildWalletList() });
-  }
 
-  // -- Auto-connect --
+    const unsubRegister = registry.on('register', () => {
+        setState({ wallets: buildWalletList() });
+    });
+    const unsubUnregister = registry.on('unregister', () => {
+        const newWallets = buildWalletList();
+        const updates: Partial<WalletStoreState> = { wallets: newWallets };
 
-  if (config.autoConnect !== false && storage) {
-    // Wrapped in async IIFE because storage.getItem may return a Promise
-    // (e.g. IndexedDB). Plugin setup still returns synchronously — status
-    // stays 'pending' until the storage read resolves.
-    (async () => {
-      const savedKey = await storage.getItem(storageKey);
-      if (userHasSelected) return;
+        if (state.connectedWallet && !newWallets.some(w => w.name === state.connectedWallet!.name)) {
+            walletEventsCleanup?.();
+            walletEventsCleanup = null;
+            updates.connectedWallet = null;
+            updates.account = null;
+            updates.signer = null;
+            updates.status = 'disconnected';
+            storage?.removeItem(storageKey);
+        }
 
-      if (!savedKey) {
-        setState({ status: 'disconnected' });
-        return;
-      }
+        setState(updates);
+    });
 
-      const separatorIndex = savedKey.lastIndexOf(':');
-      if (separatorIndex === -1) {
-        // Malformed saved key
-        storage.removeItem(storageKey);
-        setState({ status: 'disconnected' });
-        return;
-      }
+    // -- Connection lifecycle --
 
-      const walletName = savedKey.slice(0, separatorIndex);
-      const existing = state.wallets.find((w) => w.name === walletName);
+    async function connect(uiWallet: UiWallet, options?: WalletActionOptions): Promise<readonly UiWalletAccount[]> {
+        options?.abortSignal?.throwIfAborted();
+        userHasSelected = true;
+        reconnectCleanup?.();
+        reconnectCleanup = null;
+        setState({ status: 'connecting' });
 
-      if (existing) {
-        attemptSilentReconnect(savedKey, existing);
-      } else if (
-        registry.get().some((w) => {
-          const ui = getOrCreateUiWalletForStandardWallet_DO_NOT_USE_OR_YOU_WILL_BE_FIRED(w);
-          return ui.name === walletName;
-        })
-      ) {
-        // Wallet is registered but doesn't pass the filter (wrong chain,
-        // missing standard:connect, or rejected by config.filter).
-        // Clear stale persistence — don't wait for it.
-        storage.removeItem(storageKey);
-        setState({ status: 'disconnected' });
-      } else {
-        // Wallet not registered yet — watch for it to appear.
-        // Revert status to 'disconnected' after 3s to avoid a perpetual
-        // spinner if the wallet is uninstalled. Keep the listener alive
-        // so slow-loading extensions can still silently reconnect.
-        setState({ status: 'reconnecting' });
+        try {
+            const connectFeature = getWalletFeature(
+                uiWallet,
+                'standard:connect',
+            ) as StandardConnectFeature['standard:connect'];
 
-        const statusTimeout = setTimeout(() => {
-          if (!userHasSelected && state.status === 'reconnecting') {
+            // Snapshot existing accounts before connect — the wallet may
+            // already have some accounts visible.
+            const existingAccounts = [...uiWallet.accounts];
+
+            await connectFeature.connect();
+
+            // Refresh UiWallet to get updated accounts after connect.
+            // UiWallet handles are immutable snapshots — the pre-connect
+            // handle won't reflect newly authorized accounts.
+            const refreshedWallet = refreshUiWallet(uiWallet);
+            const allAccounts = refreshedWallet.accounts;
+
+            if (allAccounts.length === 0) {
+                setState({ status: 'disconnected' });
+                return allAccounts;
+            }
+
+            // Prefer the first newly authorized account. If none are new
+            // (e.g. re-connecting to an already-visible wallet), take the first.
+            const newAccount = allAccounts.find(a => !existingAccounts.some(e => e.address === a.address));
+            const activeAccount = newAccount ?? allAccounts[0];
+
+            const signer = tryCreateSigner(activeAccount);
+
+            walletEventsCleanup?.();
+            walletEventsCleanup = subscribeToWalletEvents(refreshedWallet);
+
+            setState({
+                connectedWallet: refreshedWallet,
+                account: activeAccount,
+                signer,
+                status: 'connected',
+            });
+
+            persistAccount(activeAccount, refreshedWallet);
+            return allAccounts;
+        } catch (error) {
             setState({ status: 'disconnected' });
-          }
-        }, 3000);
+            throw error;
+        }
+    }
 
-        const unsubRegisterForReconnect = registry.on('register', () => {
-          if (userHasSelected) {
-            clearTimeout(statusTimeout);
-            unsubRegisterForReconnect();
-            reconnectCleanup = null;
-            return;
-          }
-          const found = buildWalletList().find((w) => w.name === walletName);
-          if (found) {
-            clearTimeout(statusTimeout);
-            unsubRegisterForReconnect();
-            reconnectCleanup = null;
-            attemptSilentReconnect(savedKey, found);
-          } else if (
-            registry.get().some((w) => {
-              const ui = getOrCreateUiWalletForStandardWallet_DO_NOT_USE_OR_YOU_WILL_BE_FIRED(w);
-              return ui.name === walletName;
-            })
-          ) {
-            // Wallet registered but filtered out — clear stale persistence
-            clearTimeout(statusTimeout);
-            unsubRegisterForReconnect();
-            reconnectCleanup = null;
-            storage.removeItem(storageKey);
-            setState({ status: 'disconnected' });
-          }
+    async function disconnect(options?: WalletActionOptions): Promise<void> {
+        options?.abortSignal?.throwIfAborted();
+        if (!state.connectedWallet) return;
+
+        const currentWallet = state.connectedWallet;
+        setState({ status: 'disconnecting' });
+
+        try {
+            if (currentWallet && currentWallet.features.includes('standard:disconnect')) {
+                const disconnectFeature = getWalletFeature(
+                    currentWallet,
+                    'standard:disconnect',
+                ) as StandardDisconnectFeature['standard:disconnect'];
+                await disconnectFeature.disconnect();
+            }
+        } finally {
+            // Always clear local state and storage, even if standard:disconnect
+            // threw (network error, wallet bug). This is intentionally fail-safe:
+            // a broken disconnect should not leave the user in a state where they
+            // auto-reconnect into a potentially corrupt session on next page load.
+            walletEventsCleanup?.();
+            walletEventsCleanup = null;
+
+            setState({
+                connectedWallet: null,
+                account: null,
+                signer: null,
+                status: 'disconnected',
+            });
+
+            storage?.removeItem(storageKey);
+        }
+    }
+
+    /**
+     * Clear local state without calling standard:disconnect on the wallet.
+     * Used for wallet-initiated disconnections (accounts removed, chain/feature
+     * changes) where the wallet already knows it disconnected. Synchronous,
+     * so it can't race with other event handlers.
+     */
+    function disconnectLocally(): void {
+        walletEventsCleanup?.();
+        walletEventsCleanup = null;
+
+        setState({
+            connectedWallet: null,
+            account: null,
+            signer: null,
+            status: 'disconnected',
         });
 
-        reconnectCleanup = () => {
-          clearTimeout(statusTimeout);
-          unsubRegisterForReconnect();
-        };
-      }
-    })().catch(() => {
-      // Storage read failed — fall back to disconnected.
-      if (!userHasSelected) {
-        setState({ status: 'disconnected' });
-      }
-    });
-  } else {
-    // No auto-connect: immediately transition from 'pending' to 'disconnected'
-    setState({ status: 'disconnected' });
-  }
-
-  async function attemptSilentReconnect(
-    savedAccountKey: string,
-    uiWallet: UiWallet,
-  ): Promise<void> {
-    setState({ status: 'reconnecting' });
-
-    try {
-      const connectFeature = getWalletFeature(uiWallet, 'standard:connect') as
-        StandardConnectFeature['standard:connect'];
-      await connectFeature.connect({ silent: true });
-
-      const refreshedWallet = refreshUiWallet(uiWallet);
-      const allAccounts = refreshedWallet.accounts;
-
-      if (allAccounts.length === 0) {
-        setState({ status: 'disconnected' });
         storage?.removeItem(storageKey);
-        return;
-      }
-
-      // Check again: user may have connected manually while we were awaiting
-      if (userHasSelected) return;
-
-      // Restore specific saved account, fall back to first from same wallet
-      const savedAddress = savedAccountKey.slice(savedAccountKey.lastIndexOf(':') + 1);
-      const activeAccount = allAccounts.find((a) => a.address === savedAddress)
-        ?? allAccounts[0];
-
-      const signer = tryCreateSigner(activeAccount);
-
-      walletEventsCleanup?.();
-      walletEventsCleanup = subscribeToWalletEvents(refreshedWallet);
-
-      setState({
-        connectedWallet: refreshedWallet,
-        account: activeAccount,
-        signer,
-        status: 'connected',
-      });
-    } catch {
-      setState({ status: 'disconnected' });
-      storage?.removeItem(storageKey);
     }
-  }
 
-  // -- Persistence --
+    function selectAccount(account: UiWalletAccount): void {
+        if (!state.connectedWallet) {
+            throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, {
+                operation: 'selectAccount',
+            });
+        }
+        userHasSelected = true;
+        const signer = tryCreateSigner(account);
+        setState({ account, signer });
+        persistAccount(account, state.connectedWallet!);
+    }
 
-  function persistAccount(account: UiWalletAccount, wallet: UiWallet): void {
-    storage?.setItem(storageKey, `${wallet.name}:${account.address}`);
-  }
+    // -- Message signing --
 
-  // -- Public API (exposed as client.wallet) --
+    async function signMessage(message: Uint8Array, options?: WalletActionOptions): Promise<SignatureBytes> {
+        options?.abortSignal?.throwIfAborted();
+        const { connectedWallet, account } = state;
+        if (!connectedWallet || !account) {
+            throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, {
+                operation: 'signMessage',
+            });
+        }
+        // Use the wallet feature directly rather than going through the cached
+        // signer. This decouples message signing from transaction signing —
+        // a wallet that supports solana:signMessage but not transaction signing
+        // still works. getWalletFeature throws WalletStandardError if the
+        // feature is not supported.
+        const signMessageFeature = getWalletFeature(
+            connectedWallet,
+            'solana:signMessage',
+        ) as SolanaSignMessageFeature['solana:signMessage'];
+        const [output] = await signMessageFeature.signMessage({ account, message });
+        return output.signature;
+    }
 
-  return {
-    subscribe: (listener: () => void) => {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-    getState: () => snapshot,
-    connect,
-    disconnect,
-    selectAccount,
-    signMessage,
-    signIn,
-    destroy: () => {
-      unsubRegister();
-      unsubUnregister();
-      walletEventsCleanup?.();
-      walletEventsCleanup = null;
-      reconnectCleanup?.();
-      reconnectCleanup = null;
-      listeners.clear();
-    },
-  };
+    // -- Sign In With Solana (SIWS-as-connect) --
+
+    async function signIn(
+        wallet: UiWallet,
+        input: SolanaSignInInput,
+        options?: WalletActionOptions,
+    ): Promise<SolanaSignInOutput> {
+        options?.abortSignal?.throwIfAborted();
+        userHasSelected = true;
+        reconnectCleanup?.();
+        reconnectCleanup = null;
+
+        const signInFeature = getWalletFeature(wallet, 'solana:signIn') as SolanaSignInFeature['solana:signIn'];
+        const [result] = await signInFeature.signIn(input);
+
+        // Set up full connection state using the account from the sign-in response.
+        const account = result.account;
+        const signer = tryCreateSigner(account);
+
+        walletEventsCleanup?.();
+        walletEventsCleanup = subscribeToWalletEvents(wallet);
+
+        setState({
+            connectedWallet: wallet,
+            account,
+            signer,
+            status: 'connected',
+        });
+
+        persistAccount(account, wallet);
+        return result;
+    }
+
+    // -- Wallet-initiated events --
+
+    // UiWallet handles are immutable snapshots. After a connect or change
+    // event the handle may be stale. Refresh by round-tripping through the
+    // underlying raw wallet to get the latest UiWallet.
+    function refreshUiWallet(staleUiWallet: UiWallet): UiWallet {
+        const rawWallet = getWalletForHandle_DO_NOT_USE_OR_YOU_WILL_BE_FIRED(staleUiWallet);
+        return getOrCreateUiWalletForStandardWallet_DO_NOT_USE_OR_YOU_WILL_BE_FIRED(rawWallet);
+    }
+
+    function subscribeToWalletEvents(uiWallet: UiWallet): () => void {
+        if (!uiWallet.features.includes('standard:events')) {
+            return () => {};
+        }
+
+        const eventsFeature = getWalletFeature(uiWallet, 'standard:events') as StandardEventsFeature['standard:events'];
+
+        return eventsFeature.on('change', properties => {
+            if (properties.accounts) {
+                handleAccountsChanged(uiWallet);
+            }
+            if (properties.chains) {
+                handleChainsChanged(uiWallet);
+            }
+            if (properties.features) {
+                handleFeaturesChanged(uiWallet);
+            }
+        });
+    }
+
+    function handleAccountsChanged(uiWallet: UiWallet): void {
+        const refreshed = refreshUiWallet(uiWallet);
+        const newAccounts = refreshed.accounts;
+
+        if (newAccounts.length === 0) {
+            disconnectLocally();
+            return;
+        }
+
+        const currentAddress = state.account?.address;
+        const stillPresent = currentAddress ? newAccounts.find(a => a.address === currentAddress) : null;
+        const activeAccount = stillPresent ?? newAccounts[0];
+
+        const signer = tryCreateSigner(activeAccount);
+        setState({ account: activeAccount, connectedWallet: refreshed, signer });
+        persistAccount(activeAccount, refreshed);
+    }
+
+    function handleChainsChanged(uiWallet: UiWallet): void {
+        const refreshed = refreshUiWallet(uiWallet);
+
+        if (!refreshed.chains.includes(config.chain)) {
+            disconnectLocally();
+            return;
+        }
+        // Chain support shifted but our chain is still valid — recreate
+        // signer in case chain-related capabilities changed.
+        if (state.account) {
+            const signer = tryCreateSigner(state.account);
+            setState({ connectedWallet: refreshed, signer });
+        }
+    }
+
+    function handleFeaturesChanged(uiWallet: UiWallet): void {
+        const refreshed = refreshUiWallet(uiWallet);
+
+        // Re-run the filter — if the wallet no longer passes, disconnect.
+        if (config.filter && !config.filter(refreshed)) {
+            disconnectLocally();
+            return;
+        }
+        // Features changed but wallet is still valid — recreate signer
+        // to pick up new capabilities or drop removed ones.
+        if (state.account) {
+            const signer = tryCreateSigner(state.account);
+            setState({ connectedWallet: refreshed, signer });
+        }
+
+        // Rebuild wallet list so other wallets reflect feature changes too.
+        setState({ wallets: buildWalletList() });
+    }
+
+    // -- Auto-connect --
+
+    if (config.autoConnect !== false && storage) {
+        // Wrapped in async IIFE because storage.getItem may return a Promise
+        // (e.g. IndexedDB). Plugin setup still returns synchronously — status
+        // stays 'pending' until the storage read resolves.
+        (async () => {
+            const savedKey = await storage.getItem(storageKey);
+            if (userHasSelected) return;
+
+            if (!savedKey) {
+                setState({ status: 'disconnected' });
+                return;
+            }
+
+            const separatorIndex = savedKey.lastIndexOf(':');
+            if (separatorIndex === -1) {
+                // Malformed saved key
+                storage.removeItem(storageKey);
+                setState({ status: 'disconnected' });
+                return;
+            }
+
+            const walletName = savedKey.slice(0, separatorIndex);
+            const existing = state.wallets.find(w => w.name === walletName);
+
+            if (existing) {
+                attemptSilentReconnect(savedKey, existing);
+            } else if (
+                registry.get().some(w => {
+                    const ui = getOrCreateUiWalletForStandardWallet_DO_NOT_USE_OR_YOU_WILL_BE_FIRED(w);
+                    return ui.name === walletName;
+                })
+            ) {
+                // Wallet is registered but doesn't pass the filter (wrong chain,
+                // missing standard:connect, or rejected by config.filter).
+                // Clear stale persistence — don't wait for it.
+                storage.removeItem(storageKey);
+                setState({ status: 'disconnected' });
+            } else {
+                // Wallet not registered yet — watch for it to appear.
+                // Revert status to 'disconnected' after 3s to avoid a perpetual
+                // spinner if the wallet is uninstalled. Keep the listener alive
+                // so slow-loading extensions can still silently reconnect.
+                setState({ status: 'reconnecting' });
+
+                const statusTimeout = setTimeout(() => {
+                    if (!userHasSelected && state.status === 'reconnecting') {
+                        setState({ status: 'disconnected' });
+                    }
+                }, 3000);
+
+                const unsubRegisterForReconnect = registry.on('register', () => {
+                    if (userHasSelected) {
+                        clearTimeout(statusTimeout);
+                        unsubRegisterForReconnect();
+                        reconnectCleanup = null;
+                        return;
+                    }
+                    const found = buildWalletList().find(w => w.name === walletName);
+                    if (found) {
+                        clearTimeout(statusTimeout);
+                        unsubRegisterForReconnect();
+                        reconnectCleanup = null;
+                        attemptSilentReconnect(savedKey, found);
+                    } else if (
+                        registry.get().some(w => {
+                            const ui = getOrCreateUiWalletForStandardWallet_DO_NOT_USE_OR_YOU_WILL_BE_FIRED(w);
+                            return ui.name === walletName;
+                        })
+                    ) {
+                        // Wallet registered but filtered out — clear stale persistence
+                        clearTimeout(statusTimeout);
+                        unsubRegisterForReconnect();
+                        reconnectCleanup = null;
+                        storage.removeItem(storageKey);
+                        setState({ status: 'disconnected' });
+                    }
+                });
+
+                reconnectCleanup = () => {
+                    clearTimeout(statusTimeout);
+                    unsubRegisterForReconnect();
+                };
+            }
+        })().catch(() => {
+            // Storage read failed — fall back to disconnected.
+            if (!userHasSelected) {
+                setState({ status: 'disconnected' });
+            }
+        });
+    } else {
+        // No auto-connect: immediately transition from 'pending' to 'disconnected'
+        setState({ status: 'disconnected' });
+    }
+
+    async function attemptSilentReconnect(savedAccountKey: string, uiWallet: UiWallet): Promise<void> {
+        setState({ status: 'reconnecting' });
+
+        try {
+            const connectFeature = getWalletFeature(
+                uiWallet,
+                'standard:connect',
+            ) as StandardConnectFeature['standard:connect'];
+            await connectFeature.connect({ silent: true });
+
+            const refreshedWallet = refreshUiWallet(uiWallet);
+            const allAccounts = refreshedWallet.accounts;
+
+            if (allAccounts.length === 0) {
+                setState({ status: 'disconnected' });
+                storage?.removeItem(storageKey);
+                return;
+            }
+
+            // Check again: user may have connected manually while we were awaiting
+            if (userHasSelected) return;
+
+            // Restore specific saved account, fall back to first from same wallet
+            const savedAddress = savedAccountKey.slice(savedAccountKey.lastIndexOf(':') + 1);
+            const activeAccount = allAccounts.find(a => a.address === savedAddress) ?? allAccounts[0];
+
+            const signer = tryCreateSigner(activeAccount);
+
+            walletEventsCleanup?.();
+            walletEventsCleanup = subscribeToWalletEvents(refreshedWallet);
+
+            setState({
+                connectedWallet: refreshedWallet,
+                account: activeAccount,
+                signer,
+                status: 'connected',
+            });
+        } catch {
+            setState({ status: 'disconnected' });
+            storage?.removeItem(storageKey);
+        }
+    }
+
+    // -- Persistence --
+
+    function persistAccount(account: UiWalletAccount, wallet: UiWallet): void {
+        storage?.setItem(storageKey, `${wallet.name}:${account.address}`);
+    }
+
+    // -- Public API (exposed as client.wallet) --
+
+    return {
+        subscribe: (listener: () => void) => {
+            listeners.add(listener);
+            return () => listeners.delete(listener);
+        },
+        getState: () => snapshot,
+        connect,
+        disconnect,
+        selectAccount,
+        signMessage,
+        signIn,
+        destroy: () => {
+            unsubRegister();
+            unsubUnregister();
+            walletEventsCleanup?.();
+            walletEventsCleanup = null;
+            reconnectCleanup?.();
+            reconnectCleanup = null;
+            listeners.clear();
+        },
+    };
 }
 ```
 
@@ -1084,36 +1082,42 @@ All wallet state is accessed via `client.wallet.getState()`. There are no indivi
 ### Framework adapter examples
 
 **React:**
+
 ```tsx
 function useWalletState(client) {
-  return useSyncExternalStore(client.wallet.subscribe, client.wallet.getState);
+    return useSyncExternalStore(client.wallet.subscribe, client.wallet.getState);
 }
 ```
 
 **Vue:**
+
 ```typescript
 function useWalletState(client) {
-  const state = shallowRef(client.wallet.getState());
-  onMounted(() => {
-    const unsub = client.wallet.subscribe(() => { state.value = client.wallet.getState(); });
-    onUnmounted(unsub);
-  });
-  return state;
+    const state = shallowRef(client.wallet.getState());
+    onMounted(() => {
+        const unsub = client.wallet.subscribe(() => {
+            state.value = client.wallet.getState();
+        });
+        onUnmounted(unsub);
+    });
+    return state;
 }
 ```
 
 **Svelte:**
+
 ```typescript
-const walletState = readable(client.wallet.getState(), (set) => {
-  return client.wallet.subscribe(() => set(client.wallet.getState()));
+const walletState = readable(client.wallet.getState(), set => {
+    return client.wallet.subscribe(() => set(client.wallet.getState()));
 });
 ```
 
 **Solid:**
+
 ```typescript
 const [walletState, setWalletState] = createSignal(client.wallet.getState());
 onMount(() => {
-  onCleanup(client.wallet.subscribe(() => setWalletState(client.wallet.getState())));
+    onCleanup(client.wallet.subscribe(() => setWalletState(client.wallet.getState())));
 });
 ```
 
@@ -1125,9 +1129,9 @@ Persistence is handled via a pluggable storage adapter following the Web Storage
 
 ```typescript
 type WalletStorage = {
-  getItem(key: string): string | null | Promise<string | null>;
-  setItem(key: string, value: string): void | Promise<void>;
-  removeItem(key: string): void | Promise<void>;
+    getItem(key: string): string | null | Promise<string | null>;
+    setItem(key: string, value: string): void | Promise<void>;
+    removeItem(key: string): void | Promise<void>;
 };
 ```
 
@@ -1147,90 +1151,90 @@ When no `storage` option is provided, the plugin defaults to `localStorage` in t
 
 ```typescript
 // Default — uses localStorage in browser, skipped on server
-wallet({ chain: 'solana:mainnet' })
+wallet({ chain: 'solana:mainnet' });
 
 // Use sessionStorage
-wallet({ chain: 'solana:mainnet', storage: sessionStorage })
+wallet({ chain: 'solana:mainnet', storage: sessionStorage });
 
 // Use a reactive store
 wallet({
-  chain: 'solana:mainnet',
-  storage: {
-    getItem: (key) => myStore.getState().walletKey,
-    setItem: (key, value) => myStore.setState({ walletKey: value }),
-    removeItem: (key) => myStore.setState({ walletKey: null }),
-  },
-})
+    chain: 'solana:mainnet',
+    storage: {
+        getItem: key => myStore.getState().walletKey,
+        setItem: (key, value) => myStore.setState({ walletKey: value }),
+        removeItem: key => myStore.setState({ walletKey: null }),
+    },
+});
 
 // Disable persistence explicitly
-wallet({ chain: 'solana:mainnet', storage: null })
+wallet({ chain: 'solana:mainnet', storage: null });
 ```
 
 ## Configuration
 
 ```typescript
 type WalletPluginConfig = {
-  /**
-   * The chain this client targets.
-   *
-   * Accepts any `SolanaChain` (with literal autocomplete for
-   * 'solana:mainnet' / 'solana:devnet' / 'solana:testnet') and, as an escape
-   * hatch, any wallet-standard `IdentifierString` (`${string}:${string}`) for
-   * custom chains or non-Solana L2s. The `& {}` preserves literal autocomplete
-   * on the Solana members — without it TS would collapse the union into the
-   * wider template literal type.
-   *
-   * The plugin's runtime is chain-agnostic: `uiWallet.chains.includes(chain)`
-   * for discovery is a plain string check, and `createSignerFromWalletAccount`
-   * throws for chains it doesn't understand — which `tryCreateSigner` already
-   * catches, degrading to `signer: null` (matching the read-only-wallet
-   * contract).
-   *
-   * One client = one chain. To switch networks, create a separate client with
-   * a different chain and RPC endpoint.
-   */
-  chain: SolanaChain | (IdentifierString & {});
+    /**
+     * The chain this client targets.
+     *
+     * Accepts any `SolanaChain` (with literal autocomplete for
+     * 'solana:mainnet' / 'solana:devnet' / 'solana:testnet') and, as an escape
+     * hatch, any wallet-standard `IdentifierString` (`${string}:${string}`) for
+     * custom chains or non-Solana L2s. The `& {}` preserves literal autocomplete
+     * on the Solana members — without it TS would collapse the union into the
+     * wider template literal type.
+     *
+     * The plugin's runtime is chain-agnostic: `uiWallet.chains.includes(chain)`
+     * for discovery is a plain string check, and `createSignerFromWalletAccount`
+     * throws for chains it doesn't understand — which `tryCreateSigner` already
+     * catches, degrading to `signer: null` (matching the read-only-wallet
+     * contract).
+     *
+     * One client = one chain. To switch networks, create a separate client with
+     * a different chain and RPC endpoint.
+     */
+    chain: SolanaChain | (IdentifierString & {});
 
-  /**
-   * Optional filter function for wallet discovery.
-   * Called for each wallet that supports the configured chain and
-   * standard:connect. Return true to include the wallet, false to exclude.
-   * Useful for requiring specific features, whitelisting wallets,
-   * or any other application-specific filtering.
-   *
-   * @example
-   * // Require signAndSendTransaction
-   * filter: (w) => w.features.includes('solana:signAndSendTransaction')
-   *
-   * @example
-   * // Whitelist specific wallets
-   * filter: (w) => ['Phantom', 'Solflare'].includes(w.name)
-   */
-  filter?: (wallet: UiWallet) => boolean;
+    /**
+     * Optional filter function for wallet discovery.
+     * Called for each wallet that supports the configured chain and
+     * standard:connect. Return true to include the wallet, false to exclude.
+     * Useful for requiring specific features, whitelisting wallets,
+     * or any other application-specific filtering.
+     *
+     * @example
+     * // Require signAndSendTransaction
+     * filter: (w) => w.features.includes('solana:signAndSendTransaction')
+     *
+     * @example
+     * // Whitelist specific wallets
+     * filter: (w) => ['Phantom', 'Solflare'].includes(w.name)
+     */
+    filter?: (wallet: UiWallet) => boolean;
 
-  /**
-   * Whether to attempt silent reconnection on startup using
-   * the persisted wallet account from storage.
-   * @default true
-   */
-  autoConnect?: boolean;
+    /**
+     * Whether to attempt silent reconnection on startup using
+     * the persisted wallet account from storage.
+     * @default true
+     */
+    autoConnect?: boolean;
 
-  /**
-   * Storage adapter for persisting the selected wallet account.
-   * Follows the Web Storage API shape (getItem/setItem/removeItem).
-   * Supports both sync and async backends.
-   * localStorage and sessionStorage satisfy this interface directly.
-   * Pass null to disable persistence entirely.
-   * Ignored on the server (storage is always skipped in SSR).
-   * @default localStorage
-   */
-  storage?: WalletStorage | null;
+    /**
+     * Storage adapter for persisting the selected wallet account.
+     * Follows the Web Storage API shape (getItem/setItem/removeItem).
+     * Supports both sync and async backends.
+     * localStorage and sessionStorage satisfy this interface directly.
+     * Pass null to disable persistence entirely.
+     * Ignored on the server (storage is always skipped in SSR).
+     * @default localStorage
+     */
+    storage?: WalletStorage | null;
 
-  /**
-   * Storage key used for persistence.
-   * @default 'kit-wallet'
-   */
-  storageKey?: string;
+    /**
+     * Storage key used for persistence.
+     * @default 'kit-wallet'
+     */
+    storageKey?: string;
 };
 ```
 
@@ -1241,15 +1245,15 @@ type WalletPluginConfig = {
 Three error codes from `@solana/errors`:
 
 ```typescript
-SOLANA_ERROR__WALLET__NOT_CONNECTED
+SOLANA_ERROR__WALLET__NOT_CONNECTED;
 // context: { operation: string }
 // message: "Cannot $operation: no wallet connected"
 
-SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED
+SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED;
 // context: { status: string }
 // message: "No signing wallet connected (status: $status)"
 
-SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE
+SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE;
 // context: {}
 // message: "Connected wallet does not support signing"
 ```
@@ -1262,20 +1266,20 @@ Wallet-originated errors (e.g. user rejecting a connection prompt) are propagate
 
 ### Error behavior
 
-| Scenario | Behavior |
-|----------|----------|
-| SSR (server environment) | Status stays `'pending'`, all actions throw `SOLANA_ERROR__WALLET__NOT_CONNECTED` |
-| User rejects connection prompt | `connect()` propagates wallet error, status returns to `disconnected` |
-| Wallet does not support signing | Connection succeeds, `connected.signer` is `null`, `client.payer` throws `SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE`, sign methods throw |
-| Wallet does not pass filter | Filtered out at discovery time; disconnected if filter fails after feature change |
-| Wallet unregisters while connected | Automatic disconnection, subscribers notified |
-| Silent reconnect fails | Status -> `disconnected`, persisted account cleared |
-| No wallets discovered | `state.wallets` is empty, UI can prompt user to install a wallet |
-| `standard:disconnect` not supported | Disconnect proceeds -- clear local state regardless |
-| `selectAccount` without connection | Throws `SOLANA_ERROR__WALLET__NOT_CONNECTED` with `{ operation: 'selectAccount' }` |
-| `signMessage` without connection | Throws `SOLANA_ERROR__WALLET__NOT_CONNECTED` with `{ operation: 'signMessage' }` |
-| `signMessage` on wallet without feature | `getWalletFeature` throws `WalletStandardError` |
-| `signIn` on wallet without feature | `getWalletFeature` throws `WalletStandardError` |
+| Scenario                                | Behavior                                                                                                                                  |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| SSR (server environment)                | Status stays `'pending'`, all actions throw `SOLANA_ERROR__WALLET__NOT_CONNECTED`                                                         |
+| User rejects connection prompt          | `connect()` propagates wallet error, status returns to `disconnected`                                                                     |
+| Wallet does not support signing         | Connection succeeds, `connected.signer` is `null`, `client.payer` throws `SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE`, sign methods throw |
+| Wallet does not pass filter             | Filtered out at discovery time; disconnected if filter fails after feature change                                                         |
+| Wallet unregisters while connected      | Automatic disconnection, subscribers notified                                                                                             |
+| Silent reconnect fails                  | Status -> `disconnected`, persisted account cleared                                                                                       |
+| No wallets discovered                   | `state.wallets` is empty, UI can prompt user to install a wallet                                                                          |
+| `standard:disconnect` not supported     | Disconnect proceeds -- clear local state regardless                                                                                       |
+| `selectAccount` without connection      | Throws `SOLANA_ERROR__WALLET__NOT_CONNECTED` with `{ operation: 'selectAccount' }`                                                        |
+| `signMessage` without connection        | Throws `SOLANA_ERROR__WALLET__NOT_CONNECTED` with `{ operation: 'signMessage' }`                                                          |
+| `signMessage` on wallet without feature | `getWalletFeature` throws `WalletStandardError`                                                                                           |
+| `signIn` on wallet without feature      | `getWalletFeature` throws `WalletStandardError`                                                                                           |
 
 `connect()` and `disconnect()` propagate wallet errors to the caller unchanged. Internal errors (reconnect failures, storage errors) are logged via `console.warn` but do not throw.
 
@@ -1316,4 +1320,3 @@ Wallet-originated errors (e.g. user rejecting a connection prompt) are propagate
 **`userHasSelected` flag.** Tracks whether the user has made an explicit choice (via `connect`, `selectAccount`, or `signIn`). When true, the auto-restore flow will not override the user's selection, matching the `wasSetterInvokedRef` pattern from `@solana/react`.
 
 **Read-only wallet support.** `tryCreateSigner` wraps `createSignerFromWalletAccount` in a try/catch. If the wallet doesn't support any signing features (e.g. a watch-only wallet), connection still succeeds — the account is set, events fire, persistence works. `connected.signer` in the state is `null`, letting UI distinguish connected-with-signer from connected-without-signer. When using `walletAsPayer`, `client.payer` throws `SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE`.
-

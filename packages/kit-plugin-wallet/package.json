@@ -2,6 +2,38 @@
     "name": "@solana/kit-plugin-wallet",
     "version": "0.1.0",
     "description": "Wallet connection plugin for Kit clients",
+    "keywords": [
+        "kit",
+        "plugin",
+        "signer",
+        "solana",
+        "wallet",
+        "wallet-adapter",
+        "wallet-standard"
+    ],
+    "bugs": {
+        "url": "http://github.com/anza-xyz/kit-plugins/issues"
+    },
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/anza-xyz/kit-plugins"
+    },
+    "files": [
+        "./dist/types",
+        "./dist/index.*",
+        "./src/"
+    ],
+    "type": "commonjs",
+    "sideEffects": false,
+    "main": "./dist/index.node.cjs",
+    "module": "./dist/index.node.mjs",
+    "browser": {
+        "./dist/index.node.cjs": "./dist/index.browser.cjs",
+        "./dist/index.node.mjs": "./dist/index.browser.mjs"
+    },
+    "types": "./dist/types/index.d.ts",
+    "react-native": "./dist/index.react-native.mjs",
     "exports": {
         "types": "./dist/types/index.d.ts",
         "react-native": "./dist/index.react-native.mjs",
@@ -14,30 +46,6 @@
             "require": "./dist/index.node.cjs"
         }
     },
-    "browser": {
-        "./dist/index.node.cjs": "./dist/index.browser.cjs",
-        "./dist/index.node.mjs": "./dist/index.browser.mjs"
-    },
-    "main": "./dist/index.node.cjs",
-    "module": "./dist/index.node.mjs",
-    "react-native": "./dist/index.react-native.mjs",
-    "types": "./dist/types/index.d.ts",
-    "type": "commonjs",
-    "files": [
-        "./dist/types",
-        "./dist/index.*",
-        "./src/"
-    ],
-    "sideEffects": false,
-    "keywords": [
-        "solana",
-        "kit",
-        "plugin",
-        "wallet",
-        "wallet-adapter",
-        "wallet-standard",
-        "signer"
-    ],
     "scripts": {
         "build": "rimraf dist && tsup && tsc -p ./tsconfig.declarations.json",
         "dev": "vitest --project node",
@@ -46,9 +54,6 @@
         "test": "pnpm test:types && pnpm test:treeshakability",
         "test:treeshakability": "for file in dist/index.*.mjs; do agadoo $file; done",
         "test:types": "tsc --noEmit"
-    },
-    "peerDependencies": {
-        "@solana/kit": "^6.6.0"
     },
     "dependencies": {
         "@solana/wallet-account-signer": "^6.6.0",
@@ -62,13 +67,8 @@
         "@wallet-standard/ui-features": "^1.0.1",
         "@wallet-standard/ui-registry": "^1.0.1"
     },
-    "license": "MIT",
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/anza-xyz/kit-plugins"
-    },
-    "bugs": {
-        "url": "http://github.com/anza-xyz/kit-plugins/issues"
+    "peerDependencies": {
+        "@solana/kit": "^6.6.0"
     },
     "browserslist": [
         "supports bigint and not dead",
