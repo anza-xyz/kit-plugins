@@ -92,6 +92,13 @@ export type WalletActionOptions = {
  * `localStorage` and `sessionStorage` satisfy this interface directly.
  * Async backends (IndexedDB, encrypted storage) may return `Promise`s.
  *
+ * Writes are fire-and-forget: the plugin does not await `setItem`/`removeItem`
+ * and swallows any rejection (the live wallet connection is the source of
+ * truth, so a failed persist is non-fatal). A resolved action therefore does
+ * not guarantee the write has landed, and rapid successive writes are not
+ * ordered. This is intentional — persistence only records which account to
+ * silently reconnect to on the next load.
+ *
  * @example
  * ```ts
  * // Use sessionStorage
@@ -205,6 +212,11 @@ export type WalletNamespace = {
      *
      * @returns All accounts from the wallet after connection.
      * @throws The wallet's rejection error if the user declines the prompt.
+     * @throws `DOMException` with `name: 'AbortError'` if a newer `connect` or
+     *   `signIn` is started before this call resolves. The newer request wins
+     *   and owns the resulting connection; this superseded call rejects so it
+     *   can be ignored like any other aborted operation (e.g. an accidental
+     *   double-click still connects — only the orphaned first promise rejects).
      * @throws `options.abortSignal.reason` if the signal is already aborted
      *   when the action is called. Aborts after the wallet call has been
      *   dispatched do not take effect.
@@ -253,6 +265,10 @@ export type WalletNamespace = {
      *
      * @throws `WalletStandardError(WALLET_STANDARD_ERROR__FEATURES__WALLET_ACCOUNT_FEATURE_UNIMPLEMENTED)`
      *   if the wallet does not support `solana:signIn`.
+     * @throws `DOMException` with `name: 'AbortError'` if a newer `connect` or
+     *   `signIn` is started before this call resolves. The newer request wins
+     *   and owns the resulting connection; this superseded call rejects so it
+     *   can be ignored like any other aborted operation.
      * @throws `options.abortSignal.reason` if the signal is already aborted
      *   when the action is called. Aborts after the wallet call has been
      *   dispatched do not take effect.

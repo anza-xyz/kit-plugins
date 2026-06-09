@@ -202,7 +202,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             updates.account = null;
             updates.signer = null;
             updates.status = 'disconnected';
-            void storage?.removeItem(storageKey);
+            clearPersistedAccount();
         }
 
         updateState(updates);
@@ -324,8 +324,15 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
 
             await connectFeature.connect();
 
-            // A newer connect/signIn was started while we were awaiting — bail.
-            if (generation !== connectGeneration) return [];
+            // A newer connect/signIn was started while we were awaiting. Reject
+            // with an `AbortError` so this superseded call settles in the
+            // standard, ignorable way (matching the abort-signal contract) while
+            // the newer request owns the connection. The `catch` below leaves
+            // that newer connection untouched, since `generation` no longer
+            // matches `connectGeneration`.
+            if (generation !== connectGeneration) {
+                throw new DOMException('Wallet connect was superseded by a newer connect or sign-in', 'AbortError');
+            }
 
             // Refresh UiWallet to get updated accounts after connect.
             const refreshedWallet = refreshUiWallet(uiWallet);
@@ -386,7 +393,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             status: 'disconnected',
         });
 
-        void storage?.removeItem(storageKey);
+        clearPersistedAccount();
     }
 
     function selectAccount(account: UiWalletAccount): void {
@@ -394,13 +401,21 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'selectAccount' });
         }
         const refreshed = refreshUiWallet(state.connectedWallet);
-        if (!refreshed.accounts.some(a => a.address === account.address)) {
+        const selectedAccount = refreshed.accounts.find(a => a.address === account.address);
+        if (!selectedAccount) {
             throw new Error(`Account ${account.address} is not available in wallet "${state.connectedWallet.name}"`);
         }
         userHasSelected = true;
-        const signer = tryCreateSigner(account);
-        updateState({ account, signer });
-        persistAccount(account, state.connectedWallet);
+        // No-op when re-selecting the already-active account. Skipping here
+        // avoids recreating the signer — which is a fresh object each call —
+        // and the spurious listener notification (and re-render) that the new
+        // signer reference would otherwise trigger.
+        if (selectedAccount === state.account && refreshed === state.connectedWallet) {
+            return;
+        }
+        const signer = tryCreateSigner(selectedAccount);
+        updateState({ account: selectedAccount, connectedWallet: refreshed, signer });
+        persistAccount(selectedAccount, refreshed);
     }
 
     // -- Message signing ---------------------------------------------------
@@ -442,8 +457,13 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             const signInFeature = getWalletFeature(uiWallet, SolanaSignIn) as SolanaSignInFeature[typeof SolanaSignIn];
             const [result] = await signInFeature.signIn(input);
 
-            // A newer connect/signIn was started while we were awaiting — bail.
-            if (generation !== connectGeneration) return result;
+            // A newer connect/signIn was started while we were awaiting. Reject
+            // with an `AbortError` (matching the abort-signal contract) so the
+            // superseded call settles in the standard, ignorable way while the
+            // newer request owns the connection.
+            if (generation !== connectGeneration) {
+                throw new DOMException('Wallet sign-in was superseded by a newer connect or sign-in', 'AbortError');
+            }
 
             // Set up full connection state using the account from the sign-in response.
             const refreshedWallet = refreshUiWallet(uiWallet);
@@ -468,8 +488,24 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
 
     // -- Persistence -------------------------------------------------------
 
+    function ignoreStorageFailure(operation: () => Promise<void> | void): void {
+        void (async () => {
+            try {
+                await operation();
+            } catch {
+                // Persistence is best-effort; wallet state is the source of truth.
+            }
+        })();
+    }
+
     function persistAccount(account: UiWalletAccount, wallet: UiWallet): void {
-        void storage?.setItem(storageKey, `${wallet.name}:${account.address}`);
+        if (!storage) return;
+        ignoreStorageFailure(() => storage.setItem(storageKey, `${wallet.name}:${account.address}`));
+    }
+
+    function clearPersistedAccount(): void {
+        if (!storage) return;
+        ignoreStorageFailure(() => storage.removeItem(storageKey));
     }
 
     // -- Auto-connect ------------------------------------------------------
@@ -489,7 +525,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             if (separatorIndex === -1) {
                 // Malformed saved key.
                 updateState({ status: 'disconnected' });
-                await storage.removeItem(storageKey);
+                clearPersistedAccount();
                 return;
             }
 
@@ -507,7 +543,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             ) {
                 // Wallet registered but doesn't pass the filter.
                 updateState({ status: 'disconnected' });
-                await storage.removeItem(storageKey);
+                clearPersistedAccount();
             } else {
                 // Wallet not registered yet — wait for it to appear.
                 updateState({ status: 'reconnecting' });
@@ -548,7 +584,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
                                 unsubRegisterForReconnect();
                                 reconnectCleanup = null;
                                 updateState({ status: 'disconnected' });
-                                await storage.removeItem(storageKey);
+                                clearPersistedAccount();
                             }
                         })().catch(() => {
                             // Reconnect failed — fall back to disconnected.
@@ -591,7 +627,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
 
             if (allAccounts.length === 0) {
                 updateState({ status: 'disconnected' });
-                await storage?.removeItem(storageKey);
+                clearPersistedAccount();
                 return;
             }
 
@@ -602,7 +638,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         } catch {
             if (generation === connectGeneration) {
                 updateState({ status: 'disconnected' });
-                await storage?.removeItem(storageKey);
+                clearPersistedAccount();
             }
         }
     }
@@ -623,6 +659,11 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             };
         },
         [Symbol.dispose]: () => {
+            // Invalidate any in-flight connect/signIn/silent-reconnect so they
+            // bail at their generation guard instead of resuming after disposal
+            // (which would re-subscribe to wallet events and re-arm cleanup that
+            // this disposer already ran).
+            connectGeneration++;
             unsubRegister();
             unsubUnregister();
             walletEventsCleanup?.();

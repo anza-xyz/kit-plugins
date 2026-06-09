@@ -305,12 +305,19 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
         await store.connect(mockWallet);
 
+        const before = store.getState();
         const listener = vi.fn();
         store.subscribe(listener);
+        // Clear calls from connect so we only observe selectAccount.
+        createSignerMock.mockClear();
 
-        // selectAccount with the same account — no state change.
+        // selectAccount with the same account — no state change. The signer is
+        // a fresh object on every creation, so recreating it here would churn
+        // the snapshot and notify listeners; the no-op guard must skip it.
         store.selectAccount(account);
         expect(listener).not.toHaveBeenCalled();
+        expect(createSignerMock).not.toHaveBeenCalled();
+        expect(store.getState()).toBe(before);
     });
 
     it('selectAccount switches accounts', async () => {
@@ -328,6 +335,46 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
 
         store.selectAccount(account2);
         expect(store.getState().connected!.account.address).toBe(account2.address);
+    });
+
+    it('selectAccount uses the wallet-owned account for the selected address', async () => {
+        const account1 = createMockAccount();
+        const account2 = createMockAccount('Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ');
+        const refreshedAccount2 = {
+            ...account2,
+            features: ['solana:signAndSendTransaction'] as const,
+            label: 'Refreshed Account 2',
+            publicKey: new Uint8Array(32).fill(2),
+        };
+        const staleAccount2 = {
+            ...account2,
+            features: [] as const,
+            label: 'Stale Account 2',
+            publicKey: new Uint8Array(32).fill(9),
+        };
+        const mockWallet = createMockUiWallet({
+            accounts: [account1, account2],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(mockWallet);
+
+        updateRegisteredWallet(
+            createMockUiWallet({
+                accounts: [account1, refreshedAccount2],
+                name: 'TestWallet',
+            }),
+        );
+        createSignerMock.mockClear();
+
+        store.selectAccount(staleAccount2);
+
+        const state = store.getState();
+        expect(state.connected!.account).toBe(refreshedAccount2);
+        expect(state.connected!.wallet.accounts[1]).toBe(refreshedAccount2);
+        expect(createSignerMock).toHaveBeenCalledWith(refreshedAccount2, 'solana:mainnet');
     });
 
     it('selectAccount throws for account not in wallet', async () => {
@@ -607,14 +654,46 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         // Start connecting to wallet2 — this should supersede wallet1.
         const secondPromise = store.connect(wallet2);
 
-        // Resolve the first connect — it should be stale and bail.
+        // Resolve the first connect — it was superseded, so it rejects with an
+        // AbortError rather than applying its result.
         first.resolve();
-        await firstPromise;
+        await expect(firstPromise).rejects.toThrow('superseded');
         await secondPromise;
 
         // wallet2 should be connected, not wallet1.
         expect(store.getState().status).toBe('connected');
         expect(store.getState().connected!.account.address).toBe(account2.address);
+    });
+
+    it('rejects a superseded connect with an AbortError (double-click still connects)', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({ accounts: [account], name: 'TestWallet' });
+        registerWallet(mockWallet);
+
+        const first = Promise.withResolvers<void>();
+        connectMock.mockReturnValueOnce(first.promise);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+
+        // Two clicks on the same wallet before the first resolves.
+        const firstPromise = store.connect(mockWallet);
+        const secondPromise = store.connect(mockWallet);
+
+        first.resolve();
+
+        // The orphaned first click rejects with a recognizable AbortError that
+        // consumers ignore by convention, ...
+        const error = await firstPromise.then(
+            () => null,
+            (e: unknown) => e,
+        );
+        expect(error).toBeInstanceOf(DOMException);
+        expect((error as DOMException).name).toBe('AbortError');
+
+        // ... while the second click establishes the connection.
+        await secondPromise;
+        expect(store.getState().status).toBe('connected');
+        expect(store.getState().connected!.account.address).toBe(account.address);
     });
 
     it('concurrent signIn does not apply stale result', async () => {
@@ -646,9 +725,10 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         // Start signIn to wallet2 — this should supersede wallet1.
         const secondPromise = store.signIn(wallet2, {});
 
-        // Resolve the first signIn — it should be stale and bail.
+        // Resolve the first signIn — it was superseded, so it rejects with an
+        // AbortError rather than applying its result.
         first.resolve([{ account: { address: account1.address } }]);
-        await firstPromise;
+        await expect(firstPromise).rejects.toThrow('superseded');
         await secondPromise;
 
         // wallet2 should be connected, not wallet1.
@@ -677,9 +757,10 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         const signInPromise = store.signIn(wallet1, {});
         await store.connect(wallet2);
 
-        // signIn resolves stale — should not overwrite wallet2's connection.
+        // signIn resolves stale — it was superseded, so it rejects with an
+        // AbortError and must not overwrite wallet2's connection.
         pendingSignIn.resolve([{ account: { address: account1.address } }]);
-        await signInPromise;
+        await expect(signInPromise).rejects.toThrow('superseded');
 
         expect(store.getState().status).toBe('connected');
         expect(store.getState().connected!.account.address).toBe(account2.address);
@@ -1114,6 +1195,28 @@ describe.skipIf(!__BROWSER__)('store auto-connect (browser)', () => {
         expect(storage.getItem('kit-wallet')).toBe(`TestWallet:${account.address}`);
     });
 
+    it('connects when persistence writes throw synchronously', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        const storage: WalletStorage = {
+            getItem: () => null,
+            removeItem: () => {},
+            setItem: () => {
+                throw new Error('storage write failed');
+            },
+        };
+        const store = createWalletStore({ chain: 'solana:mainnet', storage });
+
+        await expect(store.connect(mockWallet)).resolves.toHaveLength(1);
+        expect(store.getState().status).toBe('connected');
+        expect(store.getState().connected!.account.address).toBe(account.address);
+    });
+
     it('clears storage on disconnect', async () => {
         const account = createMockAccount();
         const mockWallet = createMockUiWallet({
@@ -1130,6 +1233,30 @@ describe.skipIf(!__BROWSER__)('store auto-connect (browser)', () => {
 
         await store.disconnect();
         expect(storage.getItem('kit-wallet')).toBeNull();
+    });
+
+    it('disconnects when persistence removal throws synchronously', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            features: ['standard:connect', 'standard:disconnect', 'standard:events'],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        const storage: WalletStorage = {
+            getItem: () => null,
+            removeItem: () => {
+                throw new Error('storage remove failed');
+            },
+            setItem: () => {},
+        };
+        const store = createWalletStore({ chain: 'solana:mainnet', storage });
+        await store.connect(mockWallet);
+
+        await expect(store.disconnect()).resolves.toBeUndefined();
+        expect(store.getState().status).toBe('disconnected');
+        expect(store.getState().connected).toBeNull();
     });
 
     it('falls back to disconnected when silent reconnect fails', async () => {
@@ -1164,6 +1291,42 @@ describe.skipIf(!__BROWSER__)('store auto-connect (browser)', () => {
         await vi.advanceTimersByTimeAsync(0);
 
         expect(store.getState().status).toBe('disconnected');
+    });
+
+    it('does not reconnect when disposed mid silent reconnect', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        // Hold the silent connect open so we can dispose while it's in flight.
+        let resolveConnect!: () => void;
+        connectMock.mockImplementationOnce(
+            () =>
+                new Promise<void>(resolve => {
+                    resolveConnect = resolve;
+                }),
+        );
+
+        const storage = createMockStorage({ 'kit-wallet': `TestWallet:${account.address}` });
+        const store = createWalletStore({ chain: 'solana:mainnet', storage });
+
+        // Let auto-connect reach the awaited silent connect.
+        await vi.advanceTimersByTimeAsync(0);
+        expect(store.getState().status).toBe('reconnecting');
+
+        // Dispose while the silent reconnect is still awaiting, then let it resolve.
+        store[Symbol.dispose]();
+        resolveConnect();
+        await vi.advanceTimersByTimeAsync(0);
+
+        // The resumed reconnect must not establish a connection or subscribe to
+        // wallet events after disposal.
+        expect(store.getState().status).not.toBe('connected');
+        expect(store.getState().connected).toBeNull();
+        expect(walletEventHandler).toBeNull();
     });
 });
 
