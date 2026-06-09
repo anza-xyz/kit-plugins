@@ -1,4 +1,5 @@
 import { defineConfig, mergeConfig } from 'vitest/config';
+
 import { getVitestConfig } from '../../vitest.config.base.mjs';
 
 function withWalletMocks(config: ReturnType<typeof getVitestConfig>) {
