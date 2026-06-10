@@ -95,7 +95,19 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
     let connectGeneration = 0;
 
     // Resolve storage: default to localStorage in browser, null to disable.
-    const storage: WalletStorage | null = config.storage === null ? null : (config.storage ?? localStorage);
+    // Merely *accessing* `localStorage` throws a `SecurityError` in sandboxed
+    // iframes or when third-party storage is blocked, so the default resolution
+    // degrades to `null` rather than letting the whole plugin-install chain
+    // throw. This matches the best-effort persistence applied to reads/writes.
+    function resolveDefaultStorage(): WalletStorage | null {
+        try {
+            return localStorage;
+        } catch {
+            return null;
+        }
+    }
+
+    const storage: WalletStorage | null = config.storage === null ? null : (config.storage ?? resolveDefaultStorage());
     const storageKey = config.storageKey ?? 'kit-wallet';
 
     // -- State management --------------------------------------------------

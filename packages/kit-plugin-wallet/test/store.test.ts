@@ -1306,6 +1306,31 @@ describe.skipIf(!__BROWSER__)('store auto-connect (browser)', () => {
         expect(store.getState().connected!.account.address).toBe(account.address);
     });
 
+    it('does not throw at install time when accessing localStorage throws', () => {
+        // Sandboxed iframes / blocked third-party storage make even *reading*
+        // the `localStorage` global throw a `SecurityError`. The default storage
+        // resolution must degrade to disabled persistence rather than throwing
+        // out of `createWalletStore` (and the `.use(walletSigner(...))` chain).
+        const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+        Object.defineProperty(globalThis, 'localStorage', {
+            configurable: true,
+            get() {
+                throw new DOMException('The operation is insecure.', 'SecurityError');
+            },
+        });
+
+        try {
+            const store = createWalletStore({ chain: 'solana:mainnet' });
+            expect(store.getState().status).toBe('disconnected');
+        } finally {
+            if (descriptor) {
+                Object.defineProperty(globalThis, 'localStorage', descriptor);
+            } else {
+                delete (globalThis as { localStorage?: unknown }).localStorage;
+            }
+        }
+    });
+
     it('clears storage on disconnect', async () => {
         const account = createMockAccount();
         const mockWallet = createMockUiWallet({
