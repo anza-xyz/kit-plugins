@@ -1536,6 +1536,72 @@ describe.skipIf(!__BROWSER__)('store wallet events (browser)', () => {
         expect(createSignerMock).toHaveBeenCalledOnce();
         expect(createSignerMock.mock.calls[0][0]).toHaveProperty('address', account2.address);
     });
+
+    it('refreshes the connected wallet entry in the wallet list on a change event', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await connectToWallet(store, mockWallet);
+
+        // The registry regenerates the wallet handle (new reference, same name)
+        // — e.g. it authorized an additional account — while still passing the
+        // filter.
+        const account2 = createMockAccount('Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ');
+        updateRegisteredWallet(
+            createMockUiWallet({
+                accounts: [account, account2],
+                name: 'TestWallet',
+            }),
+        );
+        walletEventHandler!({ accounts: true });
+
+        const state = store.getState();
+        expect(state.status).toBe('connected');
+        // The wallet-list entry must be the same refreshed handle as
+        // connected.wallet, not the stale pre-change reference — otherwise UI
+        // rendering from the list shows pre-change accounts/features.
+        expect(state.wallets[0]).toBe(state.connected!.wallet);
+    });
+
+    it('drops the connected wallet from the wallet list when it no longer passes the filter', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            features: ['standard:connect', 'standard:events', 'solana:signTransaction'],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({
+            chain: 'solana:mainnet',
+            filter: w => w.features.includes('solana:signTransaction'),
+            storage: null,
+        });
+        await connectToWallet(store, mockWallet);
+        expect(store.getState().wallets.length).toBe(1);
+
+        // Wallet drops signTransaction — it no longer passes the filter, so the
+        // store disconnects.
+        updateRegisteredWallet(
+            createMockUiWallet({
+                accounts: [account],
+                features: ['standard:connect', 'standard:events'],
+                name: 'TestWallet',
+            }),
+        );
+        walletEventHandler!({ features: true });
+
+        const state = store.getState();
+        expect(state.status).toBe('disconnected');
+        // The now-ineligible wallet must be dropped immediately, not linger in
+        // the list until an unrelated register/unregister event.
+        expect(state.wallets.length).toBe(0);
+    });
 });
 
 // -- Auto-connect tests -------------------------------------------------------

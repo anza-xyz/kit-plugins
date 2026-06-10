@@ -311,7 +311,11 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             // `getState().connected.wallet` see current metadata; the signer
             // (in `result`) only churns when the active account changed, which
             // keeps the snapshot referentially stable on no-op change events.
-            updateState({ connectedWallet: refreshed, ...result });
+            // `wallets` is reconciled too: the registry regenerates the wallet
+            // handle on a change, so without this the list entry would keep the
+            // stale handle (`wallets[i] !== connected.wallet`). `reconcileWalletList`
+            // returns the existing reference on a no-op, preserving that stability.
+            updateState({ connectedWallet: refreshed, wallets: reconcileWalletList(), ...result });
 
             if (result.account) {
                 persistAccount(result.account, refreshed);
@@ -461,6 +465,14 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             connectedWallet: null,
             signer: null,
             status: 'disconnected',
+            // Reconcile the list too: when this runs from the change handler
+            // because the connected wallet dropped the configured chain or
+            // failed the filter, that wallet must leave `wallets` immediately
+            // rather than linger until an unrelated register/unregister event.
+            // `reconcileWalletList` returns the existing reference when the
+            // visible set is unchanged (the common case for a plain disconnect),
+            // so this stays churn-free.
+            wallets: reconcileWalletList(),
         });
 
         clearPersistedAccount();
