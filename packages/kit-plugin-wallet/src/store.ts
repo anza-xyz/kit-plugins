@@ -343,7 +343,22 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
 
     async function disconnect(options?: WalletActionOptions): Promise<void> {
         options?.abortSignal?.throwIfAborted();
-        if (!state.connectedWallet) return;
+
+        // No connected wallet, but an auto-reconnect may still be in flight:
+        // during 'reconnecting' a silent reconnect or the late-registration
+        // listener can complete and connect, overriding this explicit
+        // disconnect. Record the user's intent so auto-connect won't re-arm,
+        // tear down the late-registration listener, and bump the generation so
+        // any in-flight connect/signIn/silent-reconnect bails at its guard
+        // instead of resuming.
+        if (!state.connectedWallet) {
+            userHasSelected = true;
+            cancelReconnect();
+            connectGeneration++;
+            updateState({ status: 'disconnected' });
+            clearPersistedAccount();
+            return;
+        }
 
         const currentWallet = state.connectedWallet;
         const generation = connectGeneration;

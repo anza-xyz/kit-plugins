@@ -1482,6 +1482,58 @@ describe.skipIf(!__BROWSER__)('store late wallet registration (browser)', () => 
         expect(store.getState().connected!.account.address).toBe(account.address);
     });
 
+    it('disconnect while waiting for a late-registering wallet prevents it from connecting', async () => {
+        const account = createMockAccount();
+        const storage = createMockStorage({ 'kit-wallet': `LateWallet:${account.address}` });
+        const store = createWalletStore({ chain: 'solana:mainnet', storage });
+
+        await vi.advanceTimersByTimeAsync(0);
+        expect(store.getState().status).toBe('reconnecting');
+
+        // User explicitly disconnects while still waiting for the saved wallet.
+        await store.disconnect();
+        expect(store.getState().status).toBe('disconnected');
+        expect(storage.getItem('kit-wallet')).toBeNull();
+
+        // The saved wallet registers late — it must not override the disconnect.
+        const lateWallet = createMockUiWallet({ accounts: [account], name: 'LateWallet' });
+        lateRegisterWallet(lateWallet);
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(store.getState().status).toBe('disconnected');
+        expect(store.getState().connected).toBeNull();
+        expect(connectMock).not.toHaveBeenCalled();
+    });
+
+    it('disconnect during an in-flight silent reconnect prevents it from connecting', async () => {
+        const account = createMockAccount();
+        const wallet = createMockUiWallet({ accounts: [account], name: 'SavedWallet' });
+        registerWallet(wallet);
+
+        // Hold the silent reconnect's connect pending so it's in flight when the
+        // user disconnects.
+        const reconnectConnect = Promise.withResolvers<void>();
+        connectMock.mockReturnValueOnce(reconnectConnect.promise);
+
+        const storage = createMockStorage({ 'kit-wallet': `SavedWallet:${account.address}` });
+        const store = createWalletStore({ chain: 'solana:mainnet', storage });
+
+        await vi.advanceTimersByTimeAsync(0);
+        expect(store.getState().status).toBe('reconnecting');
+
+        // User disconnects while the silent reconnect is still awaiting connect.
+        await store.disconnect();
+        expect(store.getState().status).toBe('disconnected');
+        expect(storage.getItem('kit-wallet')).toBeNull();
+
+        // Silent reconnect resolves — but it's stale, so it must not connect.
+        reconnectConnect.resolve();
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(store.getState().status).toBe('disconnected');
+        expect(store.getState().connected).toBeNull();
+    });
+
     it('clears storage when saved wallet is registered but filtered out', async () => {
         const account = createMockAccount();
         const storage = createMockStorage({ 'kit-wallet': `FilteredWallet:${account.address}` });
