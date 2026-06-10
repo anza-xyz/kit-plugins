@@ -1754,6 +1754,34 @@ describe.skipIf(!__BROWSER__)('store auto-connect (browser)', () => {
         expect(store.getState().connected).toBeNull();
         expect(walletEventHandler).toBeNull();
     });
+
+    it('does not reconnect when disposed during the auto-connect storage read', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        const storage = createMockStorage({ 'kit-wallet': `TestWallet:${account.address}` });
+        const store = createWalletStore({ chain: 'solana:mainnet', storage });
+
+        // Dispose synchronously, before the auto-connect IIFE resumes from its
+        // awaited storage read — the window React StrictMode's
+        // mount → cleanup → remount hits. Disposal must invalidate the in-flight
+        // auto-connect even though it hasn't yet captured a connect generation.
+        store[Symbol.dispose]();
+
+        // Let the storage read resolve and the silent reconnect (if any) run.
+        await vi.advanceTimersByTimeAsync(0);
+
+        // The disposed store must not silently connect, leak a wallet-events
+        // subscription, or report itself connected.
+        expect(store.getState().status).not.toBe('connected');
+        expect(store.getState().connected).toBeNull();
+        expect(walletEventHandler).toBeNull();
+        expect(connectMock).not.toHaveBeenCalled();
+    });
 });
 
 // -- Late wallet registration tests -------------------------------------------

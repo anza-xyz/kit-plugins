@@ -93,6 +93,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
     let reconnectCleanup: (() => void) | null = null;
     let userHasSelected = false;
     let connectGeneration = 0;
+    let disposed = false;
 
     // Resolve storage: default to localStorage in browser, null to disable.
     // Merely *accessing* `localStorage` throws a `SecurityError` in sandboxed
@@ -252,6 +253,14 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
     }
 
     function setConnected(account: UiWalletAccount, wallet: UiWallet, options?: { persist?: boolean }): void {
+        // The store may have been disposed while a connect / sign-in / silent
+        // reconnect awaited. The `connectGeneration` guard at each call site
+        // doesn't cover the auto-connect IIFE resuming from its storage read —
+        // it captures a fresh generation in `attemptSilentReconnect` after
+        // disposal. Bail here so a disposed store never re-subscribes to wallet
+        // events (a listener the already-run disposer can't clean up) or reports
+        // itself connected.
+        if (disposed) return;
         const signer = tryCreateSigner(account);
         resubscribeToWalletEvents(wallet);
         updateState({ account, connectedWallet: wallet, signer, status: 'connected' });
@@ -600,8 +609,12 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
     if (config.autoConnect !== false && storage) {
         (async () => {
             const savedKey = await storage.getItem(storageKey);
-            // Don't auto-connect if the user has selected a wallet
-            if (userHasSelected) return;
+            // Don't auto-connect if the user has selected a wallet, or if the
+            // store was disposed while the storage read was in flight — the
+            // disposer has already torn down its listeners and bumped the
+            // generation, but this IIFE hasn't captured one yet, so without this
+            // check it would resume and silently reconnect into a disposed store.
+            if (userHasSelected || disposed) return;
 
             if (!savedKey) {
                 updateState({ status: 'disconnected' });
@@ -755,9 +768,12 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         },
         [Symbol.dispose]: () => {
             // Invalidate any in-flight connect/signIn/silent-reconnect so they
-            // bail at their generation guard instead of resuming after disposal
-            // (which would re-subscribe to wallet events and re-arm cleanup that
-            // this disposer already ran).
+            // bail instead of resuming after disposal (which would re-subscribe
+            // to wallet events and re-arm cleanup that this disposer already
+            // ran). The generation bump covers attempts that already captured a
+            // generation; `disposed` covers the auto-connect IIFE, which resumes
+            // from its storage read and captures a fresh generation afterward.
+            disposed = true;
             connectGeneration++;
             unsubRegister();
             unsubUnregister();
