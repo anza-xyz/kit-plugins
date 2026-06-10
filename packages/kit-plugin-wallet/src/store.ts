@@ -183,6 +183,24 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         return Object.freeze(registry.get().map(getOrCreateUiWalletForStandardWallet).filter(filterWallet));
     }
 
+    // Rebuilds the filtered wallet list but returns the *existing* `state.wallets`
+    // reference when the contents are unchanged. `buildWalletList` always
+    // allocates a fresh frozen array, so without this a registry event for a
+    // wallet that gets filtered out (or any event that doesn't alter the visible
+    // set) would still produce a new snapshot and notify every listener — a
+    // spurious re-render. Wallets are compared by reference, in order: the
+    // wallet-ui registry hands back a stable UiWallet for a given underlying
+    // wallet until its accounts/features/chains change, so reference equality is
+    // a sound same-contents check here.
+    function reconcileWalletList(): readonly UiWallet[] {
+        const next = buildWalletList();
+        const prev = state.wallets;
+        if (next.length === prev.length && next.every((w, i) => w === prev[i])) {
+            return prev;
+        }
+        return next;
+    }
+
     // True if a wallet matching `uiWallet` (by name) is currently registered and
     // passes the filter. Used to re-check membership after an awaited connect /
     // sign-in / silent reconnect resolves: the wallet may have unregistered (or
@@ -199,12 +217,12 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
 
     // Listen for new wallets being registered
     const unsubRegister = registry.on('register', () => {
-        updateState({ wallets: buildWalletList() });
+        updateState({ wallets: reconcileWalletList() });
     });
 
     // Listen for wallets being unregistered — if the connected wallet is removed, disconnect
     const unsubUnregister = registry.on('unregister', () => {
-        const newWallets = buildWalletList();
+        const newWallets = reconcileWalletList();
         const updates: Partial<WalletStoreState> = { wallets: newWallets };
 
         // If the connected wallet was unregistered, disconnect locally.

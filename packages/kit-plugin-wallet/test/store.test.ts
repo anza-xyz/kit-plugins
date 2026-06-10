@@ -106,6 +106,37 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         expect(store.getState().wallets[0].name).toBe('Allowed');
     });
 
+    it('does not notify listeners when a register event leaves the filtered wallet list unchanged', () => {
+        const visible = createMockUiWallet({ name: 'Visible' });
+        registerWallet(visible);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        const before = store.getState();
+        const listener = vi.fn();
+        store.subscribe(listener);
+
+        // A wallet for a different chain registers — it's filtered out, so the
+        // visible wallet list is unchanged. The snapshot must stay referentially
+        // stable and no listener should fire.
+        lateRegisterWallet(createMockUiWallet({ chains: ['solana:devnet'], name: 'OtherChain' }));
+
+        expect(listener).not.toHaveBeenCalled();
+        expect(store.getState()).toBe(before);
+        expect(store.getState().wallets).toBe(before.wallets);
+    });
+
+    it('notifies listeners when a register event adds a wallet to the filtered list', () => {
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        const listener = vi.fn();
+        store.subscribe(listener);
+
+        lateRegisterWallet(createMockUiWallet({ name: 'Appeared' }));
+
+        expect(listener).toHaveBeenCalledOnce();
+        expect(store.getState().wallets.length).toBe(1);
+        expect(store.getState().wallets[0].name).toBe('Appeared');
+    });
+
     it('disconnects when connected wallet is unregistered', async () => {
         const account = createMockAccount();
         const mockWallet = createMockUiWallet({
