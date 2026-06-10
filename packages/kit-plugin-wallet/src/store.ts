@@ -425,7 +425,15 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         }
 
         const currentWallet = state.connectedWallet;
-        const generation = connectGeneration;
+        // Bump the generation so this disconnect supersedes any connect/signIn
+        // that was already in flight (its prompt opened before the user chose to
+        // disconnect): that attempt captured an earlier generation, so it will
+        // bail at its guard rather than establishing a connection the user has
+        // since dismissed. Mirrors the not-connected branch above — newest action
+        // wins. A connect/signIn started *after* this disconnect bumps the
+        // generation again, so the `finally` guard skips `disconnectLocally` and
+        // leaves the newer connection intact.
+        const generation = ++connectGeneration;
         updateState({ status: 'disconnecting' });
 
         try {

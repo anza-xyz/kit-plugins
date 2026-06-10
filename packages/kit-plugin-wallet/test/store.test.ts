@@ -1104,6 +1104,38 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         expect(store.getState().connected!.account.address).toBe(account2.address);
     });
 
+    it('disconnect supersedes an in-flight connect (newest action wins)', async () => {
+        const account1 = createMockAccount();
+        const account2 = createMockAccount('Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ');
+        const wallet1 = createMockUiWallet({
+            accounts: [account1],
+            features: ['standard:connect', 'standard:disconnect', 'standard:events'],
+            name: 'Wallet1',
+        });
+        const wallet2 = createMockUiWallet({ accounts: [account2], name: 'Wallet2' });
+        registerWallet(wallet1);
+        registerWallet(wallet2);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(wallet1);
+
+        // Hold a connect to wallet2 pending, then disconnect while it's in flight.
+        const pendingConnect = Promise.withResolvers<void>();
+        connectMock.mockReturnValueOnce(pendingConnect.promise);
+        const connectPromise = store.connect(wallet2);
+        const disconnectPromise = store.disconnect();
+        await disconnectPromise;
+        expect(store.getState().status).toBe('disconnected');
+
+        // The superseded connect resolves last — it must not establish wallet2,
+        // since disconnect was the user's later action.
+        pendingConnect.resolve();
+        await expect(connectPromise).rejects.toThrow('superseded');
+
+        expect(store.getState().status).toBe('disconnected');
+        expect(store.getState().connected).toBeNull();
+    });
+
     it('getState returns referentially stable snapshots', () => {
         const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
         const snap1 = store.getState();
