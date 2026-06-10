@@ -93,12 +93,12 @@ const rawToUi = new Map<object, UiWallet>();
 const nameToRaw = new Map<string, object>();
 
 vi.mock('@wallet-standard/ui-registry', () => ({
-    getOrCreateUiWalletForStandardWallet_DO_NOT_USE_OR_YOU_WILL_BE_FIRED: (raw: object) => {
+    getOrCreateUiWalletForStandardWallet: (raw: object) => {
         const ui = rawToUi.get(raw);
         if (!ui) throw new Error('No UiWallet registered for this raw wallet');
         return ui;
     },
-    getWalletForHandle_DO_NOT_USE_OR_YOU_WILL_BE_FIRED: (ui: UiWallet) => {
+    getWalletForHandle: (ui: UiWallet) => {
         // Return the latest raw wallet for this name, so refreshUiWallet
         // picks up updated registrations.
         const raw = nameToRaw.get(ui.name);
