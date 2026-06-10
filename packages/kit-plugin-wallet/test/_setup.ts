@@ -191,8 +191,11 @@ export function unregisterWallet(uiWallet: UiWallet): void {
     if (raw) {
         const idx = registeredWallets.indexOf(raw as (typeof registeredWallets)[number]);
         if (idx >= 0) registeredWallets.splice(idx, 1);
-        rawToUi.delete(raw);
-        nameToRaw.delete(uiWallet.name);
+        // Intentionally leave `rawToUi`/`nameToRaw` intact. The real
+        // `@wallet-standard/ui-registry` resolves handles by object identity,
+        // so `getWalletForHandle`/`getOrCreateUiWalletForStandardWallet` keep
+        // working for an unregistered wallet — only the registry's `get()`
+        // list drops it.
     }
     registryListeners.unregister.forEach(l => l());
 }

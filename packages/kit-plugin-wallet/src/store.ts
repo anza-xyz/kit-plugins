@@ -183,6 +183,18 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         return Object.freeze(registry.get().map(getOrCreateUiWalletForStandardWallet).filter(filterWallet));
     }
 
+    // True if a wallet matching `uiWallet` (by name) is currently registered and
+    // passes the filter. Used to re-check membership after an awaited connect /
+    // sign-in / silent reconnect resolves: the wallet may have unregistered (or
+    // dropped a required feature/chain) while its prompt was open, and the
+    // unregister handler can't tear down a connection that hasn't been
+    // established yet. Compared by name — the same identity the unregister
+    // handler uses — because the wallet-ui registry hands back a fresh UiWallet
+    // reference once connect adds accounts, so reference equality would not hold.
+    function isWalletStillAvailable(uiWallet: UiWallet): boolean {
+        return buildWalletList().some(w => w.name === uiWallet.name);
+    }
+
     updateState({ wallets: buildWalletList() });
 
     // Listen for new wallets being registered
@@ -327,6 +339,16 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             // matches `connectGeneration`.
             if (generation !== connectGeneration) {
                 throw new DOMException('Wallet connect was superseded by a newer connect or sign-in', 'AbortError');
+            }
+
+            // The wallet may have unregistered (or dropped a required
+            // feature/chain) while its connect prompt was open. The unregister
+            // handler only disconnects an already-connected wallet, so without
+            // this re-check the store would be left connected to a wallet absent
+            // from `wallets`. Bail the same way an empty account list does.
+            if (!isWalletStillAvailable(uiWallet)) {
+                disconnectLocally();
+                return [];
             }
 
             // Refresh UiWallet to get updated accounts after connect.
@@ -478,6 +500,14 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             // newer request owns the connection.
             if (generation !== connectGeneration) {
                 throw new DOMException('Wallet sign-in was superseded by a newer connect or sign-in', 'AbortError');
+            }
+
+            // The wallet may have unregistered (or dropped a required
+            // feature/chain) while its sign-in prompt was open. Bail rather than
+            // leaving the store connected to a wallet absent from `wallets`.
+            if (!isWalletStillAvailable(uiWallet)) {
+                disconnectLocally();
+                return result;
             }
 
             // Set up full connection state using the account from the sign-in response.
@@ -636,6 +666,14 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
 
             // A newer connect/signIn was started while we were awaiting — bail.
             if (generation !== connectGeneration) return;
+
+            // The wallet may have unregistered (or dropped a required
+            // feature/chain) while the silent reconnect was in flight.
+            if (!isWalletStillAvailable(uiWallet)) {
+                updateState({ status: 'disconnected' });
+                clearPersistedAccount();
+                return;
+            }
 
             const refreshedWallet = refreshUiWallet(uiWallet);
             const allAccounts = refreshedWallet.accounts;

@@ -125,6 +125,68 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         expect(state.wallets.length).toBe(0);
     });
 
+    it('does not connect when the wallet unregisters during an in-flight connect', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+
+        // Pause the wallet's connect() so we can unregister mid-flight.
+        const { promise, resolve } = Promise.withResolvers<void>();
+        connectMock.mockReturnValueOnce(promise);
+
+        const connectPromise = store.connect(mockWallet);
+
+        // The wallet unregisters while its connect prompt is open. state.connectedWallet
+        // is still null at this point, so the unregister handler doesn't disconnect — it
+        // only drops the wallet from the list.
+        unregisterWallet(mockWallet);
+        expect(store.getState().wallets.length).toBe(0);
+
+        // The connect prompt now resolves.
+        resolve();
+        await connectPromise;
+
+        // The store must not be left connected to a wallet absent from the list.
+        const state = store.getState();
+        expect(state.connected).toBeNull();
+        expect(state.status).toBe('disconnected');
+        expect(state.wallets.length).toBe(0);
+    });
+
+    it('does not connect when the wallet unregisters during an in-flight signIn', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            features: ['standard:connect', 'standard:events', 'solana:signIn'],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+
+        // Pause the wallet's signIn() so we can unregister mid-flight.
+        const { promise, resolve } = Promise.withResolvers<unknown[]>();
+        signInMock.mockReturnValueOnce(promise);
+
+        const signInPromise = store.signIn(mockWallet, {});
+
+        unregisterWallet(mockWallet);
+        expect(store.getState().wallets.length).toBe(0);
+
+        resolve([{ account: { address: account.address } }]);
+        await signInPromise;
+
+        const state = store.getState();
+        expect(state.connected).toBeNull();
+        expect(state.status).toBe('disconnected');
+        expect(state.wallets.length).toBe(0);
+    });
+
     it('connects to a wallet', async () => {
         const account = createMockAccount();
         const mockWallet = createMockUiWallet({
