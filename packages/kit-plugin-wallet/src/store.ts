@@ -18,7 +18,7 @@ import {
     type StandardEventsFeature,
 } from '@wallet-standard/features';
 import type { UiWallet, UiWalletAccount } from '@wallet-standard/ui';
-import { getWalletFeature } from '@wallet-standard/ui-features';
+import { getWalletAccountFeature, getWalletFeature } from '@wallet-standard/ui-features';
 import { getOrCreateUiWalletForStandardWallet, getWalletForHandle } from '@wallet-standard/ui-registry';
 
 import type {
@@ -479,10 +479,12 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         // Use the wallet feature directly rather than going through the cached
         // signer. This decouples message signing from transaction signing —
         // a wallet that supports solana:signMessage but not transaction signing
-        // still works. getWalletFeature throws WalletStandardError if the
-        // feature is not supported.
-        const signMessageFeature = getWalletFeature(
-            connectedWallet,
+        // still works. solana:signMessage is an account-scoped feature, so this
+        // resolves it against the active account: getWalletAccountFeature throws
+        // a WalletStandardError when either the wallet or the account does not
+        // support it.
+        const signMessageFeature = getWalletAccountFeature(
+            account,
             SolanaSignMessage,
         ) as SolanaSignMessageFeature[typeof SolanaSignMessage];
         const [output] = await signMessageFeature.signMessage({ account, message });

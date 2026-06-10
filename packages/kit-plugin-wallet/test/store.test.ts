@@ -1,4 +1,5 @@
 import { SOLANA_ERROR__WALLET__NOT_CONNECTED, SolanaError } from '@solana/kit';
+import { isWalletStandardError } from '@wallet-standard/errors';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createWalletStore } from '../src/store';
@@ -461,8 +462,11 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         );
     });
 
-    it('signMessage calls wallet feature directly when connected', async () => {
-        const account = createMockAccount();
+    it('signMessage calls the account feature directly when connected', async () => {
+        const account = createMockAccount('11111111111111111111111111111111', [
+            'solana:signTransaction',
+            'solana:signMessage',
+        ]);
         const mockWallet = createMockUiWallet({
             accounts: [account],
             features: ['standard:connect', 'standard:events', 'solana:signMessage'],
@@ -497,6 +501,26 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         await store.connect(mockWallet);
 
         await expect(store.signMessage(new Uint8Array([1, 2, 3]))).rejects.toThrow();
+    });
+
+    it('signMessage throws a WalletStandardError when the connected account does not support solana:signMessage', async () => {
+        // The wallet advertises solana:signMessage, but the active account does
+        // not carry it in its own feature list. Feature support must be checked
+        // at the account level, so this should surface a WalletStandardError
+        // rather than being passed through to the wallet.
+        const account = createMockAccount('11111111111111111111111111111111', ['solana:signTransaction']);
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            features: ['standard:connect', 'standard:events', 'solana:signMessage'],
+            name: 'AccountWithoutSignMessage',
+        });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(mockWallet);
+
+        await expect(store.signMessage(new Uint8Array([1, 2, 3]))).rejects.toSatisfy(isWalletStandardError);
+        expect(signMessageMock).not.toHaveBeenCalled();
     });
 
     it('signIn throws when wallet does not support solana:signIn', async () => {

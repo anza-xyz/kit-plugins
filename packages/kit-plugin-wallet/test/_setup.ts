@@ -1,4 +1,8 @@
 import { address } from '@solana/kit';
+import {
+    WALLET_STANDARD_ERROR__FEATURES__WALLET_ACCOUNT_FEATURE_UNIMPLEMENTED,
+    WalletStandardError,
+} from '@wallet-standard/errors';
 import type { UiWallet, UiWalletAccount } from '@wallet-standard/ui';
 import { afterEach, beforeEach, vi } from 'vitest';
 
@@ -6,11 +10,14 @@ import type { WalletStorage } from '../src/types';
 
 // -- Mock helpers -----------------------------------------------------------
 
-export function createMockAccount(addr = '11111111111111111111111111111111'): UiWalletAccount {
+export function createMockAccount(
+    addr = '11111111111111111111111111111111',
+    features: readonly string[] = ['solana:signTransaction'],
+): UiWalletAccount {
     return {
         address: address(addr),
         chains: ['solana:mainnet'] as const,
-        features: ['solana:signTransaction'] as const,
+        features,
         icon: 'data:image/png;base64,',
         label: 'Account 1',
         publicKey: new Uint8Array(32),
@@ -119,33 +126,52 @@ export let walletEventHandler: ((properties: Record<string, unknown>) => void) |
 
 type IdentifierString = `${string}:${string}`;
 
+function resolveFeatureImpl(feature: IdentifierString): unknown {
+    if (feature === 'standard:connect') {
+        return { connect: connectMock, version: '1.0.0' };
+    }
+    if (feature === 'standard:disconnect') {
+        return { disconnect: disconnectMock, version: '1.0.0' };
+    }
+    if (feature === 'standard:events') {
+        return {
+            on: (_event: string, handler: (properties: Record<string, unknown>) => void) => {
+                walletEventHandler = handler;
+                return eventListenerCleanup;
+            },
+            version: '1.0.0',
+        };
+    }
+    if (feature === 'solana:signIn') {
+        return { signIn: signInMock, version: '1.0.0' };
+    }
+    if (feature === 'solana:signMessage') {
+        return { signMessage: signMessageMock, version: '1.0.0' };
+    }
+    throw new Error(`Feature ${feature} not supported`);
+}
+
 vi.mock('@wallet-standard/ui-features', () => ({
+    // Mirrors the real `getWalletAccountFeature`: it first checks the account's
+    // own feature list, throwing a `WalletStandardError` when the account
+    // doesn't support the feature, then resolves the wallet-level
+    // implementation.
+    getWalletAccountFeature: (account: UiWalletAccount, feature: IdentifierString) => {
+        if (!account.features.includes(feature)) {
+            throw new WalletStandardError(WALLET_STANDARD_ERROR__FEATURES__WALLET_ACCOUNT_FEATURE_UNIMPLEMENTED, {
+                address: account.address,
+                featureName: feature,
+                supportedChains: [...account.chains],
+                supportedFeatures: [...account.features],
+            });
+        }
+        return resolveFeatureImpl(feature);
+    },
     getWalletFeature: (wallet: UiWallet, feature: IdentifierString) => {
         if (!wallet.features.includes(feature)) {
             throw new Error(`Wallet "${wallet.name}" does not support ${feature}`);
         }
-        if (feature === 'standard:connect') {
-            return { connect: connectMock, version: '1.0.0' };
-        }
-        if (feature === 'standard:disconnect') {
-            return { disconnect: disconnectMock, version: '1.0.0' };
-        }
-        if (feature === 'standard:events') {
-            return {
-                on: (_event: string, handler: (properties: Record<string, unknown>) => void) => {
-                    walletEventHandler = handler;
-                    return eventListenerCleanup;
-                },
-                version: '1.0.0',
-            };
-        }
-        if (feature === 'solana:signIn') {
-            return { signIn: signInMock, version: '1.0.0' };
-        }
-        if (feature === 'solana:signMessage') {
-            return { signMessage: signMessageMock, version: '1.0.0' };
-        }
-        throw new Error(`Feature ${feature} not supported`);
+        return resolveFeatureImpl(feature);
     },
 }));
 
