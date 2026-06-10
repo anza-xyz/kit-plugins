@@ -614,6 +614,53 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         expect(state.connected).toBeNull();
     });
 
+    it('reverts to the previous connection when signIn to another wallet is rejected', async () => {
+        const account = createMockAccount();
+        const wallet1 = createMockUiWallet({ accounts: [account], name: 'Wallet1' });
+        const wallet2 = createMockUiWallet({
+            features: ['standard:connect', 'standard:events', 'solana:signIn'],
+            name: 'Wallet2',
+        });
+        registerWallet(wallet1);
+        registerWallet(wallet2);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(wallet1);
+        expect(store.getState().status).toBe('connected');
+
+        signInMock.mockRejectedValueOnce(new Error('User rejected'));
+        await expect(store.signIn(wallet2, {})).rejects.toThrow('User rejected');
+
+        const state = store.getState();
+        expect(state.status).toBe('connected');
+        expect(state.connected!.wallet.name).toBe('Wallet1');
+        expect(state.connected!.account.address).toBe(account.address);
+    });
+
+    it('reverts to the previous connection when the signed-in account is not in the new wallet', async () => {
+        const account = createMockAccount();
+        const wallet1 = createMockUiWallet({ accounts: [account], name: 'Wallet1' });
+        const wallet2 = createMockUiWallet({
+            features: ['standard:connect', 'standard:events', 'solana:signIn'],
+            name: 'Wallet2',
+        });
+        registerWallet(wallet1);
+        registerWallet(wallet2);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(wallet1);
+        expect(store.getState().status).toBe('connected');
+
+        // wallet2 reports an account that isn't among its accounts.
+        signInMock.mockResolvedValueOnce([{ account: { address: 'nonexistent' } }]);
+        await store.signIn(wallet2, {});
+
+        const state = store.getState();
+        expect(state.status).toBe('connected');
+        expect(state.connected!.wallet.name).toBe('Wallet1');
+        expect(state.connected!.account.address).toBe(account.address);
+    });
+
     it('reverts to disconnected if connect is rejected', async () => {
         const mockWallet = createMockUiWallet({ name: 'TestWallet' });
         registerWallet(mockWallet);
@@ -624,7 +671,7 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         expect(store.getState().status).toBe('disconnected');
     });
 
-    it('clears previous connection when connect fails', async () => {
+    it('reverts to the previous connection when connect to another wallet fails', async () => {
         const account = createMockAccount();
         const wallet1 = createMockUiWallet({ accounts: [account], name: 'Wallet1' });
         const wallet2 = createMockUiWallet({ name: 'Wallet2' });
@@ -638,12 +685,14 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         connectMock.mockRejectedValueOnce(new Error('User rejected'));
         await expect(store.connect(wallet2)).rejects.toThrow('User rejected');
 
-        // Previous connection should be fully cleared.
-        expect(store.getState().status).toBe('disconnected');
-        expect(store.getState().connected).toBeNull();
+        // Declining wallet2 should leave wallet1 connected, not log the user out.
+        const state = store.getState();
+        expect(state.status).toBe('connected');
+        expect(state.connected!.wallet.name).toBe('Wallet1');
+        expect(state.connected!.account.address).toBe(account.address);
     });
 
-    it('clears previous connection when new wallet returns zero accounts', async () => {
+    it('reverts to the previous connection when a new wallet returns zero accounts', async () => {
         const account = createMockAccount();
         const wallet1 = createMockUiWallet({ accounts: [account], name: 'Wallet1' });
         const wallet2 = createMockUiWallet({ accounts: [], name: 'Wallet2' });
@@ -656,8 +705,31 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
 
         await store.connect(wallet2);
 
-        expect(store.getState().status).toBe('disconnected');
-        expect(store.getState().connected).toBeNull();
+        // wallet2 never established a connection, so wallet1 stays connected.
+        const state = store.getState();
+        expect(state.status).toBe('connected');
+        expect(state.connected!.wallet.name).toBe('Wallet1');
+        expect(state.connected!.account.address).toBe(account.address);
+    });
+
+    it('retains the persisted account when connect to another wallet fails', async () => {
+        const account = createMockAccount();
+        const wallet1 = createMockUiWallet({ accounts: [account], name: 'Wallet1' });
+        const wallet2 = createMockUiWallet({ name: 'Wallet2' });
+        registerWallet(wallet1);
+        registerWallet(wallet2);
+
+        const storage = createMockStorage();
+        const store = createWalletStore({ autoConnect: false, chain: 'solana:mainnet', storage });
+        await store.connect(wallet1);
+        expect(await storage.getItem('kit-wallet')).toBe(`Wallet1:${account.address}`);
+
+        connectMock.mockRejectedValueOnce(new Error('User rejected'));
+        await expect(store.connect(wallet2)).rejects.toThrow('User rejected');
+
+        // The persisted key for wallet1 must survive the failed connect so the
+        // next page load can still silently reconnect to it.
+        expect(await storage.getItem('kit-wallet')).toBe(`Wallet1:${account.address}`);
     });
 
     it('stale connect rejection does not disconnect the active connection', async () => {

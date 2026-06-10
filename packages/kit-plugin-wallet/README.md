@@ -137,6 +137,8 @@ All wallet state is accessed via `client.wallet.getState()`, which returns a ref
     const accounts = await client.wallet.connect(selectedWallet);
     ```
 
+    Connecting to a different wallet keeps the current one connected until the new connection succeeds. If the attempt fails — the user declines the prompt, the wallet authorizes no accounts, or it becomes unavailable — the previous connection is left untouched rather than torn down. The same holds for `signIn`. While the attempt is in flight, `status` is `'connecting'` but `getState().connected` still describes the existing connection.
+
     If another `connect` or `signIn` starts before this one resolves (e.g. an accidental double-click), the newer request wins and owns the connection — the superseded call rejects with a `DOMException` whose `name` is `'AbortError'`. Ignore it the way you'd ignore any aborted operation:
 
     ```ts

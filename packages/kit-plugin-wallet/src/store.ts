@@ -347,7 +347,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             // this re-check the store would be left connected to a wallet absent
             // from `wallets`. Bail the same way an empty account list does.
             if (!isWalletStillAvailable(uiWallet)) {
-                disconnectLocally();
+                revertToPreviousConnectionOrDisconnect();
                 return [];
             }
 
@@ -356,7 +356,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             const allAccounts = refreshedWallet.accounts;
 
             if (allAccounts.length === 0) {
-                disconnectLocally();
+                revertToPreviousConnectionOrDisconnect();
                 return allAccounts;
             }
 
@@ -367,9 +367,10 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             setConnected(activeAccount, refreshedWallet);
             return allAccounts;
         } catch (error) {
-            // Only clean up if we're still the active connection attempt.
+            // Only act if we're still the active connection attempt; a
+            // superseded attempt must leave the newer connection untouched.
             if (generation === connectGeneration) {
-                disconnectLocally();
+                revertToPreviousConnectionOrDisconnect();
             }
             throw error;
         }
@@ -426,6 +427,23 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         });
 
         clearPersistedAccount();
+    }
+
+    // A `connect`/`signIn` attempt failed to establish a new connection. While
+    // such an attempt is in flight only `status` is moved to 'connecting' — the
+    // existing connection's account, signer, event subscription, and persisted
+    // key are untouched until `setConnected` runs on success. So if a prior
+    // connection is still intact, revert to it (declining the new wallet must not
+    // log the user out of the one they had). Otherwise there's nothing to keep,
+    // so disconnect cleanly. The active-attempt (`generation`) guard at each call
+    // site ensures a superseded attempt never reverts the connection a newer one
+    // owns.
+    function revertToPreviousConnectionOrDisconnect(): void {
+        if (state.connectedWallet && state.account) {
+            updateState({ status: 'connected' });
+        } else {
+            disconnectLocally();
+        }
     }
 
     function selectAccount(account: UiWalletAccount): void {
@@ -506,7 +524,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             // feature/chain) while its sign-in prompt was open. Bail rather than
             // leaving the store connected to a wallet absent from `wallets`.
             if (!isWalletStillAvailable(uiWallet)) {
-                disconnectLocally();
+                revertToPreviousConnectionOrDisconnect();
                 return result;
             }
 
@@ -515,9 +533,9 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             const activeAccount = refreshedWallet.accounts.find(a => a.address === result.account.address);
 
             if (!activeAccount) {
-                // The signed-in account isn't in the wallet — bad state, disconnect
-                // so the user can try a fresh connect/sign-in.
-                disconnectLocally();
+                // The signed-in account isn't in the wallet — bad state. Revert to
+                // any prior connection so the user can try a fresh connect/sign-in.
+                revertToPreviousConnectionOrDisconnect();
                 return result;
             }
 
@@ -525,7 +543,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             return result;
         } catch (error) {
             if (generation === connectGeneration) {
-                disconnectLocally();
+                revertToPreviousConnectionOrDisconnect();
             }
             throw error;
         }

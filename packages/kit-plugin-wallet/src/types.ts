@@ -22,7 +22,11 @@ export type WalletSigner = TransactionSigner | (MessageSigner & TransactionSigne
  *   state is permanent. In the browser it resolves to `disconnected` or
  *   `reconnecting` once the storage check completes.
  * - `disconnected` — initialized, no wallet connected.
- * - `connecting` — a user-initiated connection request is in progress.
+ * - `connecting` — a user-initiated connection request is in progress. When
+ *   connecting to a different wallet while one is already connected, the
+ *   existing connection is preserved until the new one succeeds — so
+ *   {@link WalletState.connected} can be non-null during this state, and a
+ *   failed attempt reverts to the previous connection.
  * - `connected` — a wallet is connected.
  * - `disconnecting` — a user-initiated disconnection request is in progress.
  * - `reconnecting` — auto-connect in progress (connecting to persisted wallet).
@@ -45,6 +49,11 @@ export type WalletState = {
      *
      * `signer` is `null` for read-only / watch-only wallets that do not
      * support any signing feature.
+     *
+     * Independent of {@link status}: when {@link connect} or {@link signIn} is
+     * called for a different wallet while one is already connected, `connected`
+     * keeps describing the existing connection while `status` is `'connecting'`,
+     * and a failed attempt leaves it in place.
      */
     readonly connected: {
         readonly account: UiWalletAccount;
@@ -211,6 +220,11 @@ export type WalletNamespace = {
      * newly authorized account (or the first account if reconnecting). Creates
      * and caches a signer for the active account.
      *
+     * If a wallet is already connected, it stays connected until the new one is
+     * established: a failed attempt (rejected prompt, no authorized accounts, or
+     * the wallet becoming unavailable) leaves the previous connection in place
+     * rather than disconnecting it.
+     *
      * @returns All accounts from the wallet after connection.
      * @throws The wallet's rejection error if the user declines the prompt.
      * @throws `DOMException` with `name: 'AbortError'` if a newer `connect` or
@@ -263,6 +277,9 @@ export type WalletNamespace = {
      *
      * To sign in with the already-connected wallet, pass
      * `getState().connected.wallet`.
+     *
+     * Like {@link connect}, a failed sign-in to a different wallet leaves any
+     * existing connection in place rather than disconnecting it.
      *
      * @throws `WalletStandardError(WALLET_STANDARD_ERROR__FEATURES__WALLET_ACCOUNT_FEATURE_UNIMPLEMENTED)`
      *   if the wallet does not support `solana:signIn`.
