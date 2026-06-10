@@ -1,4 +1,12 @@
-import { type ClientWithIdentity, type ClientWithPayer, extendClient, withCleanup } from '@solana/kit';
+import {
+    type ClientWithIdentity,
+    type ClientWithPayer,
+    extendClient,
+    SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED,
+    SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE,
+    SolanaError,
+    withCleanup,
+} from '@solana/kit';
 
 import { createWalletStore } from './store';
 import type { ClientWithWallet, WalletPluginConfig } from './types';
@@ -16,12 +24,10 @@ function defineSignerGetter(
         get() {
             const state = store.getState();
             if (!state.connected) {
-                // TODO: throw new SolanaError(SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED, { status: state.status });
-                throw new Error(`No signing wallet connected (status: ${state.status})`);
+                throw new SolanaError(SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED, { status: state.status });
             }
             if (!state.connected.signer) {
-                // TODO: throw new SolanaError(SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE);
-                throw new Error('Connected wallet does not support signing');
+                throw new SolanaError(SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE);
             }
             return state.connected.signer;
         },
