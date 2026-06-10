@@ -20,10 +20,7 @@ import {
 } from '@wallet-standard/features';
 import type { UiWallet, UiWalletAccount } from '@wallet-standard/ui';
 import { getWalletFeature } from '@wallet-standard/ui-features';
-import {
-    getOrCreateUiWalletForStandardWallet_DO_NOT_USE_OR_YOU_WILL_BE_FIRED,
-    getWalletForHandle_DO_NOT_USE_OR_YOU_WILL_BE_FIRED,
-} from '@wallet-standard/ui-registry';
+import { getOrCreateUiWalletForStandardWallet, getWalletForHandle } from '@wallet-standard/ui-registry';
 
 import type {
     WalletActionOptions,
@@ -174,12 +171,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
     }
 
     function buildWalletList(): readonly UiWallet[] {
-        return Object.freeze(
-            registry
-                .get()
-                .map(getOrCreateUiWalletForStandardWallet_DO_NOT_USE_OR_YOU_WILL_BE_FIRED)
-                .filter(filterWallet),
-        );
+        return Object.freeze(registry.get().map(getOrCreateUiWalletForStandardWallet).filter(filterWallet));
     }
 
     updateState({ wallets: buildWalletList() });
@@ -230,8 +222,8 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
     }
 
     function refreshUiWallet(staleUiWallet: UiWallet): UiWallet {
-        const rawWallet = getWalletForHandle_DO_NOT_USE_OR_YOU_WILL_BE_FIRED(staleUiWallet);
-        return getOrCreateUiWalletForStandardWallet_DO_NOT_USE_OR_YOU_WILL_BE_FIRED(rawWallet);
+        const rawWallet = getWalletForHandle(staleUiWallet);
+        return getOrCreateUiWalletForStandardWallet(rawWallet);
     }
 
     function subscribeToWalletEvents(uiWallet: UiWallet): () => void {
@@ -537,7 +529,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
                 await attemptSilentReconnect(savedAddress, existing);
             } else if (
                 registry.get().some(w => {
-                    const ui = getOrCreateUiWalletForStandardWallet_DO_NOT_USE_OR_YOU_WILL_BE_FIRED(w);
+                    const ui = getOrCreateUiWalletForStandardWallet(w);
                     return ui.name === walletName;
                 })
             ) {
@@ -575,7 +567,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
                                 await attemptSilentReconnect(savedAddress, found);
                             } else if (
                                 registry.get().some(w => {
-                                    const ui = getOrCreateUiWalletForStandardWallet_DO_NOT_USE_OR_YOU_WILL_BE_FIRED(w);
+                                    const ui = getOrCreateUiWalletForStandardWallet(w);
                                     return ui.name === walletName;
                                 })
                             ) {
