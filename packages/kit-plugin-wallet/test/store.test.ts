@@ -157,7 +157,7 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         expect(state.wallets.length).toBe(0);
     });
 
-    it('does not connect when the wallet unregisters during an in-flight connect', async () => {
+    it('rejects when the wallet unregisters during an in-flight connect', async () => {
         const account = createMockAccount();
         const mockWallet = createMockUiWallet({
             accounts: [account],
@@ -181,7 +181,11 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
 
         // The connect prompt now resolves.
         resolve();
-        await connectPromise;
+        // The connection could not be established, so the attempt rejects rather
+        // than resolving while the store is left disconnected.
+        await expect(connectPromise).rejects.toThrow(
+            new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'connect' }),
+        );
 
         // The store must not be left connected to a wallet absent from the list.
         const state = store.getState();
@@ -190,7 +194,7 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         expect(state.wallets.length).toBe(0);
     });
 
-    it('does not connect when the wallet unregisters during an in-flight signIn', async () => {
+    it('rejects when the wallet unregisters during an in-flight signIn', async () => {
         const account = createMockAccount();
         const mockWallet = createMockUiWallet({
             accounts: [account],
@@ -211,7 +215,11 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         expect(store.getState().wallets.length).toBe(0);
 
         resolve([{ account: { address: account.address } }]);
-        await signInPromise;
+        // signIn cannot connect to a wallet absent from the list, so it rejects
+        // rather than resolving with the sign-in output while disconnected.
+        await expect(signInPromise).rejects.toThrow(
+            new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signIn' }),
+        );
 
         const state = store.getState();
         expect(state.connected).toBeNull();
@@ -647,7 +655,7 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         expect(store.getState().status).toBe('connected');
     });
 
-    it('signIn disconnects when signed-in account is not in wallet', async () => {
+    it('signIn rejects when the signed-in account is not in the wallet', async () => {
         const account = createMockAccount();
         const mockWallet = createMockUiWallet({
             accounts: [account],
@@ -660,10 +668,12 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         signInMock.mockResolvedValueOnce([{ account: { address: 'nonexistent' } }]);
 
         const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
-        const result = await store.signIn(mockWallet, {});
+        // The wallet signed in with an account it doesn't expose — a protocol
+        // violation that can't be mapped to a connection, so signIn rejects.
+        await expect(store.signIn(mockWallet, {})).rejects.toThrow(
+            new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signIn' }),
+        );
 
-        // Should still return the result, but not establish connection.
-        expect(result).toEqual({ account: { address: 'nonexistent' } });
         const state = store.getState();
         expect(state.status).toBe('disconnected');
         expect(state.connected).toBeNull();
@@ -708,7 +718,9 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
 
         // wallet2 reports an account that isn't among its accounts.
         signInMock.mockResolvedValueOnce([{ account: { address: 'nonexistent' } }]);
-        await store.signIn(wallet2, {});
+        await expect(store.signIn(wallet2, {})).rejects.toThrow(
+            new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signIn' }),
+        );
 
         const state = store.getState();
         expect(state.status).toBe('connected');
@@ -758,7 +770,10 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         await store.connect(wallet1);
         expect(store.getState().status).toBe('connected');
 
-        await store.connect(wallet2);
+        // wallet2 authorized no accounts, so the connect attempt rejects.
+        await expect(store.connect(wallet2)).rejects.toThrow(
+            new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'connect' }),
+        );
 
         // wallet2 never established a connection, so wallet1 stays connected.
         const state = store.getState();

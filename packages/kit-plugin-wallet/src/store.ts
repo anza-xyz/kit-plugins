@@ -363,19 +363,21 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             // feature/chain) while its connect prompt was open. The unregister
             // handler only disconnects an already-connected wallet, so without
             // this re-check the store would be left connected to a wallet absent
-            // from `wallets`. Bail the same way an empty account list does.
+            // from `wallets`. Throw so the connection failure surfaces as a
+            // rejection; the `catch` below reverts to any prior connection.
             if (!isWalletStillAvailable(uiWallet)) {
-                revertToPreviousConnectionOrDisconnect();
-                return [];
+                throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'connect' });
             }
 
             // Refresh UiWallet to get updated accounts after connect.
             const refreshedWallet = refreshUiWallet(uiWallet);
             const allAccounts = refreshedWallet.accounts;
 
+            // No authorized accounts means there's nothing to connect to. Throw
+            // rather than resolving so a caller can't mistake an empty result for
+            // a successful connection; the `catch` reverts to any prior wallet.
             if (allAccounts.length === 0) {
-                revertToPreviousConnectionOrDisconnect();
-                return allAccounts;
+                throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'connect' });
             }
 
             // Prefer the first newly authorized account.
@@ -541,11 +543,11 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             }
 
             // The wallet may have unregistered (or dropped a required
-            // feature/chain) while its sign-in prompt was open. Bail rather than
-            // leaving the store connected to a wallet absent from `wallets`.
+            // feature/chain) while its sign-in prompt was open. Throw rather than
+            // resolving while the store is left connected to no wallet (or a
+            // different one); the `catch` below reverts to any prior connection.
             if (!isWalletStillAvailable(uiWallet)) {
-                revertToPreviousConnectionOrDisconnect();
-                return result;
+                throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signIn' });
             }
 
             // Set up full connection state using the account from the sign-in response.
@@ -553,10 +555,12 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             const activeAccount = refreshedWallet.accounts.find(a => a.address === result.account.address);
 
             if (!activeAccount) {
-                // The signed-in account isn't in the wallet — bad state. Revert to
-                // any prior connection so the user can try a fresh connect/sign-in.
-                revertToPreviousConnectionOrDisconnect();
-                return result;
+                // The wallet signed in with an account it doesn't expose — a
+                // protocol violation that can't be mapped to a connection. Throw
+                // so the failure surfaces as a rejection rather than resolving
+                // with a sign-in result the store can't act on; the `catch`
+                // reverts to any prior connection.
+                throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signIn' });
             }
 
             setConnected(activeAccount, refreshedWallet);

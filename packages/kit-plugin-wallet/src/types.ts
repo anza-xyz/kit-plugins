@@ -220,13 +220,18 @@ export type WalletNamespace = {
      * newly authorized account (or the first account if reconnecting). Creates
      * and caches a signer for the active account.
      *
-     * If a wallet is already connected, it stays connected until the new one is
-     * established: a failed attempt (rejected prompt, no authorized accounts, or
-     * the wallet becoming unavailable) leaves the previous connection in place
+     * Resolving means the wallet is connected; any failure rejects. If a wallet
+     * is already connected, it stays connected until the new one is established:
+     * a failed attempt — a rejected prompt, no authorized accounts, or the
+     * wallet becoming unavailable — leaves the previous connection in place
      * rather than disconnecting it.
      *
      * @returns All accounts from the wallet after connection.
      * @throws The wallet's rejection error if the user declines the prompt.
+     * @throws `SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED)` if the wallet
+     *   authorizes no accounts, or unregisters (or drops a required
+     *   feature/chain) while its connect prompt is open. Any previously
+     *   connected wallet is left in place.
      * @throws `DOMException` with `name: 'AbortError'` if a newer `connect` or
      *   `signIn` is started before this call resolves. The newer request wins
      *   and owns the resulting connection; this superseded call rejects so it
@@ -269,8 +274,9 @@ export type WalletNamespace = {
      * Sign In With Solana (SIWS-as-connect).
      *
      * Connects the wallet, calls `solana:signIn`, sets the returned account as
-     * active, and creates a signer. After completion, the client is in the same
-     * state as if {@link connect} had been called.
+     * active, and creates a signer. Resolving means the client is in the same
+     * state as if {@link connect} had been called; any failure to connect
+     * rejects rather than resolving while disconnected.
      *
      * All fields on `SolanaSignInInput` are optional — pass `{}` if no sign-in
      * customization is needed.
@@ -278,11 +284,16 @@ export type WalletNamespace = {
      * To sign in with the already-connected wallet, pass
      * `getState().connected.wallet`.
      *
-     * Like {@link connect}, a failed sign-in to a different wallet leaves any
-     * existing connection in place rather than disconnecting it.
+     * Like {@link connect}, a failed sign-in to a different wallet rejects and
+     * leaves any existing connection in place rather than disconnecting it.
      *
+     * @returns The wallet's sign-in output, once the connection is established.
      * @throws `WalletStandardError(WALLET_STANDARD_ERROR__FEATURES__WALLET_ACCOUNT_FEATURE_UNIMPLEMENTED)`
      *   if the wallet does not support `solana:signIn`.
+     * @throws `SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED)` if the wallet
+     *   unregisters (or drops a required feature/chain) while its sign-in prompt
+     *   is open, or signs in with an account it does not expose. Any previously
+     *   connected wallet is left in place.
      * @throws `DOMException` with `name: 'AbortError'` if a newer `connect` or
      *   `signIn` is started before this call resolves. The newer request wins
      *   and owns the resulting connection; this superseded call rejects so it
