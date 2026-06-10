@@ -1,8 +1,8 @@
 import { createClient, extendClient } from '@solana/kit';
 import { describe, expect, it, vi } from 'vitest';
 
-import { walletPayer, walletSigner, walletWithoutSigner } from '../src';
-import { createMockAccount, createMockUiWallet, mockSigner, registerWallet } from './_setup';
+import { walletIdentity, walletPayer, walletSigner, walletWithoutSigner } from '../src';
+import { createMockAccount, createMockUiWallet, createSignerMock, mockSigner, registerWallet } from './_setup';
 
 describe.skipIf(!__BROWSER__)('walletWithoutSigner plugin (browser)', () => {
     it('adds wallet namespace to client', () => {
@@ -112,6 +112,53 @@ describe.skipIf(!__BROWSER__)('walletSigner plugin (browser)', () => {
         const client = createClient().use(walletSigner({ chain: 'solana:mainnet', storage: null }));
         expect(() => client.payer).toThrow('No signing wallet connected');
         expect(() => client.identity).toThrow('No signing wallet connected');
+    });
+});
+
+describe.skipIf(!__BROWSER__)('walletIdentity plugin (browser)', () => {
+    it('sets identity but not payer', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        const client = createClient().use(walletIdentity({ chain: 'solana:mainnet', storage: null }));
+        await client.wallet.connect(mockWallet);
+
+        expect(client.identity).toBe(mockSigner);
+        // walletIdentity must not define a payer getter.
+        expect('payer' in client).toBe(false);
+    });
+
+    it('identity throws when not connected', () => {
+        const client = createClient().use(walletIdentity({ chain: 'solana:mainnet', storage: null }));
+        expect(() => client.identity).toThrow('No signing wallet connected');
+    });
+});
+
+describe.skipIf(!__BROWSER__)('wallet plugin read-only wallet (browser)', () => {
+    it('connects with a null signer and payer throws SIGNER_NOT_AVAILABLE', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({ accounts: [account], name: 'ReadOnlyWallet' });
+        registerWallet(mockWallet);
+
+        // The bridge function throws — the wallet supports no signing features.
+        createSignerMock.mockImplementation(() => {
+            throw new Error('No signing features');
+        });
+
+        const client = createClient().use(walletPayer({ chain: 'solana:mainnet', storage: null }));
+        await client.wallet.connect(mockWallet);
+
+        // Connection succeeds, but with no signer.
+        const { connected } = client.wallet.getState();
+        expect(connected).not.toBeNull();
+        expect(connected!.signer).toBeNull();
+
+        // The dynamic payer getter surfaces the read-only state.
+        expect(() => client.payer).toThrow('Connected wallet does not support signing');
     });
 });
 

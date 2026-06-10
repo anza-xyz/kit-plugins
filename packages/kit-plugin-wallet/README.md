@@ -244,6 +244,8 @@ By default the plugin uses `localStorage` to remember the last connected wallet 
 
 All four wallet plugins are safe to include in a shared client that runs on both server and browser. On the server, `status` stays `'pending'` permanently, all actions throw, and no registry listeners or storage reads are made. In the browser the plugin initializes normally.
 
+React Native is treated the same way as the server: wallet-standard browser discovery is not available, so the plugin returns the same inert stub (`status` stays `'pending'`, actions throw). Native wallet integration would need a different discovery mechanism and is out of scope for this plugin.
+
 ```ts
 const client = createClient()
     .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))

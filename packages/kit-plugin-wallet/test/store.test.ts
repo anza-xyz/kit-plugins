@@ -447,6 +447,30 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         await expect(store.signIn(mockWallet, {})).rejects.toThrow();
     });
 
+    it('signIn on an unsupported wallet leaves an existing connection intact', async () => {
+        const account = createMockAccount();
+        // The connected wallet supports connect/events but NOT solana:signIn.
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            features: ['standard:connect', 'standard:events'],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(mockWallet);
+        expect(store.getState().status).toBe('connected');
+
+        // signIn must reject because the feature is unsupported — and because
+        // the feature is resolved before any state is mutated, the live
+        // connection (and its status) must be untouched.
+        await expect(store.signIn(mockWallet, {})).rejects.toThrow();
+
+        const state = store.getState();
+        expect(state.status).toBe('connected');
+        expect(state.connected!.account.address).toBe(account.address);
+    });
+
     it('signIn connects via SIWS and sets up connection state', async () => {
         const account = createMockAccount();
         const mockWallet = createMockUiWallet({
@@ -960,6 +984,40 @@ describe.skipIf(!__BROWSER__)('store wallet events (browser)', () => {
         expect(store.getState().status).toBe('disconnected');
     });
 
+    it('recreates the signer when the active account is regenerated on a chains change', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            chains: ['solana:mainnet', 'solana:devnet'],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await connectToWallet(store, mockWallet);
+
+        // Clear calls from connect so we only see the event-triggered call.
+        createSignerMock.mockClear();
+
+        // The wallet narrows its chains and the registry regenerates the active
+        // account (new reference, same address) while still supporting mainnet.
+        const refreshedAccount = { ...account, chains: ['solana:mainnet'] as const };
+        updateRegisteredWallet(
+            createMockUiWallet({
+                accounts: [refreshedAccount],
+                chains: ['solana:mainnet'],
+                name: 'TestWallet',
+            }),
+        );
+        walletEventHandler!({ chains: true });
+
+        // Still connected, and the signer was recreated for the regenerated account.
+        const state = store.getState();
+        expect(state.status).toBe('connected');
+        expect(createSignerMock).toHaveBeenCalledOnce();
+        expect(createSignerMock.mock.calls[0][0]).toHaveProperty('address', account.address);
+    });
+
     it('switches to first account when current account is removed', async () => {
         const account1 = createMockAccount();
         const account2 = createMockAccount('Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ');
@@ -1051,7 +1109,30 @@ describe.skipIf(!__BROWSER__)('store wallet events (browser)', () => {
         expect(state.connected!.signer).toBeDefined();
     });
 
-    it('signer becomes null after features change when signing is dropped', async () => {
+    it('does not churn the snapshot or signer on a no-op change event', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await connectToWallet(store, mockWallet);
+
+        const before = store.getState();
+        createSignerMock.mockClear();
+
+        // A change event fires but nothing the signer depends on changed — the
+        // registry returns the same account/wallet handles. The snapshot must
+        // stay referentially stable and the signer must not be recreated.
+        walletEventHandler!({ features: true });
+
+        expect(store.getState()).toBe(before);
+        expect(createSignerMock).not.toHaveBeenCalled();
+    });
+
+    it('signer becomes null when the active account is regenerated without signing support', async () => {
         const account = createMockAccount();
         const mockWallet = createMockUiWallet({
             accounts: [account],
@@ -1063,10 +1144,18 @@ describe.skipIf(!__BROWSER__)('store wallet events (browser)', () => {
         await connectToWallet(store, mockWallet);
         expect(store.getState().connected!.signer).not.toBeNull();
 
-        // Wallet drops signing support — bridge function throws.
+        // The active account is regenerated (new reference, same address)
+        // without signing features, so the bridge function now throws.
+        const readOnlyAccount = { ...account, features: [] as const };
         createSignerMock.mockImplementation(() => {
             throw new Error('No signing features');
         });
+        updateRegisteredWallet(
+            createMockUiWallet({
+                accounts: [readOnlyAccount],
+                name: 'TestWallet',
+            }),
+        );
         walletEventHandler!({ features: true });
 
         const state = store.getState();

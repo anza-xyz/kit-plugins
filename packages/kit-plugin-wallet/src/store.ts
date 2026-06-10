@@ -233,64 +233,58 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             StandardEvents,
         ) as StandardEventsFeature[typeof StandardEvents];
 
-        return eventsFeature.on('change', properties => {
+        // The handler ignores the changed-property flags (`accounts`, `chains`,
+        // `features`) and instead reconciles the active account against the
+        // refreshed wallet. The signer is derived entirely from the account's
+        // features and chains, and the wallet-ui registry regenerates the
+        // account reference precisely when one of those changes — so the
+        // account reference is the single source of truth for whether the
+        // signer is affected, regardless of which flag the wallet sets.
+        return eventsFeature.on('change', () => {
             const refreshed = refreshUiWallet(uiWallet);
 
-            // If the wallet no longer passes the filter, disconnect.
+            // If the wallet no longer passes the filter (e.g. it dropped the
+            // configured chain or a required feature), disconnect.
             if (!filterWallet(refreshed)) {
                 disconnectLocally();
                 return;
             }
 
-            let updates: Partial<WalletStoreState> = { connectedWallet: refreshed };
-
-            if (properties.accounts) {
-                const result = handleAccountsChanged(refreshed);
-                if (result === null) {
-                    disconnectLocally();
-                    return;
-                }
-                updates = { ...updates, ...result };
-            }
-            // Skip features handler when accounts also changed — the account
-            // handler already creates a fresh signer for the new account.
-            // Running both would compute the signer from the stale account
-            // in state (setState hasn't been called yet).
-            if (properties.features && !properties.accounts) {
-                updates = { ...updates, ...handleFeaturesChanged() };
+            const result = reconcileActiveAccount(refreshed);
+            if (result === null) {
+                disconnectLocally();
+                return;
             }
 
-            updateState(updates);
+            // `connectedWallet` is always refreshed so consumers reading
+            // `getState().connected.wallet` see current metadata; the signer
+            // (in `result`) only churns when the active account changed, which
+            // keeps the snapshot referentially stable on no-op change events.
+            updateState({ connectedWallet: refreshed, ...result });
 
-            if (updates.account) {
-                persistAccount(updates.account, refreshed);
+            if (result.account) {
+                persistAccount(result.account, refreshed);
             }
         });
     }
 
-    function handleAccountsChanged(wallet: UiWallet): Partial<WalletStoreState> | null {
+    function reconcileActiveAccount(wallet: UiWallet): Partial<WalletStoreState> | null {
         const newAccounts = wallet.accounts;
 
+        // No accounts left — the caller disconnects.
         if (newAccounts.length === 0) return null;
 
         const currentAddress = state.account?.address;
         const stillPresent = currentAddress ? newAccounts.find(a => a.address === currentAddress) : null;
         const activeAccount = stillPresent ?? newAccounts[0];
 
-        // Same reference — nothing changed for this account.
+        // Same reference — nothing the signer depends on changed, so leave the
+        // signer untouched to preserve referential stability.
         if (activeAccount === state.account) return {};
 
-        // Account changed (new account, or same address with updated features).
+        // The active account changed (switched, removed, or regenerated because
+        // its features/chains changed) — recreate the signer for it.
         return { account: activeAccount, signer: tryCreateSigner(activeAccount) };
-    }
-
-    function handleFeaturesChanged(): Partial<WalletStoreState> {
-        // Features changed but wallet is still valid — recreate signer
-        // to pick up new capabilities or drop removed ones.
-        if (state.account) {
-            return { signer: tryCreateSigner(state.account) };
-        }
-        return {};
     }
 
     // -- Connection lifecycle ----------------------------------------------
@@ -436,14 +430,19 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         options?: WalletActionOptions,
     ): Promise<SolanaSignInOutput> {
         options?.abortSignal?.throwIfAborted();
+
+        // Resolve the feature before mutating any state. getWalletFeature throws
+        // WalletStandardError synchronously when the wallet doesn't support
+        // solana:signIn — doing this first means an unsupported wallet is a
+        // no-op that never tears down an existing connection.
+        const signInFeature = getWalletFeature(uiWallet, SolanaSignIn) as SolanaSignInFeature[typeof SolanaSignIn];
+
         userHasSelected = true;
         cancelReconnect();
         const generation = ++connectGeneration;
         updateState({ status: 'connecting' });
 
         try {
-            // getWalletFeature throws WalletStandardError if not supported.
-            const signInFeature = getWalletFeature(uiWallet, SolanaSignIn) as SolanaSignInFeature[typeof SolanaSignIn];
             const [result] = await signInFeature.signIn(input);
 
             // A newer connect/signIn was started while we were awaiting. Reject

@@ -18,8 +18,9 @@ export type WalletSigner = TransactionSigner | (MessageSigner & TransactionSigne
  * The connection status of the wallet plugin.
  *
  * - `pending` — not yet initialized. Initial state on both server and browser.
- *   On the server this state is permanent. In the browser it resolves to
- *   `disconnected` or `reconnecting` once the storage check completes.
+ *   On the server — and in React Native, which is treated the same way — this
+ *   state is permanent. In the browser it resolves to `disconnected` or
+ *   `reconnecting` once the storage check completes.
  * - `disconnected` — initialized, no wallet connected.
  * - `connecting` — a user-initiated connection request is in progress.
  * - `connected` — a wallet is connected.
