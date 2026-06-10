@@ -1,4 +1,4 @@
-import { createClient, extendClient } from '@solana/kit';
+import { createClient, extendClient, SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED, SolanaError } from '@solana/kit';
 import { describe, expect, it, vi } from 'vitest';
 
 import { walletIdentity, walletPayer, walletSigner, walletWithoutSigner } from '../src';
@@ -170,5 +170,39 @@ describe.skipIf(!__BROWSER__)('wallet plugin duplicate guard', () => {
                 // @ts-expect-error — intentionally testing runtime guard for duplicate wallet plugins
                 .use(walletPayer({ chain: 'solana:mainnet', storage: null })),
         ).toThrow('Only one wallet plugin can be used per client');
+    });
+});
+
+describe.skipIf(__BROWSER__)('wallet plugins (SSR / non-browser)', () => {
+    // On the server the store is an inert stub that reports 'pending' rather than
+    // 'disconnected', so the signer getters surface NO_SIGNER_CONNECTED with that
+    // status. This is the path a shared client chain hits during SSR.
+    const NO_SIGNER_ON_SERVER = new SolanaError(SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED, { status: 'pending' });
+
+    it('adds the wallet namespace in pending status', () => {
+        const client = createClient().use(walletWithoutSigner({ chain: 'solana:mainnet', storage: null }));
+        expect(client.wallet).toBeDefined();
+        expect(client.wallet.getState().status).toBe('pending');
+    });
+
+    it('walletPayer payer throws NO_SIGNER_CONNECTED', () => {
+        const client = createClient().use(walletPayer({ chain: 'solana:mainnet', storage: null }));
+        expect(() => client.payer).toThrow(NO_SIGNER_ON_SERVER);
+    });
+
+    it('walletIdentity identity throws NO_SIGNER_CONNECTED', () => {
+        const client = createClient().use(walletIdentity({ chain: 'solana:mainnet', storage: null }));
+        expect(() => client.identity).toThrow(NO_SIGNER_ON_SERVER);
+    });
+
+    it('walletSigner payer and identity both throw NO_SIGNER_CONNECTED', () => {
+        const client = createClient().use(walletSigner({ chain: 'solana:mainnet', storage: null }));
+        expect(() => client.payer).toThrow(NO_SIGNER_ON_SERVER);
+        expect(() => client.identity).toThrow(NO_SIGNER_ON_SERVER);
+    });
+
+    it('cleanup via Symbol.dispose does not throw', () => {
+        const client = createClient().use(walletSigner({ chain: 'solana:mainnet', storage: null }));
+        expect(() => client[Symbol.dispose]()).not.toThrow();
     });
 });

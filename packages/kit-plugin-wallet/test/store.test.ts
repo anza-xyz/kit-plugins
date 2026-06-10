@@ -1121,6 +1121,114 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
     });
 });
 
+// -- Abort signal tests -------------------------------------------------------
+
+describe.skipIf(!__BROWSER__)('store action abort signals (browser)', () => {
+    it('rejects connect with the signal reason and never calls the wallet when already aborted', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({ accounts: [account], name: 'TestWallet' });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        const controller = new AbortController();
+        controller.abort(new Error('aborted by caller'));
+
+        // The pre-abort check is the first thing connect does, so it bails before
+        // moving to 'connecting' or invoking the wallet's connect feature.
+        await expect(store.connect(mockWallet, { abortSignal: controller.signal })).rejects.toThrow(
+            'aborted by caller',
+        );
+        expect(connectMock).not.toHaveBeenCalled();
+        expect(store.getState().status).toBe('disconnected');
+        expect(store.getState().connected).toBeNull();
+    });
+
+    it('rejects disconnect with the signal reason and leaves the connection intact when already aborted', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            features: ['standard:connect', 'standard:disconnect', 'standard:events'],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(mockWallet);
+        expect(store.getState().status).toBe('connected');
+
+        const controller = new AbortController();
+        controller.abort(new Error('aborted by caller'));
+
+        // disconnect bails before calling the wallet's disconnect feature, so the
+        // existing connection is left untouched.
+        await expect(store.disconnect({ abortSignal: controller.signal })).rejects.toThrow('aborted by caller');
+        expect(disconnectMock).not.toHaveBeenCalled();
+        expect(store.getState().status).toBe('connected');
+    });
+
+    it('rejects signMessage with the signal reason and never calls the wallet when already aborted', async () => {
+        const account = createMockAccount('11111111111111111111111111111111', [
+            'solana:signTransaction',
+            'solana:signMessage',
+        ]);
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            features: ['standard:connect', 'standard:events', 'solana:signMessage'],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(mockWallet);
+
+        const controller = new AbortController();
+        controller.abort(new Error('aborted by caller'));
+
+        await expect(store.signMessage(new Uint8Array(), { abortSignal: controller.signal })).rejects.toThrow(
+            'aborted by caller',
+        );
+        expect(signMessageMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects signIn with the signal reason and never calls the wallet when already aborted', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            features: ['standard:connect', 'standard:events', 'solana:signIn'],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        const controller = new AbortController();
+        controller.abort(new Error('aborted by caller'));
+
+        // The pre-abort check runs before signIn resolves the feature or moves to
+        // 'connecting', so the wallet is never prompted.
+        await expect(store.signIn(mockWallet, {}, { abortSignal: controller.signal })).rejects.toThrow(
+            'aborted by caller',
+        );
+        expect(signInMock).not.toHaveBeenCalled();
+        expect(store.getState().status).toBe('disconnected');
+    });
+
+    it('throws an AbortError by default when the signal is aborted without a reason', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({ accounts: [account], name: 'TestWallet' });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        const controller = new AbortController();
+        controller.abort();
+
+        // An abort with no explicit reason surfaces the default DOMException, so
+        // callers can detect the cancellation via the standard AbortError name.
+        const error = await store.connect(mockWallet, { abortSignal: controller.signal }).catch((e: unknown) => e);
+        expect((error as DOMException).name).toBe('AbortError');
+        expect(connectMock).not.toHaveBeenCalled();
+    });
+});
+
 // -- Wallet event handler tests -----------------------------------------------
 
 describe.skipIf(!__BROWSER__)('store wallet events (browser)', () => {
