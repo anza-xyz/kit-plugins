@@ -1136,6 +1136,107 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         expect(store.getState().connected).toBeNull();
     });
 
+    it('a failed connect does not revive a wallet that was concurrently disconnected', async () => {
+        const account1 = createMockAccount();
+        const account2 = createMockAccount('Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ');
+        const wallet1 = createMockUiWallet({
+            accounts: [account1],
+            features: ['standard:connect', 'standard:disconnect', 'standard:events'],
+            name: 'Wallet1',
+        });
+        const wallet2 = createMockUiWallet({ accounts: [account2], name: 'Wallet2' });
+        registerWallet(wallet1);
+        registerWallet(wallet2);
+
+        const storage = createMockStorage();
+        const store = createWalletStore({ autoConnect: false, chain: 'solana:mainnet', storage });
+        await store.connect(wallet1);
+        expect(await storage.getItem('kit-wallet')).toBe(`Wallet1:${account1.address}`);
+
+        // User disconnects wallet1; hold its wallet-side teardown pending.
+        const pendingDisconnect = Promise.withResolvers<void>();
+        disconnectMock.mockReturnValueOnce(pendingDisconnect.promise);
+        const disconnectPromise = store.disconnect();
+
+        // While the disconnect is in flight the user starts connecting to
+        // wallet2; hold its prompt open.
+        const pendingConnect = Promise.withResolvers<void>();
+        connectMock.mockReturnValueOnce(pendingConnect.promise);
+        const connectPromise = store.connect(wallet2);
+
+        // Disconnect resolves — wallet1 is now disconnected at the wallet level.
+        // It supersedes the connect's `finally` guard, so local state is left
+        // intact on the bet that the newer connect will replace it.
+        pendingDisconnect.resolve();
+        await disconnectPromise;
+
+        // The user then declines wallet2. The revert must NOT restore wallet1 —
+        // the user's last completed action disconnected it.
+        pendingConnect.reject(new Error('User rejected'));
+        await expect(connectPromise).rejects.toThrow('User rejected');
+
+        expect(store.getState().status).toBe('disconnected');
+        expect(store.getState().connected).toBeNull();
+        // Persistence for wallet1 must be cleared too, so the next load doesn't
+        // silently reconnect to a wallet the user disconnected.
+        expect(await storage.getItem('kit-wallet')).toBeNull();
+    });
+
+    it('a failed connect that rejects before the concurrent disconnect resolves does not revive the wallet', async () => {
+        const account1 = createMockAccount();
+        const account2 = createMockAccount('Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ');
+        const wallet1 = createMockUiWallet({
+            accounts: [account1],
+            features: ['standard:connect', 'standard:disconnect', 'standard:events'],
+            name: 'Wallet1',
+        });
+        const wallet2 = createMockUiWallet({ accounts: [account2], name: 'Wallet2' });
+        registerWallet(wallet1);
+        registerWallet(wallet2);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(wallet1);
+
+        const pendingDisconnect = Promise.withResolvers<void>();
+        disconnectMock.mockReturnValueOnce(pendingDisconnect.promise);
+        const disconnectPromise = store.disconnect();
+
+        // The opposite ordering: wallet2 is declined while the disconnect is
+        // still in flight. The teardown marker is set when disconnect begins, so
+        // the revert still refuses to revive wallet1 even though the disconnect's
+        // `finally` hasn't run yet.
+        connectMock.mockRejectedValueOnce(new Error('User rejected'));
+        await expect(store.connect(wallet2)).rejects.toThrow('User rejected');
+
+        expect(store.getState().status).toBe('disconnected');
+        expect(store.getState().connected).toBeNull();
+
+        pendingDisconnect.resolve();
+        await disconnectPromise;
+        expect(store.getState().status).toBe('disconnected');
+    });
+
+    it('reverts to the previous connection when no disconnect was in flight', async () => {
+        const account1 = createMockAccount();
+        const account2 = createMockAccount('Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ');
+        const wallet1 = createMockUiWallet({ accounts: [account1], name: 'Wallet1' });
+        const wallet2 = createMockUiWallet({ accounts: [account2], name: 'Wallet2' });
+        registerWallet(wallet1);
+        registerWallet(wallet2);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(wallet1);
+
+        // No disconnect involved — declining wallet2 must still revert to the
+        // genuinely-live wallet1 connection (guards against the marker leaking
+        // across unrelated reverts).
+        connectMock.mockRejectedValueOnce(new Error('User rejected'));
+        await expect(store.connect(wallet2)).rejects.toThrow('User rejected');
+
+        expect(store.getState().status).toBe('connected');
+        expect(store.getState().connected!.wallet.name).toBe('Wallet1');
+    });
+
     it('getState returns referentially stable snapshots', () => {
         const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
         const snap1 = store.getState();

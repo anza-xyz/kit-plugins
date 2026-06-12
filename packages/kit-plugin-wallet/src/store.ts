@@ -90,6 +90,8 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
     let userHasSelected = false;
     let connectGeneration = 0;
     let disposed = false;
+    // Wallet that is in the process of disconnecting, stored to guard against re-connecting to it if a future connect fails
+    let disconnectingWalletName: string | null = null;
 
     // Resolve storage: default to localStorage in browser, null to disable.
     // Merely *accessing* `localStorage` throws a `SecurityError` in sandboxed
@@ -259,6 +261,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         if (disposed) return;
         const signer = tryCreateSigner(account);
         resubscribeToWalletEvents(wallet);
+        disconnectingWalletName = null;
         updateState({ account, connectedWallet: wallet, signer, status: 'connected' });
         if (options?.persist !== false) {
             persistAccount(account, wallet);
@@ -434,6 +437,8 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         // generation again, so the `finally` guard skips `disconnectLocally` and
         // leaves the newer connection intact.
         const generation = ++connectGeneration;
+        // Mark this wallet as disconnecting
+        disconnectingWalletName = currentWallet.name;
         updateState({ status: 'disconnecting' });
 
         try {
@@ -455,6 +460,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
     function disconnectLocally(): void {
         walletEventsCleanup?.();
         walletEventsCleanup = null;
+        disconnectingWalletName = null;
 
         updateState({
             account: null,
@@ -484,7 +490,8 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
     // site ensures a superseded attempt never reverts the connection a newer one
     // owns.
     function revertToPreviousConnectionOrDisconnect(): void {
-        if (state.connectedWallet && state.account) {
+        // Don't revive a wallet with disconnect in progress
+        if (state.connectedWallet && state.account && state.connectedWallet.name !== disconnectingWalletName) {
             updateState({ status: 'connected' });
         } else {
             disconnectLocally();
