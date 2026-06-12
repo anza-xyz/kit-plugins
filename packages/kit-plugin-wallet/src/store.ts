@@ -509,6 +509,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             throw new Error(`Account ${account.address} is not available in wallet "${state.connectedWallet.name}"`);
         }
         userHasSelected = true;
+        ++connectGeneration;
         // No-op when re-selecting the already-active account. Skipping here
         // avoids recreating the signer — which is a fresh object each call —
         // and the spurious listener notification (and re-render) that the new

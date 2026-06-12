@@ -1136,6 +1136,44 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         expect(store.getState().connected).toBeNull();
     });
 
+    it('selectAccount supersedes an in-flight connect (newest action wins)', async () => {
+        const account1a = createMockAccount();
+        const account1b = createMockAccount('Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ');
+        const account2 = createMockAccount('So11111111111111111111111111111111111111112');
+        const wallet1 = createMockUiWallet({
+            accounts: [account1a, account1b],
+            features: ['standard:connect', 'standard:disconnect', 'standard:events'],
+            name: 'Wallet1',
+        });
+        const wallet2 = createMockUiWallet({ accounts: [account2], name: 'Wallet2' });
+        registerWallet(wallet1);
+        registerWallet(wallet2);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(wallet1);
+        expect(store.getState().connected!.account.address).toBe(account1a.address);
+
+        // Hold a connect to wallet2 pending. wallet1 is still fully connected
+        // while wallet2's prompt is open.
+        const pendingConnect = Promise.withResolvers<void>();
+        connectMock.mockReturnValueOnce(pendingConnect.promise);
+        const connectPromise = store.connect(wallet2);
+
+        // The user switches accounts on the still-connected wallet1 — a later
+        // action than the in-flight connect.
+        store.selectAccount(account1b);
+        expect(store.getState().connected!.account.address).toBe(account1b.address);
+
+        // The superseded connect resolves last — it must not establish wallet2
+        // and overwrite the user's just-made selection.
+        pendingConnect.resolve();
+        await expect(connectPromise).rejects.toThrow('superseded');
+
+        const state = store.getState();
+        expect(state.connected!.wallet.name).toBe('Wallet1');
+        expect(state.connected!.account.address).toBe(account1b.address);
+    });
+
     it('a failed connect does not revive a wallet that was concurrently disconnected', async () => {
         const account1 = createMockAccount();
         const account2 = createMockAccount('Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ');
