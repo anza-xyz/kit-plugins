@@ -775,7 +775,10 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             // Restore the specific saved account, fall back to first from same wallet.
             const activeAccount = allAccounts.find(a => a.address === savedAddress) ?? allAccounts[0];
 
-            setConnected(activeAccount, refreshedWallet, { persist: false });
+            // Persist only when we fell back to a different account
+            setConnected(activeAccount, refreshedWallet, {
+                persist: activeAccount.address !== savedAddress,
+            });
         } catch {
             if (generation === connectGeneration) {
                 updateState({ status: 'disconnected' });

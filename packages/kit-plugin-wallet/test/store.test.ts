@@ -1978,6 +1978,46 @@ describe.skipIf(!__BROWSER__)('store auto-connect (browser)', () => {
         expect(storage.getItem('kit-wallet')).toBeNull();
     });
 
+    it('persists the fallback account when the saved account is gone', async () => {
+        const account = createMockAccount('Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ');
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        // The saved address no longer belongs to the wallet, so the reconnect
+        // falls back to the first available account.
+        const storage = createMockStorage({ 'kit-wallet': 'TestWallet:11111111111111111111111111111111' });
+        const store = createWalletStore({ chain: 'solana:mainnet', storage });
+
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(store.getState().connected!.account.address).toBe(account.address);
+        // The stale address must be overwritten so future loads don't repeat the
+        // find-miss-fallback dance.
+        expect(storage.getItem('kit-wallet')).toBe(`TestWallet:${account.address}`);
+    });
+
+    it('does not rewrite storage on a normal reconnect to the saved account', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        const storage = createMockStorage({ 'kit-wallet': `TestWallet:${account.address}` });
+        const setItem = vi.spyOn(storage, 'setItem');
+        const store = createWalletStore({ chain: 'solana:mainnet', storage });
+
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(store.getState().connected!.account.address).toBe(account.address);
+        // The saved address matched, so the reconnect must not write to storage.
+        expect(setItem).not.toHaveBeenCalled();
+    });
+
     it('falls back to disconnected when storage read rejects', async () => {
         const storage: WalletStorage = {
             getItem: () => Promise.reject(new Error('storage unavailable')),
