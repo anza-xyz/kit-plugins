@@ -498,6 +498,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         const refreshed = refreshUiWallet(state.connectedWallet);
         const selectedAccount = refreshed.accounts.find(a => a.address === account.address);
         if (!selectedAccount) {
+            // Note: no Kit SolanaError for this case
             throw new Error(`Account ${account.address} is not available in wallet "${state.connectedWallet.name}"`);
         }
         userHasSelected = true;
@@ -623,6 +624,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
     // -- Auto-connect ------------------------------------------------------
 
     if (config.autoConnect !== false && storage) {
+        const generation = connectGeneration;
         (async () => {
             const savedKey = await storage.getItem(storageKey);
             // Don't auto-connect if the user has selected a wallet, or if the
@@ -673,40 +675,41 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
                     }
                 }, 3000);
 
-                const unsubRegisterForReconnect = registry.on(
-                    'register',
-                    () =>
-                        void (async () => {
-                            if (userHasSelected) {
-                                clearTimeout(statusTimeout);
-                                unsubRegisterForReconnect();
-                                reconnectCleanup = null;
-                                return;
-                            }
-                            const found = buildWalletList().find(w => w.name === walletName);
-                            if (found) {
-                                clearTimeout(statusTimeout);
-                                unsubRegisterForReconnect();
-                                reconnectCleanup = null;
-                                await attemptSilentReconnect(savedAddress, found);
-                            } else if (
-                                registry.get().some(w => {
-                                    const ui = getOrCreateUiWalletForStandardWallet(w);
-                                    return ui.name === walletName;
-                                })
-                            ) {
-                                // Wallet registered but filtered out.
-                                clearTimeout(statusTimeout);
-                                unsubRegisterForReconnect();
-                                reconnectCleanup = null;
-                                updateState({ status: 'disconnected' });
-                                clearPersistedAccount();
-                            }
-                        })().catch(() => {
-                            // Reconnect failed — fall back to disconnected.
+                const unsubRegisterForReconnect = registry.on('register', () => {
+                    const generation = connectGeneration;
+                    void (async () => {
+                        if (userHasSelected) {
+                            clearTimeout(statusTimeout);
+                            unsubRegisterForReconnect();
+                            reconnectCleanup = null;
+                            return;
+                        }
+                        const found = buildWalletList().find(w => w.name === walletName);
+                        if (found) {
+                            clearTimeout(statusTimeout);
+                            unsubRegisterForReconnect();
+                            reconnectCleanup = null;
+                            await attemptSilentReconnect(savedAddress, found);
+                        } else if (
+                            registry.get().some(w => {
+                                const ui = getOrCreateUiWalletForStandardWallet(w);
+                                return ui.name === walletName;
+                            })
+                        ) {
+                            // Wallet registered but filtered out.
+                            clearTimeout(statusTimeout);
+                            unsubRegisterForReconnect();
+                            reconnectCleanup = null;
                             updateState({ status: 'disconnected' });
-                        }),
-                );
+                            clearPersistedAccount();
+                        }
+                    })().catch(() => {
+                        // Reconnect failed — fall back to disconnected.
+                        if (generation === connectGeneration && !userHasSelected) {
+                            updateState({ status: 'disconnected' });
+                        }
+                    });
+                });
 
                 reconnectCleanup = () => {
                     clearTimeout(statusTimeout);
@@ -715,7 +718,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             }
         })().catch(() => {
             // Storage read failed — fall back to disconnected.
-            if (!userHasSelected) {
+            if (generation === connectGeneration && !userHasSelected) {
                 updateState({ status: 'disconnected' });
             }
         });

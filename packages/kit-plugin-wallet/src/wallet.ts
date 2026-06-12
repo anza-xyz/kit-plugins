@@ -34,7 +34,12 @@ function defineSignerGetter(
     });
 }
 
-function createPlugin<TAdditions extends ClientWithWallet>(config: WalletPluginConfig, signerProperties: string[]) {
+type SignerProperties = 'payer' | 'identity';
+
+function createPlugin<TAdditions extends ClientWithWallet>(
+    config: WalletPluginConfig,
+    signerProperties: SignerProperties[],
+) {
     return <T extends object & { wallet?: never }>(client: T): Disposable & Omit<T, keyof TAdditions> & TAdditions => {
         if ('wallet' in client) {
             throw new Error(
