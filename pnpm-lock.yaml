@@ -199,9 +199,6 @@ importers:
       '@wallet-standard/base':
         specifier: ^1.1.1
         version: 1.1.1
-      '@wallet-standard/errors':
-        specifier: ^0.1.2
-        version: 0.1.2
       '@wallet-standard/features':
         specifier: ^1.1.1
         version: 1.1.1
@@ -214,6 +211,10 @@ importers:
       '@wallet-standard/ui-registry':
         specifier: ^1.1.1
         version: 1.1.1
+    devDependencies:
+      '@wallet-standard/errors':
+        specifier: ^0.1.2
+        version: 0.1.2
 
   packages/kit-plugins:
     dependencies:
