@@ -29,10 +29,10 @@ describe.skipIf(__BROWSER__)('store (SSR / non-browser)', () => {
         expect(store.getState().connected).toBeNull();
     });
 
-    it('throws for connect on server', () => {
+    it('throws for connect on server', async () => {
         const store = createWalletStore({ chain: 'solana:mainnet' });
         const mockWallet = createMockUiWallet();
-        expect(() => store.connect(mockWallet)).toThrow(
+        await expect(() => store.connect(mockWallet)).rejects.toThrow(
             new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'connect' }),
         );
     });
@@ -42,17 +42,17 @@ describe.skipIf(__BROWSER__)('store (SSR / non-browser)', () => {
         await expect(store.disconnect()).resolves.toBeUndefined();
     });
 
-    it('throws for signMessage on server', () => {
+    it('throws for signMessage on server', async () => {
         const store = createWalletStore({ chain: 'solana:mainnet' });
-        expect(() => store.signMessage(new Uint8Array())).toThrow(
+        await expect(() => store.signMessage(new Uint8Array())).rejects.toThrow(
             new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signMessage' }),
         );
     });
 
-    it('throws for signIn on server', () => {
+    it('throws for signIn on server', async () => {
         const store = createWalletStore({ chain: 'solana:mainnet' });
         const mockWallet = createMockUiWallet();
-        expect(() => store.signIn(mockWallet, {})).toThrow(
+        await expect(() => store.signIn(mockWallet, {})).rejects.toThrow(
             new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signIn' }),
         );
     });

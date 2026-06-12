@@ -59,20 +59,16 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             wallets: Object.freeze([]) as readonly UiWallet[],
         });
         return {
-            connect: () => {
-                throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'connect' });
-            },
+            connect: () =>
+                Promise.reject(new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'connect' })),
             disconnect: () => Promise.resolve(),
             getState: () => ssrSnapshot,
             selectAccount: () => {
                 throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'selectAccount' });
             },
-            signIn: () => {
-                throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signIn' });
-            },
-            signMessage: () => {
-                throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signMessage' });
-            },
+            signIn: () => Promise.reject(new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signIn' })),
+            signMessage: () =>
+                Promise.reject(new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signMessage' })),
             subscribe: () => () => {},
             [Symbol.dispose]: () => {},
         };
