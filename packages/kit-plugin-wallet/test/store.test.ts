@@ -297,6 +297,43 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         expect(store.getState().status).toBe('connected');
     });
 
+    it('connect throws when the wallet does not support standard:connect', async () => {
+        const mockWallet = createMockUiWallet({ features: ['standard:events'], name: 'NoConnect' });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await expect(store.connect(mockWallet)).rejects.toThrow();
+    });
+
+    it('connect to an unsupported wallet leaves an existing connection intact', async () => {
+        const account = createMockAccount();
+        const supported = createMockUiWallet({
+            accounts: [account],
+            features: ['standard:connect', 'standard:events'],
+            name: 'Supported',
+        });
+        // A wallet without standard:connect — connect cannot establish a session.
+        const unsupported = createMockUiWallet({ features: ['standard:events'], name: 'NoConnect' });
+        registerWallet(supported);
+        registerWallet(unsupported);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(supported);
+        expect(store.getState().status).toBe('connected');
+
+        // The feature is resolved before any state is mutated, so connecting to
+        // an unsupported wallet must reject without publishing a 'connecting'
+        // status or otherwise disturbing the live connection.
+        const listener = vi.fn();
+        store.subscribe(listener);
+        await expect(store.connect(unsupported)).rejects.toThrow();
+
+        expect(listener).not.toHaveBeenCalled();
+        const state = store.getState();
+        expect(state.status).toBe('connected');
+        expect(state.connected!.account.address).toBe(account.address);
+    });
+
     it('disconnects from a wallet', async () => {
         const account = createMockAccount();
         const mockWallet = createMockUiWallet({

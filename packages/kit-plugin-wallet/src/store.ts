@@ -345,17 +345,23 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
 
     async function connect(uiWallet: UiWallet, options?: WalletActionOptions): Promise<readonly UiWalletAccount[]> {
         options?.abortSignal?.throwIfAborted();
+
+        // Resolve the feature before mutating any state. getWalletFeature throws
+        // WalletStandardError synchronously when the wallet doesn't support
+        // standard:connect — doing this first means an unsupported wallet is a
+        // no-op that never tears down an existing connection or cancels a
+        // pending reconnect.
+        const connectFeature = getWalletFeature(
+            uiWallet,
+            StandardConnect,
+        ) as StandardConnectFeature[typeof StandardConnect];
+
         userHasSelected = true;
         cancelReconnect();
         const generation = ++connectGeneration;
         updateState({ status: 'connecting' });
 
         try {
-            const connectFeature = getWalletFeature(
-                uiWallet,
-                StandardConnect,
-            ) as StandardConnectFeature[typeof StandardConnect];
-
             // Snapshot existing accounts before connect.
             const existingAccounts = [...uiWallet.accounts];
 
