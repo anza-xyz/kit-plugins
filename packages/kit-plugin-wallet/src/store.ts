@@ -509,6 +509,10 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         if (!state.connectedWallet) {
             throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'selectAccount' });
         }
+        // Reject if this wallet is disconnecting
+        if (state.connectedWallet.name === disconnectingWalletName) {
+            throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'selectAccount' });
+        }
         const refreshed = refreshUiWallet(state.connectedWallet);
         const selectedAccount = refreshed.accounts.find(a => a.address === account.address);
         if (!selectedAccount) {
@@ -516,16 +520,17 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             throw new Error(`Account ${account.address} is not available in wallet "${state.connectedWallet.name}"`);
         }
         userHasSelected = true;
+        // Bump the generation so this selection supersedes any in-flight
+        // connect/signIn
         ++connectGeneration;
-        // No-op when re-selecting the already-active account. Skipping here
-        // avoids recreating the signer — which is a fresh object each call —
-        // and the spurious listener notification (and re-render) that the new
-        // signer reference would otherwise trigger.
+        // Change status back to `connected` if something in-flight changed it
+        // But skip recreating the signer if account is the same as before
         if (selectedAccount === state.account && refreshed === state.connectedWallet) {
+            updateState({ status: 'connected' });
             return;
         }
         const signer = tryCreateSigner(selectedAccount);
-        updateState({ account: selectedAccount, connectedWallet: refreshed, signer });
+        updateState({ account: selectedAccount, connectedWallet: refreshed, signer, status: 'connected' });
         persistAccount(selectedAccount, refreshed);
     }
 

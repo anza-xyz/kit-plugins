@@ -1209,6 +1209,78 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         const state = store.getState();
         expect(state.connected!.wallet.name).toBe('Wallet1');
         expect(state.connected!.account.address).toBe(account1b.address);
+        // The superseded connect had moved status to 'connecting'; selectAccount
+        // must settle it back to 'connected' rather than leaving the store
+        // stranded mid-connect when wallet1 is in fact live.
+        expect(state.status).toBe('connected');
+    });
+
+    it('selectAccount restores connected status even when re-selecting the active account', async () => {
+        const account1 = createMockAccount();
+        const account2 = createMockAccount('Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ');
+        const wallet1 = createMockUiWallet({ accounts: [account1], name: 'Wallet1' });
+        const wallet2 = createMockUiWallet({ accounts: [account2], name: 'Wallet2' });
+        registerWallet(wallet1);
+        registerWallet(wallet2);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(wallet1);
+
+        // Hold a connect to wallet2 pending — status moves to 'connecting' while
+        // wallet1 stays live.
+        const pendingConnect = Promise.withResolvers<void>();
+        connectMock.mockReturnValueOnce(pendingConnect.promise);
+        const connectPromise = store.connect(wallet2);
+        expect(store.getState().status).toBe('connecting');
+
+        // Re-select the already-active account. This hits the no-op early return,
+        // but must still supersede the in-flight connect and settle the status.
+        store.selectAccount(account1);
+        expect(store.getState().status).toBe('connected');
+
+        pendingConnect.resolve();
+        await expect(connectPromise).rejects.toThrow('superseded');
+
+        const state = store.getState();
+        expect(state.status).toBe('connected');
+        expect(state.connected!.account.address).toBe(account1.address);
+    });
+
+    it('selectAccount on a wallet mid-disconnect throws and does not revive it', async () => {
+        const account1 = createMockAccount();
+        const account2 = createMockAccount('Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ');
+        const wallet1 = createMockUiWallet({
+            accounts: [account1, account2],
+            features: ['standard:connect', 'standard:disconnect', 'standard:events'],
+            name: 'Wallet1',
+        });
+        registerWallet(wallet1);
+
+        const storage = createMockStorage();
+        const store = createWalletStore({ autoConnect: false, chain: 'solana:mainnet', storage });
+        await store.connect(wallet1);
+        expect(await storage.getItem('kit-wallet')).toBe(`Wallet1:${account1.address}`);
+
+        // Hold the wallet-side disconnect pending so it's in flight.
+        const pendingDisconnect = Promise.withResolvers<void>();
+        disconnectMock.mockReturnValueOnce(pendingDisconnect.promise);
+        const disconnectPromise = store.disconnect();
+        expect(store.getState().status).toBe('disconnecting');
+
+        // Switching accounts on a wallet being torn down must reject rather than
+        // supersede the disconnect, re-persist, and leave the store half-connected.
+        expect(() => store.selectAccount(account2)).toThrow(
+            new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'selectAccount' }),
+        );
+
+        // The disconnect completes cleanly — the rejected selectAccount left it
+        // intact, so the store ends fully disconnected with persistence cleared.
+        pendingDisconnect.resolve();
+        await disconnectPromise;
+
+        expect(store.getState().status).toBe('disconnected');
+        expect(store.getState().connected).toBeNull();
+        expect(await storage.getItem('kit-wallet')).toBeNull();
     });
 
     it('a failed connect does not revive a wallet that was concurrently disconnected', async () => {
