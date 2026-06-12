@@ -341,6 +341,7 @@ export type WalletNamespace = {
  * All wallet state and actions are namespaced under `client.wallet`.
  * Depending on which plugin variant is used, `client.payer` and/or
  * `client.identity` may also be set to the connected wallet's signer.
+ * This is not part of Kit plugin-interfaces, as it depends on wallet-standard types
  *
  * @see {@link walletSigner}
  * @see {@link walletPayer}
@@ -348,7 +349,6 @@ export type WalletNamespace = {
  * @see {@link walletWithoutSigner}
  * @see {@link WalletNamespace}
  *
- * @note this is not part of Kit plugin-interfaces, as it depends on wallet-standard types
  */
 export type ClientWithWallet = {
     /** The wallet namespace — state, actions, and framework integration. */

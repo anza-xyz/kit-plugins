@@ -33,6 +33,7 @@ import type {
 
 // -- Internal types ---------------------------------------------------------
 
+/** @internal */
 export type WalletStore = WalletNamespace & {
     [Symbol.dispose]: () => void;
 };
