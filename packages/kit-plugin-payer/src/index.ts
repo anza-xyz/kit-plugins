@@ -5,6 +5,7 @@ import {
     ClientWithPayer,
     createKeyPairSignerFromBytes,
     extendClient,
+    ExtendedClient,
     generateKeyPairSigner,
     Lamports,
     lamports,
@@ -127,7 +128,7 @@ export function payerFromFile(path: string) {
  * ```
  */
 export function payerOrGeneratedPayer(explicitPayer: TransactionSigner | undefined) {
-    return <T extends ClientWithAirdrop>(client: T): Promise<ClientWithPayer & Omit<T, 'payer'>> => {
+    return <T extends ClientWithAirdrop>(client: T): Promise<ExtendedClient<T, ClientWithPayer>> => {
         if (explicitPayer) {
             return Promise.resolve(payer(explicitPayer)(client));
         }
