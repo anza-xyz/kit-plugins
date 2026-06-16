@@ -6,6 +6,7 @@ import {
     DefaultRpcSubscriptionsChannelConfig,
     DevnetUrl,
     extendClient,
+    ExtendedClient,
     MainnetUrl,
     pipe,
     Rpc,
@@ -301,10 +302,13 @@ export function solanaRpcConnection<TClusterUrl extends ClusterUrl>(config: Sola
     );
     return <T extends object>(
         client: T,
-    ): Omit<T, 'rpc' | 'rpcSubscriptions'> & {
-        rpc: Rpc<SolanaRpcApiFromClusterUrl<TClusterUrl>>;
-        rpcSubscriptions: RpcSubscriptions<SolanaRpcSubscriptionsApi>;
-    } => extendClient(client, { rpc, rpcSubscriptions });
+    ): ExtendedClient<
+        T,
+        {
+            rpc: Rpc<SolanaRpcApiFromClusterUrl<TClusterUrl>>;
+            rpcSubscriptions: RpcSubscriptions<SolanaRpcSubscriptionsApi>;
+        }
+    > => extendClient(client, { rpc, rpcSubscriptions });
 }
 
 /**
