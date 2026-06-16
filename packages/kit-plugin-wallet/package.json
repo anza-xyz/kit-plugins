@@ -56,7 +56,7 @@
         "test:types": "tsc --noEmit"
     },
     "dependencies": {
-        "@solana/wallet-account-signer": "^6.9.0",
+        "@solana/wallet-account-signer": "^6.10.0",
         "@solana/wallet-standard-chains": "^1.1.1",
         "@solana/wallet-standard-features": "^1.3.0",
         "@wallet-standard/app": "^1.1.1",
