@@ -1,4 +1,9 @@
-import { type SignatureBytes, SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE, SOLANA_ERROR__WALLET__NOT_CONNECTED, SolanaError } from '@solana/kit';
+import {
+    type SignatureBytes,
+    SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE,
+    SOLANA_ERROR__WALLET__NOT_CONNECTED,
+    SolanaError,
+} from '@solana/kit';
 import { createSignerFromWalletAccount } from '@solana/wallet-account-signer';
 import {
     SolanaSignIn,
@@ -35,6 +40,14 @@ import type {
 
 /** @internal */
 export type WalletStore = WalletNamespace & {
+    /**
+     * Registers a listener notified only when the wallet signer may
+     * have changed.
+     * Returns an idempotent unsubscribe function.
+     *
+     * @internal
+     */
+    subscribeSigner: (listener: () => void) => () => void;
     [Symbol.dispose]: () => void;
 };
 
@@ -70,8 +83,9 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             signIn: () => Promise.reject(new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signIn' })),
             signMessage: () =>
                 Promise.reject(new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signMessage' })),
-            subscribe: () => () => { },
-            [Symbol.dispose]: () => { },
+            subscribe: () => () => {},
+            subscribeSigner: () => () => {},
+            [Symbol.dispose]: () => {},
         };
     }
 
@@ -86,6 +100,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
     };
 
     const listeners = new Set<() => void>();
+    const signerListeners = new Set<() => void>();
     let walletEventsCleanup: (() => void) | null = null;
     let reconnectCleanup: (() => void) | null = null;
     let userHasSelected = false;
@@ -117,10 +132,10 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             connected:
                 s.connectedWallet && s.account
                     ? Object.freeze({
-                        account: s.account,
-                        signer: s.signer,
-                        wallet: s.connectedWallet,
-                    })
+                          account: s.account,
+                          signer: s.signer,
+                          wallet: s.connectedWallet,
+                      })
                     : null,
             status: s.status,
             wallets: s.wallets,
@@ -129,23 +144,34 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
 
     let snapshot: WalletState = deriveSnapshot(state);
 
+    // We set `client.{payer,identity}` to `getState().connected?.signer
+    // This is `undefined` if disconnected, `null` if connected to a read-only wallet,
+    // or the signer reference otherwise.
+    function observableSigner(s: WalletStoreState): WalletSigner | null | undefined {
+        return s.connectedWallet && s.account ? s.signer : undefined;
+    }
+
     function updateState(updates: Partial<WalletStoreState>): void {
         const prev = state;
         state = { ...state, ...updates };
 
-        // Only create a new snapshot and notify listeners when a
-        // snapshot-relevant field actually changed. This ensures
-        // referential stability for useSyncExternalStore and avoids
-        // unnecessary re-renders in non-React frameworks.
+        // Signer subscribers (`subscribeToPayer` / `subscribeToIdentity`) fire
+        // only when the observed signer changes.
+        const signerChanged = observableSigner(state) !== observableSigner(prev);
+
         if (
-            state.wallets !== prev.wallets ||
             state.connectedWallet !== prev.connectedWallet ||
             state.account !== prev.account ||
             state.status !== prev.status ||
-            state.signer !== prev.signer
+            state.signer !== prev.signer ||
+            state.wallets !== prev.wallets
         ) {
             snapshot = deriveSnapshot(state);
             listeners.forEach(l => l());
+        }
+
+        if (signerChanged) {
+            signerListeners.forEach(l => l());
         }
     }
 
@@ -276,7 +302,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
 
     function subscribeToWalletEvents(uiWallet: UiWallet): () => void {
         if (!uiWallet.features.includes(StandardEvents)) {
-            return () => { };
+            return () => {};
         }
 
         const eventsFeature = getWalletFeature(
@@ -516,7 +542,10 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         const refreshed = refreshUiWallet(state.connectedWallet);
         const selectedAccount = refreshed.accounts.find(a => a.address === account.address);
         if (!selectedAccount) {
-            throw new SolanaError(SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE, { account: account.address, operation: 'selectAccount', });
+            throw new SolanaError(SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE, {
+                account: account.address,
+                operation: 'selectAccount',
+            });
         }
         userHasSelected = true;
         // Bump the generation so this selection supersedes any in-flight
@@ -807,6 +836,12 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
                 listeners.delete(listener);
             };
         },
+        subscribeSigner: (listener: () => void) => {
+            signerListeners.add(listener);
+            return () => {
+                signerListeners.delete(listener);
+            };
+        },
         [Symbol.dispose]: () => {
             // Invalidate any in-flight connect/signIn/silent-reconnect so they
             // bail instead of resuming after disposal (which would re-subscribe
@@ -822,6 +857,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             walletEventsCleanup = null;
             cancelReconnect();
             listeners.clear();
+            signerListeners.clear();
         },
     };
 }

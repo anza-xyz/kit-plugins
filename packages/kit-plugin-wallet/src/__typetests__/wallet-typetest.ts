@@ -1,4 +1,11 @@
-import { type ClientWithIdentity, type ClientWithPayer, createClient, TransactionSigner } from '@solana/kit';
+import {
+    type ClientWithIdentity,
+    type ClientWithPayer,
+    type ClientWithSubscribeToIdentity,
+    type ClientWithSubscribeToPayer,
+    createClient,
+    TransactionSigner,
+} from '@solana/kit';
 
 import { ClientWithWallet } from '../types';
 import { walletIdentity, walletPayer, walletSigner, walletWithoutSigner } from '../wallet';
@@ -15,6 +22,8 @@ const signer = null as unknown as TransactionSigner;
         client.payer satisfies ClientWithPayer['payer'];
         client.identity satisfies ClientWithIdentity['identity'];
         client.wallet satisfies ClientWithWallet['wallet'];
+        client.subscribeToPayer satisfies ClientWithSubscribeToPayer['subscribeToPayer'];
+        client.subscribeToIdentity satisfies ClientWithSubscribeToIdentity['subscribeToIdentity'];
     }
 }
 
@@ -25,6 +34,9 @@ const signer = null as unknown as TransactionSigner;
         const client = createClient().use(walletPayer(config));
         client.payer satisfies ClientWithPayer['payer'];
         client.wallet satisfies ClientWithWallet['wallet'];
+        client.subscribeToPayer satisfies ClientWithSubscribeToPayer['subscribeToPayer'];
+        // @ts-expect-error walletPayer does not install subscribeToIdentity.
+        void client.subscribeToIdentity;
     }
     // It does not strip a previously-set identity.
     {
@@ -41,6 +53,9 @@ const signer = null as unknown as TransactionSigner;
         const client = createClient().use(walletIdentity(config));
         client.identity satisfies ClientWithIdentity['identity'];
         client.wallet satisfies ClientWithWallet['wallet'];
+        client.subscribeToIdentity satisfies ClientWithSubscribeToIdentity['subscribeToIdentity'];
+        // @ts-expect-error walletIdentity does not install subscribeToPayer.
+        void client.subscribeToPayer;
     }
     // It does not strip a previously-set payer.
     {
@@ -56,6 +71,10 @@ const signer = null as unknown as TransactionSigner;
     {
         const client = createClient().use(walletWithoutSigner(config));
         client.wallet satisfies ClientWithWallet['wallet'];
+        // @ts-expect-error walletWithoutSigner does not install subscribeToPayer.
+        void client.subscribeToPayer;
+        // @ts-expect-error walletWithoutSigner does not install subscribeToIdentity.
+        void client.subscribeToIdentity;
     }
     // It does not strip a previously-set payer.
     {

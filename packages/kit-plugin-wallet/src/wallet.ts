@@ -1,6 +1,8 @@
 import {
     type ClientWithIdentity,
     type ClientWithPayer,
+    type ClientWithSubscribeToIdentity,
+    type ClientWithSubscribeToPayer,
     extendClient,
     SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED,
     SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE,
@@ -36,6 +38,15 @@ function defineSignerGetter(
 
 type SignerProperties = 'payer' | 'identity';
 
+// Maps each signer capability to the Kit-convention reactive hook installed
+// alongside it (`@solana/plugin-interfaces`). A plugin whose `client.payer` /
+// `client.identity` is dynamic installs the matching `subscribeTo*` function
+// so reactive consumers can observe changes without naming this plugin.
+const SUBSCRIBE_PROPERTY: Record<SignerProperties, 'subscribeToIdentity' | 'subscribeToPayer'> = {
+    identity: 'subscribeToIdentity',
+    payer: 'subscribeToPayer',
+};
+
 function createPlugin<TAdditions extends ClientWithWallet>(
     config: WalletPluginConfig,
     signerProperties: SignerProperties[],
@@ -53,6 +64,7 @@ function createPlugin<TAdditions extends ClientWithWallet>(
         const additions: Record<string, unknown> = { wallet: store };
         for (const prop of signerProperties) {
             defineSignerGetter(additions, prop, store);
+            additions[SUBSCRIBE_PROPERTY[prop]] = store.subscribeSigner;
         }
 
         return withCleanup(extendClient(client, additions), () => store[Symbol.dispose]()) as unknown as Disposable &
@@ -72,6 +84,10 @@ function createPlugin<TAdditions extends ClientWithWallet>(
  * wallet is connected, `client.payer` and `client.identity` both return the
  * wallet signer. When disconnected or read-only, accessing either throws.
  *
+ * Because the signer is dynamic, both `client.subscribeToPayer` and
+ * `client.subscribeToIdentity` are installed so reactive consumers can observe
+ * changes (the Kit reactive-capability convention).
+ *
  * **SSR-safe.** Can be included in a shared client chain that runs on both
  * server and browser.
  *
@@ -90,7 +106,13 @@ function createPlugin<TAdditions extends ClientWithWallet>(
  * @see {@link WalletPluginConfig}
  */
 export function walletSigner(config: WalletPluginConfig) {
-    return createPlugin<ClientWithIdentity & ClientWithPayer & ClientWithWallet>(config, ['payer', 'identity']);
+    return createPlugin<
+        ClientWithIdentity &
+            ClientWithPayer &
+            ClientWithSubscribeToIdentity &
+            ClientWithSubscribeToPayer &
+            ClientWithWallet
+    >(config, ['payer', 'identity']);
 }
 
 /**
@@ -100,6 +122,9 @@ export function walletSigner(config: WalletPluginConfig) {
  *
  * Use this when `client.payer` is controlled by a separate `payer()` plugin
  * (e.g. a backend relayer pays fees, but the user's wallet is the identity).
+ *
+ * Because the signer is dynamic, `client.subscribeToIdentity` is installed so
+ * reactive consumers can observe changes (the Kit reactive-capability convention).
  *
  * **SSR-safe.** Can be included in a shared client chain that runs on both
  * server and browser.
@@ -120,7 +145,7 @@ export function walletSigner(config: WalletPluginConfig) {
  * @see {@link WalletPluginConfig}
  */
 export function walletIdentity(config: WalletPluginConfig) {
-    return createPlugin<ClientWithIdentity & ClientWithWallet>(config, ['identity']);
+    return createPlugin<ClientWithIdentity & ClientWithSubscribeToIdentity & ClientWithWallet>(config, ['identity']);
 }
 
 /**
@@ -131,6 +156,9 @@ export function walletIdentity(config: WalletPluginConfig) {
  * Use this when you need the wallet as the fee payer but don't need
  * `client.identity`. For most dApps, prefer {@link walletSigner} which
  * sets both.
+ *
+ * Because the signer is dynamic, `client.subscribeToPayer` is installed so
+ * reactive consumers can observe changes (the Kit reactive-capability convention).
  *
  * **SSR-safe.** Can be included in a shared client chain that runs on both
  * server and browser.
@@ -150,7 +178,7 @@ export function walletIdentity(config: WalletPluginConfig) {
  * @see {@link WalletPluginConfig}
  */
 export function walletPayer(config: WalletPluginConfig) {
-    return createPlugin<ClientWithPayer & ClientWithWallet>(config, ['payer']);
+    return createPlugin<ClientWithPayer & ClientWithSubscribeToPayer & ClientWithWallet>(config, ['payer']);
 }
 
 /**

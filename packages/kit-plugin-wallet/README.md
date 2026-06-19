@@ -226,6 +226,30 @@ export const walletState = readable(client.wallet.getState(), set => {
 });
 ```
 
+### Reactivity: observing `payer` / `identity`
+
+Because the connected wallet's signer is dynamic, the plugins follow Kit's
+reactive-capability convention. The variants that set `client.payer` /
+`client.identity` also install a sibling `subscribeToPayer` /
+`subscribeToIdentity` function, so reactive consumers can observe signer
+changes without naming the wallet plugin:
+
+```ts
+const client = createClient().use(walletSigner({ chain: 'solana:mainnet' }));
+
+const unsubscribe = client.subscribeToPayer(() => {
+    // Re-read the current value; it may now throw if disconnected.
+    console.log('payer is now', client.payer);
+});
+```
+
+`walletSigner` installs both hooks, `walletPayer` installs `subscribeToPayer`,
+`walletIdentity` installs `subscribeToIdentity`, and `walletWithoutSigner`
+installs neither. The listener fires on connect, account switch, and
+disconnect. For the full
+wallet state (including the discovered-wallet list), use
+`client.wallet.subscribe` instead.
+
 ## Configuration
 
 ```ts

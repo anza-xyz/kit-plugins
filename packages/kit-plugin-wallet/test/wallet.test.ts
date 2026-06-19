@@ -5,6 +5,12 @@ import { walletIdentity, walletPayer, walletSigner, walletWithoutSigner } from '
 import { createMockAccount, createMockUiWallet, createSignerMock, mockSigner, registerWallet } from './_setup';
 
 describe.skipIf(!__BROWSER__)('walletWithoutSigner plugin (browser)', () => {
+    it('installs neither subscribeToPayer nor subscribeToIdentity', () => {
+        const client = createClient().use(walletWithoutSigner({ chain: 'solana:mainnet', storage: null }));
+        expect('subscribeToPayer' in client).toBe(false);
+        expect('subscribeToIdentity' in client).toBe(false);
+    });
+
     it('adds wallet namespace to client', () => {
         const client = createClient().use(walletWithoutSigner({ chain: 'solana:mainnet', storage: null }));
         expect(client.wallet).toBeDefined();
@@ -37,6 +43,12 @@ describe.skipIf(!__BROWSER__)('walletWithoutSigner plugin (browser)', () => {
 });
 
 describe.skipIf(!__BROWSER__)('walletPayer plugin (browser)', () => {
+    it('installs subscribeToPayer but not subscribeToIdentity', () => {
+        const client = createClient().use(walletPayer({ chain: 'solana:mainnet', storage: null }));
+        expect('subscribeToPayer' in client).toBe(true);
+        expect('subscribeToIdentity' in client).toBe(false);
+    });
+
     it('payer throws when not connected', () => {
         const client = createClient().use(walletPayer({ chain: 'solana:mainnet', storage: null }));
         expect(() => client.payer).toThrow('No signing wallet connected');
@@ -93,6 +105,23 @@ describe.skipIf(!__BROWSER__)('walletPayer plugin (browser)', () => {
 });
 
 describe.skipIf(!__BROWSER__)('walletSigner plugin (browser)', () => {
+    it('subscribeToPayer and subscribeToIdentity fire when the signer changes', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({ accounts: [account], name: 'TestWallet' });
+        registerWallet(mockWallet);
+
+        const client = createClient().use(walletSigner({ chain: 'solana:mainnet', storage: null }));
+        const payerListener = vi.fn();
+        const identityListener = vi.fn();
+        client.subscribeToPayer(payerListener);
+        client.subscribeToIdentity(identityListener);
+
+        await client.wallet.connect(mockWallet);
+
+        expect(payerListener).toHaveBeenCalled();
+        expect(identityListener).toHaveBeenCalled();
+    });
+
     it('sets both payer and identity', async () => {
         const account = createMockAccount();
         const mockWallet = createMockUiWallet({
@@ -116,6 +145,12 @@ describe.skipIf(!__BROWSER__)('walletSigner plugin (browser)', () => {
 });
 
 describe.skipIf(!__BROWSER__)('walletIdentity plugin (browser)', () => {
+    it('installs subscribeToIdentity but not subscribeToPayer', () => {
+        const client = createClient().use(walletIdentity({ chain: 'solana:mainnet', storage: null }));
+        expect('subscribeToIdentity' in client).toBe(true);
+        expect('subscribeToPayer' in client).toBe(false);
+    });
+
     it('sets identity but not payer', async () => {
         const account = createMockAccount();
         const mockWallet = createMockUiWallet({

@@ -63,6 +63,12 @@ describe.skipIf(__BROWSER__)('store (SSR / non-browser)', () => {
         expect(typeof unsub).toBe('function');
     });
 
+    it('subscribeSigner returns unsubscribe function on server', () => {
+        const store = createWalletStore({ chain: 'solana:mainnet' });
+        const unsub = store.subscribeSigner(() => {});
+        expect(() => unsub()).not.toThrow();
+    });
+
     it('dispose is a noop on server', () => {
         const store = createWalletStore({ chain: 'solana:mainnet' });
         expect(() => store[Symbol.dispose]()).not.toThrow();
@@ -1398,6 +1404,93 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         store[Symbol.dispose]();
         expect(registryListeners.register.length).toBe(0);
         expect(registryListeners.unregister.length).toBe(0);
+    });
+
+    it('subscribeSigner notifies on connect', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({ accounts: [account], name: 'TestWallet' });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        const listener = vi.fn();
+        store.subscribeSigner(listener);
+
+        await store.connect(mockWallet);
+        expect(listener).toHaveBeenCalled();
+    });
+
+    it('subscribeSigner does not notify on a wallet-list-only change', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({ accounts: [account], name: 'TestWallet' });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(mockWallet);
+
+        const signerListener = vi.fn();
+        const generalListener = vi.fn();
+        store.subscribeSigner(signerListener);
+        store.subscribe(generalListener);
+
+        // An unrelated wallet registers while connected — changes `wallets` only.
+        const other = createMockUiWallet({
+            accounts: [createMockAccount('Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ')],
+            name: 'OtherWallet',
+        });
+        lateRegisterWallet(other);
+
+        expect(generalListener).toHaveBeenCalled();
+        expect(signerListener).not.toHaveBeenCalled();
+    });
+
+    it('subscribeSigner does not notify on a status-only change that preserves the signer', async () => {
+        const account = createMockAccount();
+        const walletA = createMockUiWallet({ accounts: [account], name: 'WalletA' });
+        const walletB = createMockUiWallet({
+            accounts: [createMockAccount('Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ')],
+            name: 'WalletB',
+        });
+        registerWallet(walletA);
+        registerWallet(walletB);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(walletA);
+
+        const signerListener = vi.fn();
+        const generalListener = vi.fn();
+        store.subscribeSigner(signerListener);
+        store.subscribe(generalListener);
+
+        // Connecting to WalletB fails, so the store stays connected to WalletA.
+        // `status` churns 'connected' → 'connecting' → 'connected' while the
+        // signer is untouched: the public listener sees the status changes, but
+        // the signer channel must stay silent.
+        connectMock.mockRejectedValueOnce(new Error('user declined'));
+        await expect(store.connect(walletB)).rejects.toThrow('user declined');
+
+        expect(generalListener).toHaveBeenCalled();
+        expect(signerListener).not.toHaveBeenCalled();
+    });
+
+    it('subscribeSigner unsubscribe stops notifications and is idempotent', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            features: ['standard:connect', 'standard:disconnect', 'standard:events'],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(mockWallet);
+
+        const listener = vi.fn();
+        const unsub = store.subscribeSigner(listener);
+        unsub();
+        unsub(); // second call must be a safe no-op
+
+        await store.disconnect();
+        expect(listener).not.toHaveBeenCalled();
     });
 });
 
