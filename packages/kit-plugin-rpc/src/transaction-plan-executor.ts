@@ -3,33 +3,32 @@ import {
     ClientWithRpc,
     ClientWithRpcSubscriptions,
     createTransactionPlanExecutor,
-    estimateComputeUnitLimitFactory,
+    estimateAndSetResourceLimitsFactory,
+    estimateResourceLimitsFactory,
     extendClient,
     GetEpochInfoApi,
     GetLatestBlockhashApi,
     GetSignatureStatusesApi,
-    getTransactionMessageComputeUnitLimit,
     isSolanaError,
     pipe,
+    ResourceLimitsEstimate,
     sendAndConfirmTransactionFactory,
     SendTransactionApi,
-    setTransactionMessageComputeUnitLimit,
     setTransactionMessageLifetimeUsingBlockhash,
     SignatureNotificationsApi,
     signTransactionMessageWithSigners,
     SimulateTransactionApi,
     SlotNotificationsApi,
-    SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_COMPUTE_LIMIT,
+    SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_RESOURCE_LIMITS,
     TransactionPlanExecutorConfig,
 } from '@solana/kit';
-
-const MAX_COMPUTE_UNIT_LIMIT = 1_400_000;
 
 /**
  * A plugin that provides a default transaction plan executor using RPC.
  *
- * The executor handles compute unit estimation, transaction signing, and
- * sending via RPC. A concurrency limit can be set to avoid hitting rate
+ * The executor handles resource limit estimation (compute units and, for
+ * version 1 transactions, the loaded accounts data size), transaction signing,
+ * and sending via RPC. A concurrency limit can be set to avoid hitting rate
  * limits when sending many transactions in parallel.
  *
  * @param config - Optional configuration for the executor.
@@ -58,16 +57,16 @@ export function rpcTransactionPlanExecutor(
         /**
          * Whether to skip the preflight simulation when sending transactions.
          *
-         * When `false` (default), preflight is skipped only if a compute unit
+         * When `false` (default), preflight is skipped only if a resource limit
          * estimation simulation was already performed for that transaction.
-         * If the transaction has an explicit compute unit limit (i.e. no
+         * If every applicable resource limit is already explicitly set (i.e. no
          * estimation was needed), preflight runs as the only simulation.
          *
          * When `true`, preflight is always skipped and the transaction is sent
-         * directly to the validator. Additionally, if the compute unit estimation
-         * simulation fails, the consumed units from the failed simulation are used
-         * to set the compute unit limit so the transaction still reaches the
-         * validator. This is useful for debugging failed transactions in an explorer.
+         * directly to the validator. Additionally, if the resource limit estimation
+         * simulation fails, the consumed resources from the failed simulation are
+         * used to set the limits so the transaction still reaches the validator.
+         * This is useful for debugging failed transactions in an explorer.
          *
          * Defaults to `false`.
          */
@@ -97,25 +96,29 @@ export function rpcTransactionPlanExecutor(
             rpc: client.rpc,
             rpcSubscriptions: client.rpcSubscriptions,
         });
-        const estimateCULimit = estimateComputeUnitLimitFactory({ rpc: client.rpc });
+        const estimateResourceLimits = estimateResourceLimitsFactory({ rpc: client.rpc });
+        const skipPreflight = config.skipPreflight ?? false;
 
         const transactionPlanExecutor = createTransactionPlanExecutor({
             executeTransactionMessage: limitFunction(async (context, transactionMessage, executorConfig) => {
-                const needsCuEstimation = needsComputeUnitEstimation(transactionMessage);
                 const { value: latestBlockhash } = await client.rpc.getLatestBlockhash().send(executorConfig);
+
+                // `estimateAndSetResourceLimits` only invokes our estimator when a
+                // resource limit actually needs estimating, so this flag tells us
+                // whether an estimation simulation was performed. When it was, we
+                // skip the redundant preflight simulation while sending.
+                let didSimulateToEstimate = false;
+                const estimateAndSetResourceLimits = estimateAndSetResourceLimitsFactory(
+                    bufferAndRecoverResourceLimits(estimateResourceLimits, skipPreflight, () => {
+                        didSimulateToEstimate = true;
+                    }),
+                );
+
                 const signedTransaction = await pipe(
                     transactionMessage,
                     tx => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, tx),
                     tx => (context.message = tx),
-                    async tx =>
-                        needsCuEstimation
-                            ? await estimateAndSetComputeUnitLimit(
-                                  tx,
-                                  estimateCULimit,
-                                  config.skipPreflight ?? false,
-                                  executorConfig,
-                              )
-                            : tx,
+                    async tx => await estimateAndSetResourceLimits(tx, executorConfig),
                     async tx => (context.message = await tx),
                     async tx => await signTransactionMessageWithSigners(await tx, executorConfig),
                     async tx => (context.transaction = await tx),
@@ -123,7 +126,7 @@ export function rpcTransactionPlanExecutor(
                 assertIsTransactionWithBlockhashLifetime(signedTransaction);
                 await sendAndConfirmTransaction(signedTransaction, {
                     commitment: 'confirmed',
-                    skipPreflight: config.skipPreflight || needsCuEstimation,
+                    skipPreflight: skipPreflight || didSimulateToEstimate,
                     ...executorConfig,
                 });
                 return signedTransaction;
@@ -135,66 +138,70 @@ export function rpcTransactionPlanExecutor(
 }
 
 /**
- * Checks whether a transaction message needs compute unit estimation.
+ * Wraps a resource limit estimator to add a 10% compute unit buffer and,
+ * optionally, recover from failed estimation simulations.
  *
- * Estimation is needed when the transaction has no `SetComputeUnitLimit`
- * instruction, or when it has a provisory (`0`) or maximum (`1,400,000`)
- * compute unit limit.
+ * The returned estimator is intended to be passed to
+ * {@link estimateAndSetResourceLimitsFactory}, which only calls it when a
+ * resource limit actually needs estimating. The `onSimulate` callback is
+ * therefore invoked exactly once an estimation simulation has been performed
+ * and we are proceeding to send (i.e. not on a non-recoverable failure).
  *
- * @param transactionMessage - The transaction message to check.
- * @returns `true` if the transaction needs compute unit estimation, `false` otherwise.
+ * A 10% buffer is applied to the compute unit limit only, to account for
+ * variations between simulation and execution.
+ *
+ * When `skipPreflight` is `true` and the estimation simulation fails, the
+ * consumed resources from the failed simulation are used so the transaction
+ * can still reach the validator for debugging purposes.
+ *
+ * @param estimateResourceLimits - The underlying estimator, typically created by
+ *   {@link estimateResourceLimitsFactory}.
+ * @param skipPreflight - Whether to recover from failed simulations using consumed resources.
+ * @param onSimulate - Called once a simulation has been performed and an estimate produced.
+ * @returns An estimator that applies a compute unit buffer and recovery behaviour.
  */
-function needsComputeUnitEstimation(
-    transactionMessage: Parameters<typeof getTransactionMessageComputeUnitLimit>[0],
-): boolean {
-    const computeUnitLimit = getTransactionMessageComputeUnitLimit(transactionMessage);
-    return !computeUnitLimit || computeUnitLimit === MAX_COMPUTE_UNIT_LIMIT;
-}
-
-/**
- * Estimates the compute unit limit for a transaction message via simulation
- * and sets the result on the message with a 10% buffer.
- *
- * When `skipPreflight` is `true` and the estimation simulation fails, the consumed
- * units from the failed simulation are used so the transaction can still reach the
- * validator for debugging purposes.
- *
- * @param transactionMessage - The transaction message to estimate and set the compute unit limit on.
- * @param estimateCULimit - A function that estimates the compute unit limit via simulation.
- * @param skipPreflight - Whether to recover from failed simulations using consumed units.
- * @param config - Optional configuration forwarded to the estimator (e.g. abort signal).
- * @returns The updated transaction message with the estimated compute unit limit.
- */
-async function estimateAndSetComputeUnitLimit<
-    TMessage extends Parameters<typeof setTransactionMessageComputeUnitLimit>[1],
->(
-    transactionMessage: TMessage,
-    estimateCULimit: (tx: TMessage, config?: { abortSignal?: AbortSignal }) => Promise<number>,
+function bufferAndRecoverResourceLimits(
+    estimateResourceLimits: ReturnType<typeof estimateResourceLimitsFactory>,
     skipPreflight: boolean,
-    config?: { abortSignal?: AbortSignal },
-) {
-    let estimatedUnits;
-    try {
-        estimatedUnits = await estimateCULimit(transactionMessage, config);
-    } catch (error) {
-        if (
-            skipPreflight &&
-            isSolanaError(error, SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_COMPUTE_LIMIT)
-        ) {
-            // Use consumed units from the failed simulation so the
-            // transaction can still reach the validator for debugging.
-            // The unitsConsumed field is a raw bigint from the RPC response,
-            // so we downcast it to a u32 number, capping at 4_294_967_295.
-            const bigintUnits = error.context.unitsConsumed ?? 0n;
-            estimatedUnits = bigintUnits > 4_294_967_295n ? 4_294_967_295 : Number(bigintUnits);
-        } else {
-            throw error;
+    onSimulate: () => void,
+): ReturnType<typeof estimateResourceLimitsFactory> {
+    return async (transactionMessage, config) => {
+        let estimate: ResourceLimitsEstimate<typeof transactionMessage>;
+        try {
+            estimate = await estimateResourceLimits(transactionMessage, config);
+        } catch (error) {
+            if (
+                skipPreflight &&
+                isSolanaError(error, SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_RESOURCE_LIMITS)
+            ) {
+                // Use the consumed resources from the failed simulation so the
+                // transaction can still reach the validator for debugging.
+                // The unitsConsumed field is a raw bigint from the RPC response,
+                // so we downcast it to a u32 number, capping at 4_294_967_295.
+                const bigintUnits = error.context.unitsConsumed ?? 0n;
+                const computeUnitLimit = bigintUnits > 4_294_967_295n ? 4_294_967_295 : Number(bigintUnits);
+                estimate = (
+                    error.context.loadedAccountsDataSize == null
+                        ? { computeUnitLimit }
+                        : { computeUnitLimit, loadedAccountsDataSizeLimit: error.context.loadedAccountsDataSize }
+                ) as ResourceLimitsEstimate<typeof transactionMessage>;
+            } else {
+                throw error;
+            }
         }
-    }
 
-    // Multiply the simulated limit by 1.1 to add a 10% buffer.
-    const units = Math.ceil(estimatedUnits * 1.1);
-    return setTransactionMessageComputeUnitLimit(units, transactionMessage);
+        // Reaching this point means a simulation was performed (either it
+        // succeeded, or it failed and we recovered from it) and we are
+        // proceeding to send, so signal it. A non-recoverable failure throws
+        // above and never gets here.
+        onSimulate();
+
+        // Multiply the estimated compute unit limit by 1.1 to add a 10% buffer.
+        return {
+            ...estimate,
+            computeUnitLimit: Math.ceil(estimate.computeUnitLimit * 1.1),
+        } as ResourceLimitsEstimate<typeof transactionMessage>;
+    };
 }
 
 /**
