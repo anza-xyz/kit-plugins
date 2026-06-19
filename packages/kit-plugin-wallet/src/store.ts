@@ -1,4 +1,4 @@
-import { type SignatureBytes, SOLANA_ERROR__WALLET__NOT_CONNECTED, SolanaError } from '@solana/kit';
+import { type SignatureBytes, SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE, SOLANA_ERROR__WALLET__NOT_CONNECTED, SolanaError } from '@solana/kit';
 import { createSignerFromWalletAccount } from '@solana/wallet-account-signer';
 import {
     SolanaSignIn,
@@ -70,8 +70,8 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             signIn: () => Promise.reject(new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signIn' })),
             signMessage: () =>
                 Promise.reject(new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signMessage' })),
-            subscribe: () => () => {},
-            [Symbol.dispose]: () => {},
+            subscribe: () => () => { },
+            [Symbol.dispose]: () => { },
         };
     }
 
@@ -117,10 +117,10 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             connected:
                 s.connectedWallet && s.account
                     ? Object.freeze({
-                          account: s.account,
-                          signer: s.signer,
-                          wallet: s.connectedWallet,
-                      })
+                        account: s.account,
+                        signer: s.signer,
+                        wallet: s.connectedWallet,
+                    })
                     : null,
             status: s.status,
             wallets: s.wallets,
@@ -276,7 +276,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
 
     function subscribeToWalletEvents(uiWallet: UiWallet): () => void {
         if (!uiWallet.features.includes(StandardEvents)) {
-            return () => {};
+            return () => { };
         }
 
         const eventsFeature = getWalletFeature(
@@ -516,8 +516,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         const refreshed = refreshUiWallet(state.connectedWallet);
         const selectedAccount = refreshed.accounts.find(a => a.address === account.address);
         if (!selectedAccount) {
-            // Note: no Kit SolanaError for this case
-            throw new Error(`Account ${account.address} is not available in wallet "${state.connectedWallet.name}"`);
+            throw new SolanaError(SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE, { account: account.address, operation: 'selectAccount', });
         }
         userHasSelected = true;
         // Bump the generation so this selection supersedes any in-flight
