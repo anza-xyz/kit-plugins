@@ -188,8 +188,8 @@ importers:
         specifier: ^6.10.0
         version: 6.10.0(typescript@6.0.3)
       '@solana/wallet-standard-chains':
-        specifier: ^1.1.1
-        version: 1.1.1
+        specifier: ^1.1.2
+        version: 1.1.2
       '@solana/wallet-standard-features':
         specifier: ^1.4.0
         version: 1.4.0
@@ -1579,9 +1579,9 @@ packages:
       typescript:
         optional: true
 
-  '@solana/wallet-standard-chains@1.1.1':
-    resolution: {integrity: sha512-Us3TgL4eMVoVWhuC4UrePlYnpWN+lwteCBlhZDUhFZBJ5UMGh94mYPXno3Ho7+iHPYRtuCi/ePvPcYBqCGuBOw==}
-    engines: {node: '>=16'}
+  '@solana/wallet-standard-chains@1.1.2':
+    resolution: {integrity: sha512-EZobEGclDBAFplpJC5F3d/s8Xnlqc5isNKuPrd5o9ZPZ7tWN84O0e68yIZ8MAOj9V7ieRadNiHtql7uIXCTyXg==}
+    engines: {node: '>=22'}
 
   '@solana/wallet-standard-features@1.4.0':
     resolution: {integrity: sha512-f0tAdqwM2aL6CiFbIgt9h5zKFp+mgY/iNGwoxPMTj9VSTeQj7d1GGSmWhZw0XWoZ4N/1tnKTKmYFq+Dyq08jRw==}
@@ -3681,7 +3681,7 @@ snapshots:
       '@solana/signers': 6.10.0(typescript@6.0.3)
       '@solana/transaction-messages': 6.10.0(typescript@6.0.3)
       '@solana/transactions': 6.10.0(typescript@6.0.3)
-      '@solana/wallet-standard-chains': 1.1.1
+      '@solana/wallet-standard-chains': 1.1.2
       '@solana/wallet-standard-features': 1.4.0
       '@wallet-standard/base': 1.1.1
       '@wallet-standard/errors': 0.1.2
@@ -3692,7 +3692,7 @@ snapshots:
     transitivePeerDependencies:
       - fastestsmallesttextencoderdecoder
 
-  '@solana/wallet-standard-chains@1.1.1':
+  '@solana/wallet-standard-chains@1.1.2':
     dependencies:
       '@wallet-standard/base': 1.1.1
 
