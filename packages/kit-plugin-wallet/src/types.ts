@@ -266,8 +266,10 @@ export type WalletNamespace = {
      * Switch to a different account within the connected wallet. Creates and
      * caches a new signer for the selected account.
      *
-     * @throws `SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED)` if no wallet is connected.
-     * @throws Error if the specified account is not among the currently connected wallet's accounts.
+     * @throws `SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED)` if no wallet is
+     *   connected, or the connected wallet is currently disconnecting.
+     * @throws `SolanaError(SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE)` if the
+     *   specified account is not among the connected wallet's accounts.
      */
     selectAccount: (account: UiWalletAccount) => void;
 
