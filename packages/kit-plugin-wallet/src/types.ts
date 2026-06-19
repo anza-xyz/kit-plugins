@@ -18,10 +18,15 @@ export type WalletSigner = TransactionSigner | (MessageSigner & TransactionSigne
  * The connection status of the wallet plugin.
  *
  * - `pending` — not yet initialized. Initial state on both server and browser.
- *   On the server this state is permanent. In the browser it resolves to
- *   `disconnected` or `reconnecting` once the storage check completes.
+ *   On the server — and in React Native, which is treated the same way — this
+ *   state is permanent. In the browser it resolves to `disconnected` or
+ *   `reconnecting` once the storage check completes.
  * - `disconnected` — initialized, no wallet connected.
- * - `connecting` — a user-initiated connection request is in progress.
+ * - `connecting` — a user-initiated connection request is in progress. When
+ *   connecting to a different wallet while one is already connected, the
+ *   existing connection is preserved until the new one succeeds — so
+ *   {@link WalletState.connected} can be non-null during this state, and a
+ *   failed attempt reverts to the previous connection.
  * - `connected` — a wallet is connected.
  * - `disconnecting` — a user-initiated disconnection request is in progress.
  * - `reconnecting` — auto-connect in progress (connecting to persisted wallet).
@@ -44,6 +49,11 @@ export type WalletState = {
      *
      * `signer` is `null` for read-only / watch-only wallets that do not
      * support any signing feature.
+     *
+     * Independent of {@link status}: when {@link connect} or {@link signIn} is
+     * called for a different wallet while one is already connected, `connected`
+     * keeps describing the existing connection while `status` is `'connecting'`,
+     * and a failed attempt leaves it in place.
      */
     readonly connected: {
         readonly account: UiWalletAccount;
@@ -92,13 +102,20 @@ export type WalletActionOptions = {
  * `localStorage` and `sessionStorage` satisfy this interface directly.
  * Async backends (IndexedDB, encrypted storage) may return `Promise`s.
  *
+ * Writes are fire-and-forget: the plugin does not await `setItem`/`removeItem`
+ * and swallows any rejection (the live wallet connection is the source of
+ * truth, so a failed persist is non-fatal). A resolved action therefore does
+ * not guarantee the write has landed, and rapid successive writes are not
+ * ordered. This is intentional — persistence only records which account to
+ * silently reconnect to on the next load.
+ *
  * @example
  * ```ts
  * // Use sessionStorage
- * wallet({ chain: 'solana:mainnet', storage: sessionStorage });
+ * walletSigner({ chain: 'solana:mainnet', storage: sessionStorage });
  *
  * // Custom async adapter
- * wallet({
+ * walletSigner({
  *   chain: 'solana:mainnet',
  *   storage: {
  *     getItem: (key) => myStore.get(key),
@@ -115,8 +132,12 @@ export type WalletStorage = {
 };
 
 /**
- * Configuration for the wallet plugins ({@link walletSigner},
- * {@link walletPayer}, {@link walletIdentity}, {@link walletWithoutSigner}).
+ * Configuration for the wallet plugins.
+ *
+ * @see {@link walletSigner}
+ * @see {@link walletIdentity}
+ * @see {@link walletPayer}
+ * @see {@link walletWithoutSigner}
  */
 export type WalletPluginConfig = {
     /**
@@ -199,8 +220,23 @@ export type WalletNamespace = {
      * newly authorized account (or the first account if reconnecting). Creates
      * and caches a signer for the active account.
      *
+     * Resolving means the wallet is connected; any failure rejects. If a wallet
+     * is already connected, it stays connected until the new one is established:
+     * a failed attempt — a rejected prompt, no authorized accounts, or the
+     * wallet becoming unavailable — leaves the previous connection in place
+     * rather than disconnecting it.
+     *
      * @returns All accounts from the wallet after connection.
      * @throws The wallet's rejection error if the user declines the prompt.
+     * @throws `SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED)` if the wallet
+     *   authorizes no accounts, or unregisters (or drops a required
+     *   feature/chain) while its connect prompt is open. Any previously
+     *   connected wallet is left in place.
+     * @throws `DOMException` with `name: 'AbortError'` if a newer `connect` or
+     *   `signIn` is started before this call resolves. The newer request wins
+     *   and owns the resulting connection; this superseded call rejects so it
+     *   can be ignored like any other aborted operation (e.g. an accidental
+     *   double-click still connects — only the orphaned first promise rejects).
      * @throws `options.abortSignal.reason` if the signal is already aborted
      *   when the action is called. Aborts after the wallet call has been
      *   dispatched do not take effect.
@@ -230,7 +266,10 @@ export type WalletNamespace = {
      * Switch to a different account within the connected wallet. Creates and
      * caches a new signer for the selected account.
      *
-     * @throws `SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED)` if no wallet is connected.
+     * @throws `SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED)` if no wallet is
+     *   connected, or the connected wallet is currently disconnecting.
+     * @throws `SolanaError(SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE)` if the
+     *   specified account is not among the connected wallet's accounts.
      */
     selectAccount: (account: UiWalletAccount) => void;
 
@@ -238,8 +277,9 @@ export type WalletNamespace = {
      * Sign In With Solana (SIWS-as-connect).
      *
      * Connects the wallet, calls `solana:signIn`, sets the returned account as
-     * active, and creates a signer. After completion, the client is in the same
-     * state as if {@link connect} had been called.
+     * active, and creates a signer. Resolving means the client is in the same
+     * state as if {@link connect} had been called; any failure to connect
+     * rejects rather than resolving while disconnected.
      *
      * All fields on `SolanaSignInInput` are optional — pass `{}` if no sign-in
      * customization is needed.
@@ -247,8 +287,20 @@ export type WalletNamespace = {
      * To sign in with the already-connected wallet, pass
      * `getState().connected.wallet`.
      *
+     * Like {@link connect}, a failed sign-in to a different wallet rejects and
+     * leaves any existing connection in place rather than disconnecting it.
+     *
+     * @returns The wallet's sign-in output, once the connection is established.
      * @throws `WalletStandardError(WALLET_STANDARD_ERROR__FEATURES__WALLET_ACCOUNT_FEATURE_UNIMPLEMENTED)`
      *   if the wallet does not support `solana:signIn`.
+     * @throws `SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED)` if the wallet
+     *   unregisters (or drops a required feature/chain) while its sign-in prompt
+     *   is open, or signs in with an account it does not expose. Any previously
+     *   connected wallet is left in place.
+     * @throws `DOMException` with `name: 'AbortError'` if a newer `connect` or
+     *   `signIn` is started before this call resolves. The newer request wins
+     *   and owns the resulting connection; this superseded call rejects so it
+     *   can be ignored like any other aborted operation.
      * @throws `options.abortSignal.reason` if the signal is already aborted
      *   when the action is called. Aborts after the wallet call has been
      *   dispatched do not take effect.
@@ -289,11 +341,17 @@ export type WalletNamespace = {
  * Properties added to the client by the wallet plugins.
  *
  * All wallet state and actions are namespaced under `client.wallet`.
+ * Depending on which plugin variant is used, `client.payer` and/or
+ * `client.identity` may also be set to the connected wallet's signer.
+ * This is not part of Kit plugin-interfaces, as it depends on wallet-standard types
  *
  * @see {@link walletSigner}
+ * @see {@link walletPayer}
+ * @see {@link walletIdentity}
+ * @see {@link walletWithoutSigner}
  * @see {@link WalletNamespace}
+ *
  */
-// TODO: would be moved to kit plugin-interfaces
 export type ClientWithWallet = {
     /** The wallet namespace — state, actions, and framework integration. */
     readonly wallet: WalletNamespace;

@@ -1,4 +1,14 @@
-import { type ClientWithIdentity, type ClientWithPayer, extendClient, withCleanup } from '@solana/kit';
+import {
+    type ClientWithIdentity,
+    type ClientWithPayer,
+    type ClientWithSubscribeToIdentity,
+    type ClientWithSubscribeToPayer,
+    extendClient,
+    SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED,
+    SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE,
+    SolanaError,
+    withCleanup,
+} from '@solana/kit';
 
 import { createWalletStore } from './store';
 import type { ClientWithWallet, WalletPluginConfig } from './types';
@@ -16,19 +26,31 @@ function defineSignerGetter(
         get() {
             const state = store.getState();
             if (!state.connected) {
-                // TODO: throw new SolanaError(SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED, { status: state.status });
-                throw new Error(`No signing wallet connected (status: ${state.status})`);
+                throw new SolanaError(SOLANA_ERROR__WALLET__NO_SIGNER_CONNECTED, { status: state.status });
             }
             if (!state.connected.signer) {
-                // TODO: throw new SolanaError(SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE);
-                throw new Error('Connected wallet does not support signing');
+                throw new SolanaError(SOLANA_ERROR__WALLET__SIGNER_NOT_AVAILABLE);
             }
             return state.connected.signer;
         },
     });
 }
 
-function createPlugin<TAdditions extends ClientWithWallet>(config: WalletPluginConfig, signerProperties: string[]) {
+type SignerProperties = 'payer' | 'identity';
+
+// Maps each signer capability to the Kit-convention reactive hook installed
+// alongside it (`@solana/plugin-interfaces`). A plugin whose `client.payer` /
+// `client.identity` is dynamic installs the matching `subscribeTo*` function
+// so reactive consumers can observe changes without naming this plugin.
+const SUBSCRIBE_PROPERTY: Record<SignerProperties, 'subscribeToIdentity' | 'subscribeToPayer'> = {
+    identity: 'subscribeToIdentity',
+    payer: 'subscribeToPayer',
+};
+
+function createPlugin<TAdditions extends ClientWithWallet>(
+    config: WalletPluginConfig,
+    signerProperties: SignerProperties[],
+) {
     return <T extends object & { wallet?: never }>(client: T): Disposable & Omit<T, keyof TAdditions> & TAdditions => {
         if ('wallet' in client) {
             throw new Error(
@@ -42,6 +64,7 @@ function createPlugin<TAdditions extends ClientWithWallet>(config: WalletPluginC
         const additions: Record<string, unknown> = { wallet: store };
         for (const prop of signerProperties) {
             defineSignerGetter(additions, prop, store);
+            additions[SUBSCRIBE_PROPERTY[prop]] = store.subscribeSigner;
         }
 
         return withCleanup(extendClient(client, additions), () => store[Symbol.dispose]()) as unknown as Disposable &
@@ -61,13 +84,17 @@ function createPlugin<TAdditions extends ClientWithWallet>(config: WalletPluginC
  * wallet is connected, `client.payer` and `client.identity` both return the
  * wallet signer. When disconnected or read-only, accessing either throws.
  *
+ * Because the signer is dynamic, both `client.subscribeToPayer` and
+ * `client.subscribeToIdentity` are installed so reactive consumers can observe
+ * changes (the Kit reactive-capability convention).
+ *
  * **SSR-safe.** Can be included in a shared client chain that runs on both
  * server and browser.
  *
  * ```ts
  * const client = createClient()
- *   .use(rpc('https://api.mainnet-beta.solana.com'))
  *   .use(walletSigner({ chain: 'solana:mainnet' }))
+ *   .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
  *   .use(planAndSendTransactions());
  * ```
  *
@@ -79,7 +106,13 @@ function createPlugin<TAdditions extends ClientWithWallet>(config: WalletPluginC
  * @see {@link WalletPluginConfig}
  */
 export function walletSigner(config: WalletPluginConfig) {
-    return createPlugin<ClientWithIdentity & ClientWithPayer & ClientWithWallet>(config, ['payer', 'identity']);
+    return createPlugin<
+        ClientWithIdentity &
+            ClientWithPayer &
+            ClientWithSubscribeToIdentity &
+            ClientWithSubscribeToPayer &
+            ClientWithWallet
+    >(config, ['payer', 'identity']);
 }
 
 /**
@@ -90,14 +123,17 @@ export function walletSigner(config: WalletPluginConfig) {
  * Use this when `client.payer` is controlled by a separate `payer()` plugin
  * (e.g. a backend relayer pays fees, but the user's wallet is the identity).
  *
+ * Because the signer is dynamic, `client.subscribeToIdentity` is installed so
+ * reactive consumers can observe changes (the Kit reactive-capability convention).
+ *
  * **SSR-safe.** Can be included in a shared client chain that runs on both
  * server and browser.
  *
  * ```ts
  * const client = createClient()
- *   .use(rpc('https://api.mainnet-beta.solana.com'))
  *   .use(payer(relayerKeypair))
  *   .use(walletIdentity({ chain: 'solana:mainnet' }))
+ *   .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
  *   .use(planAndSendTransactions());
  * ```
  *
@@ -109,7 +145,7 @@ export function walletSigner(config: WalletPluginConfig) {
  * @see {@link WalletPluginConfig}
  */
 export function walletIdentity(config: WalletPluginConfig) {
-    return createPlugin<ClientWithIdentity & ClientWithWallet>(config, ['identity']);
+    return createPlugin<ClientWithIdentity & ClientWithSubscribeToIdentity & ClientWithWallet>(config, ['identity']);
 }
 
 /**
@@ -121,13 +157,16 @@ export function walletIdentity(config: WalletPluginConfig) {
  * `client.identity`. For most dApps, prefer {@link walletSigner} which
  * sets both.
  *
+ * Because the signer is dynamic, `client.subscribeToPayer` is installed so
+ * reactive consumers can observe changes (the Kit reactive-capability convention).
+ *
  * **SSR-safe.** Can be included in a shared client chain that runs on both
  * server and browser.
  *
  * ```ts
  * const client = createClient()
- *   .use(rpc('https://api.mainnet-beta.solana.com'))
  *   .use(walletPayer({ chain: 'solana:mainnet' }))
+ *   .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
  *   .use(planAndSendTransactions());
  * ```
  *
@@ -139,7 +178,7 @@ export function walletIdentity(config: WalletPluginConfig) {
  * @see {@link WalletPluginConfig}
  */
 export function walletPayer(config: WalletPluginConfig) {
-    return createPlugin<ClientWithPayer & ClientWithWallet>(config, ['payer']);
+    return createPlugin<ClientWithPayer & ClientWithSubscribeToPayer & ClientWithWallet>(config, ['payer']);
 }
 
 /**
@@ -156,9 +195,9 @@ export function walletPayer(config: WalletPluginConfig) {
  *
  * ```ts
  * const client = createClient()
- *   .use(rpc('https://api.mainnet-beta.solana.com'))
  *   .use(payer(backendKeypair))
  *   .use(walletWithoutSigner({ chain: 'solana:mainnet' }))
+ *   .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
  *   .use(planAndSendTransactions());
  *
  * // client.payer is always backendKeypair

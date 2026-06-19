@@ -49,11 +49,10 @@
     "scripts": {
         "build": "rimraf dist && tsup && tsc -p ./tsconfig.declarations.json",
         "dev": "vitest --project node",
-        "lint": "eslint . && prettier --check .",
-        "lint:fix": "eslint --fix . && prettier --write .",
-        "test": "pnpm test:types && pnpm test:treeshakability",
+        "test": "pnpm test:types && pnpm test:treeshakability && pnpm test:unit",
         "test:treeshakability": "for file in dist/index.*.mjs; do agadoo $file; done",
-        "test:types": "tsc --noEmit"
+        "test:types": "tsc --noEmit",
+        "test:unit": "vitest run"
     },
     "dependencies": {
         "@solana/wallet-account-signer": "^6.10.0",
@@ -61,11 +60,13 @@
         "@solana/wallet-standard-features": "^1.4.0",
         "@wallet-standard/app": "^1.1.1",
         "@wallet-standard/base": "^1.1.1",
-        "@wallet-standard/errors": "^0.1.2",
         "@wallet-standard/features": "^1.1.1",
         "@wallet-standard/ui": "^1.0.3",
         "@wallet-standard/ui-features": "^1.0.3",
         "@wallet-standard/ui-registry": "^1.1.1"
+    },
+    "devDependencies": {
+        "@wallet-standard/errors": "^0.1.2"
     },
     "peerDependencies": {
         "@solana/kit": "^6.10.0"

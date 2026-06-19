@@ -137,6 +137,18 @@ All wallet state is accessed via `client.wallet.getState()`, which returns a ref
     const accounts = await client.wallet.connect(selectedWallet);
     ```
 
+    A successful call resolves only once the wallet is connected; any failure rejects. Connecting to a different wallet keeps the current one connected until the new connection succeeds — so if the attempt fails (the user declines the prompt, the wallet authorizes no accounts, or it becomes unavailable), the previous connection is left untouched rather than torn down. The same holds for `signIn`, which rejects rather than resolving with its sign-in output when the connection can't be established. While the attempt is in flight, `status` is `'connecting'` but `getState().connected` still describes the existing connection.
+
+    If another `connect` or `signIn` starts before this one resolves (e.g. an accidental double-click), the newer request wins and owns the connection — the superseded call rejects with a `DOMException` whose `name` is `'AbortError'`. Ignore it the way you'd ignore any aborted operation:
+
+    ```ts
+    try {
+        await client.wallet.connect(selectedWallet);
+    } catch (e) {
+        if ((e as Error).name !== 'AbortError') throw e; // a real failure
+    }
+    ```
+
 - **`disconnect()`** — Disconnect the active wallet.
 
 - **`selectAccount(account)`** — Switch to a different account within an already-authorized wallet without reconnecting.
@@ -214,6 +226,30 @@ export const walletState = readable(client.wallet.getState(), set => {
 });
 ```
 
+### Reactivity: observing `payer` / `identity`
+
+Because the connected wallet's signer is dynamic, the plugins follow Kit's
+reactive-capability convention. The variants that set `client.payer` /
+`client.identity` also install a sibling `subscribeToPayer` /
+`subscribeToIdentity` function, so reactive consumers can observe signer
+changes without naming the wallet plugin:
+
+```ts
+const client = createClient().use(walletSigner({ chain: 'solana:mainnet' }));
+
+const unsubscribe = client.subscribeToPayer(() => {
+    // Re-read the current value; it may now throw if disconnected.
+    console.log('payer is now', client.payer);
+});
+```
+
+`walletSigner` installs both hooks, `walletPayer` installs `subscribeToPayer`,
+`walletIdentity` installs `subscribeToIdentity`, and `walletWithoutSigner`
+installs neither. The listener fires on connect, account switch, and
+disconnect. For the full
+wallet state (including the discovered-wallet list), use
+`client.wallet.subscribe` instead.
+
 ## Configuration
 
 ```ts
@@ -233,6 +269,8 @@ By default the plugin uses `localStorage` to remember the last connected wallet 
 ## SSR / server-side rendering
 
 All four wallet plugins are safe to include in a shared client that runs on both server and browser. On the server, `status` stays `'pending'` permanently, all actions throw, and no registry listeners or storage reads are made. In the browser the plugin initializes normally.
+
+React Native is treated the same way as the server: wallet-standard browser discovery is not available, so the plugin returns the same inert stub (`status` stays `'pending'`, actions throw). Native wallet integration would need a different discovery mechanism and is out of scope for this plugin.
 
 ```ts
 const client = createClient()

@@ -14,6 +14,7 @@ This is a monorepo managed with [pnpm](https://pnpm.io/) and [Turborepo](https:/
 | [`@solana/kit-plugin-signer`](./packages/kit-plugin-signer)                     | Signer, payer, and identity plugins.        |
 | [`@solana/kit-plugin-litesvm`](./packages/kit-plugin-litesvm)                   | LiteSVM support plugin.                     |
 | [`@solana/kit-plugin-instruction-plan`](./packages/kit-plugin-instruction-plan) | Transaction planning and execution plugins. |
+| [`@solana/kit-plugin-wallet`](./packages/kit-plugin-wallet)                     | Browser wallet support plugins.             |
 
 The repo also contains a deprecated umbrella package (`@solana/kit-plugins`) and several deprecated single-purpose packages (`@solana/kit-plugin-payer`, `@solana/kit-plugin-airdrop`, `@solana/kit-client-rpc`, `@solana/kit-client-litesvm`). They re-export from the active packages via `export *` for backward compatibility, but new code should import from the individual `kit-plugin-*` packages above directly.
 
