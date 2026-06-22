@@ -3,7 +3,7 @@ import {
     createTransactionMessage,
     createTransactionPlanner,
     extendClient,
-    fillTransactionMessageProvisoryComputeUnitLimit,
+    fillTransactionMessageProvisoryResourceLimits,
     MicroLamports,
     pipe,
     setTransactionMessageComputeUnitPrice,
@@ -15,7 +15,8 @@ import {
  *
  * The planner creates transaction messages with:
  * - The configured fee payer.
- * - A provisory compute unit limit (to be estimated later by the executor).
+ * - Provisory resource limits (a compute unit limit, plus a loaded accounts data
+ *   size limit for version 1 transactions) to be estimated later by the executor.
  * - Optional priority fees.
  *
  * @param config - Optional configuration for the planner.
@@ -41,7 +42,7 @@ export function rpcTransactionPlanner(config: TransactionPlannerConfig = {}) {
                 return pipe(
                     createTransactionMessage({ version: config.version ?? 0 }),
                     tx => setTransactionMessageFeePayerSigner(client.payer, tx),
-                    tx => fillTransactionMessageProvisoryComputeUnitLimit(tx),
+                    tx => fillTransactionMessageProvisoryResourceLimits(tx),
                     tx =>
                         config.microLamportsPerComputeUnit
                             ? setTransactionMessageComputeUnitPrice(config.microLamportsPerComputeUnit, tx)

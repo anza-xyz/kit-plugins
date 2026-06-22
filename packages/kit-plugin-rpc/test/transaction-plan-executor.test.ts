@@ -10,6 +10,7 @@ import {
     sendAndConfirmTransactionFactory,
     setTransactionMessageComputeUnitLimit,
     setTransactionMessageFeePayerSigner,
+    setTransactionMessageLoadedAccountsDataSizeLimit,
     singleInstructionPlan,
     singleTransactionPlan,
     SingleTransactionPlanResult,
@@ -223,6 +224,139 @@ describe('rpcTransactionPlanExecutor', () => {
         expect(sendAndConfirmTransaction).toHaveBeenCalledExactlyOnceWith(expect.anything(), {
             commitment: 'confirmed',
             skipPreflight: true,
+        });
+    });
+
+    it('estimates the loaded accounts data size for version 1 transactions', async () => {
+        const payer = await generateKeyPairSigner();
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        // A version 1 transaction requires the simulation to return a loaded accounts data size.
+        const simulateTransaction = vi
+            .fn()
+            .mockResolvedValue({ value: { loadedAccountsDataSize: 5000, unitsConsumed: 42n } });
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: simulateTransaction }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
+        const sendAndConfirmTransaction = vi.fn().mockResolvedValue('MockTransactionSignature');
+        (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
+
+        const client = createClient()
+            .use(() => ({ payer, rpc, rpcSubscriptions }))
+            .use(rpcTransactionPlanExecutor());
+
+        const txMessage = setTransactionMessageFeePayerSigner(
+            payer,
+            // @ts-expect-error Version 1 transaction messages work at runtime but are not yet in the public type.
+            createTransactionMessage({ version: 1 }),
+        );
+        await client.transactionPlanExecutor(singleTransactionPlan(txMessage));
+
+        // Estimation runs a single simulation, so preflight is skipped when sending.
+        expect(simulateTransaction).toHaveBeenCalledOnce();
+        expect(sendAndConfirmTransaction).toHaveBeenCalledExactlyOnceWith(expect.anything(), {
+            commitment: 'confirmed',
+            skipPreflight: true,
+        });
+    });
+
+    it('throws when a version 1 transaction simulation omits the loaded accounts data size', async () => {
+        const payer = await generateKeyPairSigner();
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        // The RPC omits `loadedAccountsDataSize`, which is required for version 1 transactions.
+        const simulateTransaction = vi.fn().mockResolvedValue({ value: { unitsConsumed: 42n } });
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: simulateTransaction }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
+        const sendAndConfirmTransaction = vi.fn().mockResolvedValue('MockTransactionSignature');
+        (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
+
+        const client = createClient()
+            .use(() => ({ payer, rpc, rpcSubscriptions }))
+            // Even with skipPreflight, a missing data size cannot be recovered.
+            .use(rpcTransactionPlanExecutor({ skipPreflight: true }));
+
+        const txMessage = setTransactionMessageFeePayerSigner(
+            payer,
+            // @ts-expect-error Version 1 transaction messages work at runtime but are not yet in the public type.
+            createTransactionMessage({ version: 1 }),
+        );
+        const promise = client.transactionPlanExecutor(singleTransactionPlan(txMessage));
+
+        await expect(promise).rejects.toThrow();
+        expect(sendAndConfirmTransaction).not.toHaveBeenCalled();
+    });
+
+    it('recovers the loaded accounts data size for version 1 transactions when estimation fails and skipPreflight is true', async () => {
+        const payer = await generateKeyPairSigner();
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        // The estimation simulation fails, but still reports the consumed resources,
+        // including the loaded accounts data size required for version 1 transactions.
+        const simulateTransaction = vi.fn().mockResolvedValue({
+            value: { err: 'AccountNotFound', loadedAccountsDataSize: 5000, unitsConsumed: 200n },
+        });
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: simulateTransaction }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
+        const sendAndConfirmTransaction = vi.fn().mockResolvedValue('MockTransactionSignature');
+        (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
+
+        const client = createClient()
+            .use(() => ({ payer, rpc, rpcSubscriptions }))
+            .use(rpcTransactionPlanExecutor({ skipPreflight: true }));
+
+        const txMessage = setTransactionMessageFeePayerSigner(
+            payer,
+            // @ts-expect-error Version 1 transaction messages work at runtime but are not yet in the public type.
+            createTransactionMessage({ version: 1 }),
+        );
+        await client.transactionPlanExecutor(singleTransactionPlan(txMessage));
+
+        // The recovered limits let the transaction reach the validator with preflight skipped.
+        expect(sendAndConfirmTransaction).toHaveBeenCalledExactlyOnceWith(expect.anything(), {
+            commitment: 'confirmed',
+            skipPreflight: true,
+        });
+    });
+
+    it('does not simulate when a version 1 transaction already has explicit resource limits', async () => {
+        const payer = await generateKeyPairSigner();
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        const simulateTransaction = vi.fn();
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: simulateTransaction }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
+        const sendAndConfirmTransaction = vi.fn().mockResolvedValue('MockTransactionSignature');
+        (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
+
+        const client = createClient()
+            .use(() => ({ payer, rpc, rpcSubscriptions }))
+            .use(rpcTransactionPlanExecutor());
+
+        // Both applicable resource limits are explicit, so no estimation is needed.
+        const txMessage = pipe(
+            // @ts-expect-error Version 1 transaction messages work at runtime but are not yet in the public type.
+            createTransactionMessage({ version: 1 }),
+            tx => setTransactionMessageFeePayerSigner(payer, tx),
+            tx => setTransactionMessageComputeUnitLimit(500, tx),
+            tx => setTransactionMessageLoadedAccountsDataSizeLimit(5000, tx),
+        );
+        await client.transactionPlanExecutor(singleTransactionPlan(txMessage));
+
+        // No simulation should have been performed.
+        expect(simulateTransaction).not.toHaveBeenCalled();
+
+        // Preflight should run as the only simulation.
+        expect(sendAndConfirmTransaction).toHaveBeenCalledExactlyOnceWith(expect.anything(), {
+            commitment: 'confirmed',
+            skipPreflight: false,
         });
     });
 

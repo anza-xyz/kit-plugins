@@ -23,3 +23,6 @@ yarn-error.log*
 test-ledger/
 target/
 CHANGELOG.md
+
+# LLM
+.claude/worktrees/
