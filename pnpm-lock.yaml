@@ -66,8 +66,8 @@ importers:
         specifier: ^0.12.2
         version: 0.12.2(@solana/kit@6.10.0(typescript@6.0.3))
       '@solana-program/token':
-        specifier: ^0.13.0
-        version: 0.13.0(@solana/kit@6.10.0(typescript@6.0.3))
+        specifier: ^0.14.0
+        version: 0.14.0(@solana/kit@6.10.0(typescript@6.0.3))
       '@solana/kit':
         specifier: ^6.10.0
         version: 6.10.0(typescript@6.0.3)
@@ -1181,11 +1181,6 @@ packages:
 
   '@solana-program/system@0.12.2':
     resolution: {integrity: sha512-MaBeOxlvTruQhA7UYkOb3hVTEHPPagOtd+PvTm6a8rGgvEAP0kD4BbC37NceOaR4ABNqdaCmD5OMVRKgrE6KAg==}
-    peerDependencies:
-      '@solana/kit': ^6.10.0
-
-  '@solana-program/token@0.13.0':
-    resolution: {integrity: sha512-/Apjrd5lwOJGrPB0J5Rv7EBeclvyEBQPAGA85Scm7wBH+GpkbdLDM9uK3TNg8jjFKyWQYai/JtPHbrx7VgFLSg==}
     peerDependencies:
       '@solana/kit': ^6.10.0
 
@@ -3201,11 +3196,6 @@ snapshots:
 
   '@solana-program/system@0.12.2(@solana/kit@6.10.0(typescript@6.0.3))':
     dependencies:
-      '@solana/kit': 6.10.0(typescript@6.0.3)
-
-  '@solana-program/token@0.13.0(@solana/kit@6.10.0(typescript@6.0.3))':
-    dependencies:
-      '@solana-program/system': 0.12.2(@solana/kit@6.10.0(typescript@6.0.3))
       '@solana/kit': 6.10.0(typescript@6.0.3)
 
   '@solana-program/token@0.14.0(@solana/kit@6.10.0(typescript@6.0.3))':
