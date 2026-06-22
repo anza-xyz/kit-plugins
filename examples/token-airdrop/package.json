@@ -10,7 +10,7 @@
     },
     "dependencies": {
         "@solana-program/system": "^0.12.2",
-        "@solana-program/token": "^0.13.0",
+        "@solana-program/token": "^0.14.0",
         "@solana/kit": "^6.10.0",
         "@solana/kit-plugin-rpc": "workspace:*",
         "@solana/kit-plugin-signer": "workspace:*"
