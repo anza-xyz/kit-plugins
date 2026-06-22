@@ -56,7 +56,7 @@
         "@solana/kit-plugin-rpc": "workspace:*"
     },
     "peerDependencies": {
-        "@solana/kit": "^6.8.0"
+        "@solana/kit": "^6.10.0"
     },
     "browserslist": [
         "supports bigint and not dead",
