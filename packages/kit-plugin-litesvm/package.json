@@ -53,7 +53,7 @@
     },
     "dependencies": {
         "@solana/kit-plugin-instruction-plan": "workspace:*",
-        "litesvm": "^1.1.0"
+        "litesvm": "^1.2.0"
     },
     "devDependencies": {
         "@solana-program/system": "^0.12.2"
