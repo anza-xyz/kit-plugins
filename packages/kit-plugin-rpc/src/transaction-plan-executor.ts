@@ -23,6 +23,8 @@ import {
     TransactionPlanExecutorConfig,
 } from '@solana/kit';
 
+import { type ResourceLimitEstimationMode, shouldEstimateResourceLimits } from './resource-limit-estimation';
+
 /**
  * A plugin that provides a default transaction plan executor using RPC.
  *
@@ -71,6 +73,14 @@ export function rpcTransactionPlanExecutor(
          * Defaults to `false`.
          */
         skipPreflight?: boolean;
+        /**
+         * Whether to estimate and set missing resource limits before sending.
+         * Set to `none` for transactions where injecting a compute-budget
+         * instruction can push the message over the size limit.
+         *
+         * Defaults to `estimate`.
+         */
+        resourceLimitEstimation?: ResourceLimitEstimationMode;
     } = {},
 ) {
     return <
@@ -98,6 +108,7 @@ export function rpcTransactionPlanExecutor(
         });
         const estimateResourceLimits = estimateResourceLimitsFactory({ rpc: client.rpc });
         const skipPreflight = config.skipPreflight ?? false;
+        const shouldEstimateResources = shouldEstimateResourceLimits(config.resourceLimitEstimation);
 
         const transactionPlanExecutor = createTransactionPlanExecutor({
             executeTransactionMessage: limitFunction(async (context, transactionMessage, executorConfig) => {
@@ -118,7 +129,7 @@ export function rpcTransactionPlanExecutor(
                     transactionMessage,
                     tx => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, tx),
                     tx => (context.message = tx),
-                    async tx => await estimateAndSetResourceLimits(tx, executorConfig),
+                    async tx => (shouldEstimateResources ? await estimateAndSetResourceLimits(tx, executorConfig) : tx),
                     async tx => (context.message = await tx),
                     async tx => await signTransactionMessageWithSigners(await tx, executorConfig),
                     async tx => (context.transaction = await tx),

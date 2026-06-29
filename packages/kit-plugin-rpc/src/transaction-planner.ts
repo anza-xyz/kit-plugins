@@ -10,6 +10,8 @@ import {
     setTransactionMessageFeePayerSigner,
 } from '@solana/kit';
 
+import { type ResourceLimitEstimationMode, shouldEstimateResourceLimits } from './resource-limit-estimation';
+
 /**
  * A plugin that provides a default transaction planner using RPC.
  *
@@ -39,10 +41,11 @@ export function rpcTransactionPlanner(config: TransactionPlannerConfig = {}) {
     return <T extends ClientWithPayer>(client: T) => {
         const transactionPlanner = createTransactionPlanner({
             createTransactionMessage: () => {
+                const estimateResourceLimits = shouldEstimateResourceLimits(config.resourceLimitEstimation);
                 return pipe(
                     createTransactionMessage({ version: config.version ?? 0 }),
                     tx => setTransactionMessageFeePayerSigner(client.payer, tx),
-                    tx => fillTransactionMessageProvisoryResourceLimits(tx),
+                    tx => (estimateResourceLimits ? fillTransactionMessageProvisoryResourceLimits(tx) : tx),
                     tx =>
                         config.microLamportsPerComputeUnit
                             ? setTransactionMessageComputeUnitPrice(config.microLamportsPerComputeUnit, tx)
@@ -71,6 +74,14 @@ export type TransactionPlannerConfig = {
      * Defaults to using no priority fees.
      */
     microLamportsPerComputeUnit?: MicroLamports;
+    /**
+     * Whether to reserve space for resource limits that the executor can later
+     * estimate and set. Set to `none` for transactions where reserving a
+     * compute-budget instruction can push the message over the size limit.
+     *
+     * Defaults to `estimate`.
+     */
+    resourceLimitEstimation?: ResourceLimitEstimationMode;
     /**
      * The transaction message version to use when creating transaction messages.
      * Defaults to version 0.

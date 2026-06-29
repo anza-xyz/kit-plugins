@@ -1,4 +1,16 @@
-import { createClient, createSolanaRpc, createSolanaRpcSubscriptions, mainnet, TransactionSigner } from '@solana/kit';
+import {
+    Address,
+    createClient,
+    createSolanaRpc,
+    createSolanaRpcSubscriptions,
+    generateKeyPairSigner,
+    getTransactionMessageComputeUnitLimit,
+    mainnet,
+    singleInstructionPlan,
+    SingleTransactionPlan,
+    TransactionMessage,
+    TransactionSigner,
+} from '@solana/kit';
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 import {
@@ -12,6 +24,10 @@ import {
     solanaRpcConnection,
     solanaRpcSubscriptionsConnection,
 } from '../src';
+
+const MOCK_INSTRUCTION = {
+    programAddress: '11111111111111111111111111111111' as Address,
+};
 
 vi.mock('@solana/kit', async () => {
     const actual = await vi.importActual<typeof import('@solana/kit')>('@solana/kit');
@@ -170,6 +186,42 @@ describe('solanaRpc', () => {
                 }),
             );
         expect(client).toHaveProperty('rpcSubscriptions');
+    });
+
+    it('passes resource limit estimation config to the transaction planner', async () => {
+        const payer = await generateKeyPairSigner();
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(
+                solanaRpc({
+                    resourceLimitEstimation: 'none',
+                    rpcUrl: 'https://api.mainnet-beta.solana.com',
+                }),
+            );
+
+        const transactionPlan = (await client.transactionPlanner(
+            singleInstructionPlan(MOCK_INSTRUCTION),
+        )) as SingleTransactionPlan;
+        const message = transactionPlan.message as TransactionMessage & { version: 'legacy' | 0 };
+        expect(getTransactionMessageComputeUnitLimit(message)).toBeUndefined();
+    });
+
+    it('uses resource limit estimation from transactionConfig when no top-level value is provided', async () => {
+        const payer = await generateKeyPairSigner();
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(
+                solanaRpc({
+                    rpcUrl: 'https://api.mainnet-beta.solana.com',
+                    transactionConfig: { resourceLimitEstimation: 'none' },
+                }),
+            );
+
+        const transactionPlan = (await client.transactionPlanner(
+            singleInstructionPlan(MOCK_INSTRUCTION),
+        )) as SingleTransactionPlan;
+        const message = transactionPlan.message as TransactionMessage & { version: 'legacy' | 0 };
+        expect(getTransactionMessageComputeUnitLimit(message)).toBeUndefined();
     });
 });
 

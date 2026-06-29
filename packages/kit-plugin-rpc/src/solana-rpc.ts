@@ -18,6 +18,7 @@ import { planAndSendTransactions } from '@solana/kit-plugin-instruction-plan';
 
 import { rpcAirdrop } from './airdrop';
 import { rpcGetMinimumBalance } from './get-minimum-balance';
+import { type ResourceLimitEstimationMode } from './resource-limit-estimation';
 import { rpcSubscriptionsConnection } from './rpc';
 import { rpcTransactionPlanExecutor } from './transaction-plan-executor';
 import { rpcTransactionPlanner, TransactionPlannerConfig } from './transaction-planner';
@@ -77,6 +78,14 @@ export type SolanaRpcConfig<TClusterUrl extends ClusterUrl = ClusterUrl> = Solan
      */
     skipPreflight?: boolean;
     /**
+     * Whether to reserve, estimate, and set transaction resource limits.
+     * Set to `none` for transactions where automatic compute-budget
+     * instructions can push the message over the size limit.
+     *
+     * Defaults to `estimate`.
+     */
+    resourceLimitEstimation?: ResourceLimitEstimationMode;
+    /**
      * Options to configure how transaction messages are created such as
      * choosing a transaction version or setting priority fees.
      */
@@ -111,15 +120,25 @@ export type SolanaRpcConfig<TClusterUrl extends ClusterUrl = ClusterUrl> = Solan
  * @see {@link solanaLocalRpc}
  */
 export function solanaRpc<TClusterUrl extends ClusterUrl>(config: SolanaRpcConfig<TClusterUrl>) {
-    return <T extends ClientWithPayer>(client: T) =>
-        pipe(
+    return <T extends ClientWithPayer>(client: T) => {
+        const resourceLimitEstimation =
+            config.resourceLimitEstimation ?? config.transactionConfig?.resourceLimitEstimation;
+        return pipe(
             client,
             solanaRpcConnection<TClusterUrl>(config),
             rpcGetMinimumBalance(),
-            rpcTransactionPlanner(config.transactionConfig),
-            rpcTransactionPlanExecutor({ maxConcurrency: config.maxConcurrency, skipPreflight: config.skipPreflight }),
+            rpcTransactionPlanner({
+                ...config.transactionConfig,
+                resourceLimitEstimation,
+            }),
+            rpcTransactionPlanExecutor({
+                maxConcurrency: config.maxConcurrency,
+                resourceLimitEstimation,
+                skipPreflight: config.skipPreflight,
+            }),
             planAndSendTransactions(),
         );
+    };
 }
 
 /**

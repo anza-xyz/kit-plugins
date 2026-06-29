@@ -3,6 +3,7 @@ import {
     createClient,
     createTransactionMessage,
     generateKeyPairSigner,
+    getTransactionMessageComputeUnitLimit,
     parallelTransactionPlan,
     pipe,
     Rpc,
@@ -100,6 +101,38 @@ describe('rpcTransactionPlanExecutor', () => {
         expect(sendAndConfirmTransaction).toHaveBeenCalledExactlyOnceWith(expect.anything(), {
             commitment: 'confirmed',
             skipPreflight: true,
+        });
+    });
+
+    it('does not estimate or set resource limits when resource limit estimation is disabled', async () => {
+        const payer = await generateKeyPairSigner();
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        const simulateTransaction = vi.fn();
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: simulateTransaction }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
+        const sendAndConfirmTransaction = vi.fn().mockResolvedValue('MockTransactionSignature');
+        (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
+
+        const client = createClient()
+            .use(() => ({ payer, rpc, rpcSubscriptions }))
+            .use(rpcTransactionPlanExecutor({ resourceLimitEstimation: 'none' }));
+
+        const txMessage = setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }));
+        const result = (await client.transactionPlanExecutor(
+            singleTransactionPlan(txMessage),
+        )) as SingleTransactionPlanResult;
+        const updatedMessage = (
+            result.context as { message: Parameters<typeof getTransactionMessageComputeUnitLimit>[0] }
+        ).message;
+
+        expect(simulateTransaction).not.toHaveBeenCalled();
+        expect(getTransactionMessageComputeUnitLimit(updatedMessage)).toBeUndefined();
+        expect(sendAndConfirmTransaction).toHaveBeenCalledExactlyOnceWith(expect.anything(), {
+            commitment: 'confirmed',
+            skipPreflight: false,
         });
     });
 
