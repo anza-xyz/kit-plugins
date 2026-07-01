@@ -55,7 +55,7 @@
         "test:unit": "vitest run"
     },
     "dependencies": {
-        "@solana/wallet-account-signer": "^6.10.0",
+        "@solana/wallet-account-signer": "^7.0.0",
         "@solana/wallet-standard-chains": "^1.1.2",
         "@solana/wallet-standard-features": "^1.4.0",
         "@wallet-standard/app": "^1.1.1",
