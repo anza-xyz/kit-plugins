@@ -105,6 +105,40 @@ const client = createClient()
     const transactionPlanResult = await client.sendTransaction(myInstructionPlan);
     ```
 
+## React hooks
+
+The `@solana/kit-plugin-instruction-plan/react` subpath exposes hooks for planning and
+sending transactions from React components. Install the optional peer dependencies
+(`react` and [`@solana/react`](https://www.npmjs.com/package/@solana/react)) and render your
+tree inside a `ClientProvider` whose client has `planAndSendTransactions()` installed.
+
+| Hook                  | Wraps                     |
+| --------------------- | ------------------------- |
+| `usePlanTransaction`  | `client.planTransaction`  |
+| `usePlanTransactions` | `client.planTransactions` |
+| `useSendTransaction`  | `client.sendTransaction`  |
+| `useSendTransactions` | `client.sendTransactions` |
+
+Each hook asserts at mount that the client has the corresponding function and returns the
+`useAction` result from `@solana/react` (`dispatch`, `dispatchAsync`, `data`, `error`,
+`status`, `isRunning`, `reset`, …). `dispatch`/`dispatchAsync` take the instruction, message,
+instruction plan or transaction plan input; the hook manages the `AbortSignal` internally so
+an in-flight call is aborted when a newer one is dispatched.
+
+```tsx
+import { useSendTransaction } from '@solana/kit-plugin-instruction-plan/react';
+
+function SendButton({ instructionPlan }) {
+    const { dispatch, isRunning, error } = useSendTransaction();
+    return (
+        <button disabled={isRunning} onClick={() => dispatch(instructionPlan)}>
+            {isRunning ? 'Sending…' : 'Send'}
+            {error ? <span role="alert">Failed</span> : null}
+        </button>
+    );
+}
+```
+
 ## Default Planner and Executor Implementations
 
 For ready-to-use transaction planner and executor implementations, see:
