@@ -59,7 +59,7 @@
         "@solana-program/system": "^0.12.2"
     },
     "peerDependencies": {
-        "@solana/kit": "^6.10.0"
+        "@solana/kit": "^7.0.0"
     },
     "browserslist": [
         "supports bigint and not dead",
