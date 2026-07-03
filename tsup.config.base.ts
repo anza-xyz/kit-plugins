@@ -5,12 +5,13 @@ import { Format, Options as TsupConfig } from 'tsup';
 type Platform = 'browser' | 'node' | 'react-native';
 
 type BuildOptions = {
+    entry?: string[];
     format: Format;
     platform: Platform;
 };
 
 export function getBuildConfig(options: BuildOptions): TsupConfig {
-    const { format, platform } = options;
+    const { entry = ['./src/index.ts'], format, platform } = options;
     return {
         define: {
             __BROWSER__: `${platform === 'browser'}`,
@@ -20,7 +21,7 @@ export function getBuildConfig(options: BuildOptions): TsupConfig {
             __TEST__: 'false',
             __VERSION__: `"${env.npm_package_version}"`,
         },
-        entry: [`./src/index.ts`],
+        entry,
         esbuildOptions(options) {
             options.define = {
                 ...options.define,
@@ -48,12 +49,13 @@ export function getBuildConfig(options: BuildOptions): TsupConfig {
     };
 }
 
-export function getPackageBuildConfigs(): TsupConfig[] {
+export function getPackageBuildConfigs(options?: { entry?: string[] }): TsupConfig[] {
+    const { entry } = options ?? {};
     return [
-        getBuildConfig({ format: 'cjs', platform: 'node' }),
-        getBuildConfig({ format: 'esm', platform: 'node' }),
-        getBuildConfig({ format: 'cjs', platform: 'browser' }),
-        getBuildConfig({ format: 'esm', platform: 'browser' }),
-        getBuildConfig({ format: 'esm', platform: 'react-native' }),
+        getBuildConfig({ entry, format: 'cjs', platform: 'node' }),
+        getBuildConfig({ entry, format: 'esm', platform: 'node' }),
+        getBuildConfig({ entry, format: 'cjs', platform: 'browser' }),
+        getBuildConfig({ entry, format: 'esm', platform: 'browser' }),
+        getBuildConfig({ entry, format: 'esm', platform: 'react-native' }),
     ];
 }
