@@ -169,11 +169,54 @@ All wallet state is accessed via `client.wallet.getState()`, which returns a ref
     const output = await client.wallet.signIn(selectedWallet, { domain: window.location.host });
     ```
 
+## React hooks
+
+The `@solana/kit-plugin-wallet/react` subpath exposes hooks for reading wallet state and driving wallet actions from React components. Install the optional peer dependencies (`react` and [`@solana/react`](https://www.npmjs.com/package/@solana/react)) and render your tree inside a `ClientProvider` whose client has a wallet plugin installed.
+
+The **state** hooks subscribe via `useSyncExternalStore`, each to a single slice of `WalletState`, so a component only re-renders when the slice it reads changes:
+
+| Hook                 | Returns                                                        |
+| -------------------- | -------------------------------------------------------------- |
+| `useWalletStatus`    | The current `WalletStatus`.                                    |
+| `useConnectedWallet` | The active connection (`{ account, signer, wallet }`) or null. |
+| `useWallets`         | The discovered wallets for the client's chain.                 |
+
+The **action** hooks wrap the async wallet actions with `useAction` from `@solana/react`, returning its result (`dispatch`, `dispatchAsync`, `data`, `error`, `status`, `isRunning`, `reset`, …). The hook manages the `AbortSignal` internally, so an in-flight call is aborted when a newer one is dispatched:
+
+| Hook               | Wraps                                                                     |
+| ------------------ | ------------------------------------------------------------------------- |
+| `useConnect`       | `client.wallet.connect` — `dispatch(wallet)`                              |
+| `useDisconnect`    | `client.wallet.disconnect` — `dispatch()`                                 |
+| `useSignIn`        | `client.wallet.signIn` — `dispatch(wallet, input)`                        |
+| `useSignMessage`   | `client.wallet.signMessage` — `dispatch(message)`                         |
+| `useSelectAccount` | `client.wallet.selectAccount` — returns the synchronous callback directly |
+
+```tsx
+import { useConnect, useConnectedWallet, useWallets, useWalletStatus } from '@solana/kit-plugin-wallet/react';
+
+function WalletButton() {
+    const status = useWalletStatus();
+    const wallets = useWallets();
+    const connected = useConnectedWallet();
+    const { dispatch: connect, isRunning } = useConnect();
+
+    if (status === 'pending') return null; // avoid flashing UI before auto-reconnect resolves
+
+    if (connected) return <p>Connected: {connected.account.address}</p>;
+
+    return wallets.map(wallet => (
+        <button key={wallet.name} disabled={isRunning} onClick={() => connect(wallet)}>
+            Connect {wallet.name}
+        </button>
+    ));
+}
+```
+
 ## Framework integration
 
 The plugin exposes `subscribe` and `getState` for binding wallet state to any UI framework.
 
-**React** — use `useSyncExternalStore` for concurrent-mode-safe rendering:
+**React** — prefer the ready-made [React hooks](#react-hooks) above; they wrap the pattern below. To bind state manually (e.g. to read the whole snapshot at once), use `useSyncExternalStore` for concurrent-mode-safe rendering:
 
 ```tsx
 import { useSyncExternalStore } from 'react';
