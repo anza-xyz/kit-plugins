@@ -55,7 +55,7 @@
         "@solana/kit-plugin-instruction-plan": "workspace:*"
     },
     "peerDependencies": {
-        "@solana/kit": "^6.10.0"
+        "@solana/kit": "^7.0.0"
     },
     "browserslist": [
         "supports bigint and not dead",
