@@ -289,7 +289,22 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         const signer = tryCreateSigner(account);
         resubscribeToWalletEvents(wallet);
         disconnectingWalletName = null;
-        updateState({ account, connectedWallet: wallet, signer, status: 'connected' });
+        // Reconcile `wallets` alongside the connection: `connect`/`signIn`/silent
+        // reconnect authorize accounts on the underlying wallet, which regenerates
+        // its registry handle. Without rebuilding the list here, `getState().wallets`
+        // would keep the pre-connect handle (empty `.accounts`) until an unrelated
+        // `standard:events change` happened to fire — so consumers reading the
+        // just-connected wallet from `wallets` (e.g. rendering its authorized
+        // accounts) would see it as unconnected. `reconcileWalletList` returns the
+        // existing reference when the visible set is unchanged, keeping the snapshot
+        // churn-free when connect didn't actually add accounts.
+        updateState({
+            account,
+            connectedWallet: wallet,
+            signer,
+            status: 'connected',
+            wallets: reconcileWalletList(),
+        });
         if (options?.persist !== false) {
             persistAccount(account, wallet);
         }
