@@ -101,7 +101,11 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
 
     const listeners = new Set<() => void>();
     const signerListeners = new Set<() => void>();
-    let walletEventsCleanup: (() => void) | null = null;
+    // One `standard:events change` subscription per discovered wallet, keyed by
+    // name (the stable identity; the UiWallet handle regenerates on changes). The
+    // underlying subscription attaches to the raw wallet's events, so it survives
+    // handle regeneration — no need to resubscribe when a wallet's accounts change.
+    const walletEventSubscriptions = new Map<string, () => void>();
     let reconnectCleanup: (() => void) | null = null;
     let userHasSelected = false;
     let connectGeneration = 0;
@@ -154,6 +158,10 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
     function updateState(updates: Partial<WalletStoreState>): void {
         const prev = state;
         state = { ...state, ...updates };
+
+        if (state.wallets !== prev.wallets) {
+            syncWalletEventSubscriptions(state.wallets);
+        }
 
         // Signer subscribers (`subscribeToPayer` / `subscribeToIdentity`) fire
         // only when the observed signer changes.
@@ -227,6 +235,29 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         return next;
     }
 
+    // Reconcile the per-wallet event subscriptions against the current wallet set:
+    // subscribe wallets that just appeared, unsubscribe those that left. Called
+    // whenever `state.wallets` changes reference. Subscribing fires nothing, so
+    // this never causes re-render churn. `wallets` is the already-filtered visible
+    // list, so wallets excluded by chain/feature/`config.filter` are intentionally
+    // never subscribed — a `register` / `unregister` event reconciles them in or
+    // out of the list (and thus in or out of this map) when their eligibility
+    // changes.
+    function syncWalletEventSubscriptions(wallets: readonly UiWallet[]): void {
+        const names = new Set(wallets.map(w => w.name));
+        for (const [name, cleanup] of walletEventSubscriptions) {
+            if (!names.has(name)) {
+                cleanup();
+                walletEventSubscriptions.delete(name);
+            }
+        }
+        for (const w of wallets) {
+            if (!walletEventSubscriptions.has(w.name)) {
+                walletEventSubscriptions.set(w.name, subscribeToWalletEvents(w));
+            }
+        }
+    }
+
     // True if a wallet matching `uiWallet` (by name) is currently registered and
     // passes the filter. Used to re-check membership after an awaited connect /
     // sign-in / silent reconnect resolves: the wallet may have unregistered (or
@@ -253,8 +284,6 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
 
         // If the connected wallet was unregistered, disconnect locally.
         if (state.connectedWallet && !newWallets.some(w => w.name === state.connectedWallet!.name)) {
-            walletEventsCleanup?.();
-            walletEventsCleanup = null;
             updates.connectedWallet = null;
             updates.account = null;
             updates.signer = null;
@@ -272,11 +301,6 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         reconnectCleanup = null;
     }
 
-    function resubscribeToWalletEvents(uiWallet: UiWallet): void {
-        walletEventsCleanup?.();
-        walletEventsCleanup = subscribeToWalletEvents(uiWallet);
-    }
-
     function setConnected(account: UiWalletAccount, wallet: UiWallet, options?: { persist?: boolean }): void {
         // The store may have been disposed while a connect / sign-in / silent
         // reconnect awaited. The `connectGeneration` guard at each call site
@@ -287,7 +311,6 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         // itself connected.
         if (disposed) return;
         const signer = tryCreateSigner(account);
-        resubscribeToWalletEvents(wallet);
         disconnectingWalletName = null;
         // Reconcile `wallets` alongside the connection: `connect`/`signIn`/silent
         // reconnect authorize accounts on the underlying wallet, which regenerates
@@ -319,45 +342,43 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         if (!uiWallet.features.includes(StandardEvents)) {
             return () => {};
         }
-
         const eventsFeature = getWalletFeature(
             uiWallet,
             StandardEvents,
         ) as StandardEventsFeature[typeof StandardEvents];
+        const walletName = uiWallet.name;
 
-        // The handler ignores the changed-property flags (`accounts`, `chains`,
-        // `features`) and instead reconciles the active account against the
-        // refreshed wallet. The signer is derived entirely from the account's
-        // features and chains, and the wallet-ui registry regenerates the
-        // account reference precisely when one of those changes — so the
-        // account reference is the single source of truth for whether the
-        // signer is affected, regardless of which flag the wallet sets.
+        // The handler intentionally ignores the changed-property flags
+        // (`accounts`, `chains`, `features`) the wallet passes and instead
+        // reconciles against the refreshed wallet. The signer is derived
+        // entirely from the active account's features and chains, and the
+        // wallet-ui registry regenerates the account reference precisely when
+        // one of those changes — so the account reference, not the flags, is
+        // the single source of truth for whether the signer is affected. Branch
+        // on the reconciled state below, never on `properties`.
         return eventsFeature.on('change', () => {
-            const refreshed = refreshUiWallet(uiWallet);
+            // Refresh the discovered list so this wallet's (and any others') accounts
+            // are current; `updateState` re-syncs subscriptions for added/removed wallets.
+            const newWallets = reconcileWalletList();
 
-            // If the wallet no longer passes the filter (e.g. it dropped the
-            // configured chain or a required feature), disconnect.
+            // Non-active wallet: reflect its new account/feature state in the list only.
+            if (!state.connectedWallet || state.connectedWallet.name !== walletName) {
+                updateState({ wallets: newWallets });
+                return;
+            }
+
+            // Active wallet: the original reconcile logic, unchanged.
+            const refreshed = refreshUiWallet(state.connectedWallet);
             if (!filterWallet(refreshed)) {
                 disconnectLocally();
                 return;
             }
-
             const result = reconcileActiveAccount(refreshed);
             if (result === null) {
                 disconnectLocally();
                 return;
             }
-
-            // `connectedWallet` is always refreshed so consumers reading
-            // `getState().connected.wallet` see current metadata; the signer
-            // (in `result`) only churns when the active account changed, which
-            // keeps the snapshot referentially stable on no-op change events.
-            // `wallets` is reconciled too: the registry regenerates the wallet
-            // handle on a change, so without this the list entry would keep the
-            // stale handle (`wallets[i] !== connected.wallet`). `reconcileWalletList`
-            // returns the existing reference on a no-op, preserving that stability.
-            updateState({ connectedWallet: refreshed, wallets: reconcileWalletList(), ...result });
-
+            updateState({ connectedWallet: refreshed, wallets: newWallets, ...result });
             if (result.account) {
                 persistAccount(result.account, refreshed);
             }
@@ -506,8 +527,6 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
     }
 
     function disconnectLocally(): void {
-        walletEventsCleanup?.();
-        walletEventsCleanup = null;
         disconnectingWalletName = null;
 
         updateState({
@@ -868,8 +887,10 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             connectGeneration++;
             unsubRegister();
             unsubUnregister();
-            walletEventsCleanup?.();
-            walletEventsCleanup = null;
+            for (const cleanup of walletEventSubscriptions.values()) {
+                cleanup();
+            }
+            walletEventSubscriptions.clear();
             cancelReconnect();
             listeners.clear();
             signerListeners.clear();

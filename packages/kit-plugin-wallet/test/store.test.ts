@@ -11,6 +11,7 @@ import {
     createMockUiWallet,
     createSignerMock,
     disconnectMock,
+    emitWalletChange,
     lateRegisterWallet,
     registerWallet,
     registryListeners,
@@ -18,7 +19,7 @@ import {
     signMessageMock,
     unregisterWallet,
     updateRegisteredWallet,
-    walletEventHandler,
+    walletEventHandlers,
 } from './_setup';
 
 describe.skipIf(__BROWSER__)('store (SSR / non-browser)', () => {
@@ -1668,7 +1669,7 @@ describe.skipIf(!__BROWSER__)('store wallet events (browser)', () => {
         wallet: ReturnType<typeof createMockUiWallet>,
     ) {
         await store.connect(wallet);
-        expect(walletEventHandler).not.toBeNull();
+        expect(walletEventHandlers.has(wallet.name)).toBe(true);
     }
 
     it('disconnects when wallet no longer passes filter after feature change', async () => {
@@ -1695,7 +1696,7 @@ describe.skipIf(!__BROWSER__)('store wallet events (browser)', () => {
                 name: 'TestWallet',
             }),
         );
-        walletEventHandler!({ features: true });
+        emitWalletChange('TestWallet', { features: true });
 
         const state = store.getState();
         expect(state.status).toBe('disconnected');
@@ -1722,7 +1723,7 @@ describe.skipIf(!__BROWSER__)('store wallet events (browser)', () => {
                 name: 'TestWallet',
             }),
         );
-        walletEventHandler!({ chains: true });
+        emitWalletChange('TestWallet', { chains: true });
 
         expect(store.getState().status).toBe('disconnected');
     });
@@ -1752,7 +1753,7 @@ describe.skipIf(!__BROWSER__)('store wallet events (browser)', () => {
                 name: 'TestWallet',
             }),
         );
-        walletEventHandler!({ chains: true });
+        emitWalletChange('TestWallet', { chains: true });
 
         // Still connected, and the signer was recreated for the regenerated account.
         const state = store.getState();
@@ -1781,7 +1782,7 @@ describe.skipIf(!__BROWSER__)('store wallet events (browser)', () => {
                 name: 'TestWallet',
             }),
         );
-        walletEventHandler!({ accounts: true });
+        emitWalletChange('TestWallet', { accounts: true });
 
         const state = store.getState();
         expect(state.status).toBe('connected');
@@ -1802,7 +1803,7 @@ describe.skipIf(!__BROWSER__)('store wallet events (browser)', () => {
         const snapshotBefore = store.getState();
 
         // Trigger accounts change but with same account reference.
-        walletEventHandler!({ accounts: true });
+        emitWalletChange('TestWallet', { accounts: true });
 
         // Snapshot should be stable — no unnecessary state change.
         expect(store.getState()).toBe(snapshotBefore);
@@ -1826,7 +1827,7 @@ describe.skipIf(!__BROWSER__)('store wallet events (browser)', () => {
                 name: 'TestWallet',
             }),
         );
-        walletEventHandler!({ accounts: true });
+        emitWalletChange('TestWallet', { accounts: true });
 
         const state = store.getState();
         expect(state.status).toBe('disconnected');
@@ -1845,7 +1846,7 @@ describe.skipIf(!__BROWSER__)('store wallet events (browser)', () => {
         await connectToWallet(store, mockWallet);
 
         // Trigger feature change — store should stay connected with a valid signer.
-        walletEventHandler!({ features: true });
+        emitWalletChange('TestWallet', { features: true });
 
         const state = store.getState();
         expect(state.status).toBe('connected');
@@ -1869,7 +1870,7 @@ describe.skipIf(!__BROWSER__)('store wallet events (browser)', () => {
         // A change event fires but nothing the signer depends on changed — the
         // registry returns the same account/wallet handles. The snapshot must
         // stay referentially stable and the signer must not be recreated.
-        walletEventHandler!({ features: true });
+        emitWalletChange('TestWallet', { features: true });
 
         expect(store.getState()).toBe(before);
         expect(createSignerMock).not.toHaveBeenCalled();
@@ -1899,7 +1900,7 @@ describe.skipIf(!__BROWSER__)('store wallet events (browser)', () => {
                 name: 'TestWallet',
             }),
         );
-        walletEventHandler!({ features: true });
+        emitWalletChange('TestWallet', { features: true });
 
         const state = store.getState();
         expect(state.status).toBe('connected');
@@ -1928,7 +1929,7 @@ describe.skipIf(!__BROWSER__)('store wallet events (browser)', () => {
                 name: 'TestWallet',
             }),
         );
-        walletEventHandler!({ accounts: true, features: true });
+        emitWalletChange('TestWallet', { accounts: true, features: true });
 
         // Signer should be created for account2 (the new account), not account1.
         expect(store.getState().connected!.account.address).toBe(account2.address);
@@ -1957,7 +1958,7 @@ describe.skipIf(!__BROWSER__)('store wallet events (browser)', () => {
                 name: 'TestWallet',
             }),
         );
-        walletEventHandler!({ accounts: true });
+        emitWalletChange('TestWallet', { accounts: true });
 
         const state = store.getState();
         expect(state.status).toBe('connected');
@@ -1993,7 +1994,7 @@ describe.skipIf(!__BROWSER__)('store wallet events (browser)', () => {
                 name: 'TestWallet',
             }),
         );
-        walletEventHandler!({ features: true });
+        emitWalletChange('TestWallet', { features: true });
 
         const state = store.getState();
         expect(state.status).toBe('disconnected');
@@ -2319,7 +2320,7 @@ describe.skipIf(!__BROWSER__)('store auto-connect (browser)', () => {
         // wallet events after disposal.
         expect(store.getState().status).not.toBe('connected');
         expect(store.getState().connected).toBeNull();
-        expect(walletEventHandler).toBeNull();
+        expect(walletEventHandlers.has('TestWallet')).toBe(false);
     });
 
     it('does not reconnect when disposed during the auto-connect storage read', async () => {
@@ -2346,7 +2347,7 @@ describe.skipIf(!__BROWSER__)('store auto-connect (browser)', () => {
         // subscription, or report itself connected.
         expect(store.getState().status).not.toBe('connected');
         expect(store.getState().connected).toBeNull();
-        expect(walletEventHandler).toBeNull();
+        expect(walletEventHandlers.has('TestWallet')).toBe(false);
         expect(connectMock).not.toHaveBeenCalled();
     });
 });
@@ -2487,5 +2488,84 @@ describe.skipIf(!__BROWSER__)('store late wallet registration (browser)', () => 
 
         expect(store.getState().status).toBe('disconnected');
         expect(storage.getItem('kit-wallet')).toBeNull();
+    });
+});
+
+// -- All-wallets subscription tests -------------------------------------------
+
+describe.skipIf(!__BROWSER__)('store all-wallets subscription (browser)', () => {
+    it("keeps a non-active wallet's accounts live in the discovered list", async () => {
+        const aAccount = createMockAccount('11111111111111111111111111111111');
+        const walletA = createMockUiWallet({ accounts: [aAccount], name: 'WalletA' });
+        const walletB = createMockUiWallet({ accounts: [], name: 'WalletB' });
+        registerWallet(walletA);
+        registerWallet(walletB);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(walletA);
+        expect(store.getState().connected!.wallet.name).toBe('WalletA');
+
+        // WalletB (non-active) authorizes an account and fires its change event.
+        const bAccount = createMockAccount('3JF3sEqM796hk5WFqA6EtmEwJQ9quALszsfJyvXNQKy3');
+        updateRegisteredWallet(createMockUiWallet({ accounts: [bAccount], name: 'WalletB' }));
+        emitWalletChange('WalletB', { accounts: true });
+
+        // Its accounts must be reflected in `wallets` without switching the active
+        // connection — previously this stayed stale (no subscription for non-active).
+        const state = store.getState();
+        expect(state.connected!.wallet.name).toBe('WalletA');
+        const b = state.wallets.find(w => w.name === 'WalletB')!;
+        expect(b.accounts.length).toBe(1);
+    });
+
+    it('subscribes to wallets registered after store creation', () => {
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        expect(store.getState().wallets.length).toBe(0);
+
+        const account = createMockAccount();
+        lateRegisterWallet(createMockUiWallet({ accounts: [account], name: 'LateWallet' }));
+
+        // A change from the late-registered wallet is observed (it got subscribed).
+        const more = createMockAccount('4Ss5JMkXAD9Z7cktFEdrqeMuT6jGMF1pVozTyPHZ6zT4');
+        updateRegisteredWallet(createMockUiWallet({ accounts: [account, more], name: 'LateWallet' }));
+        emitWalletChange('LateWallet', { accounts: true });
+        expect(store.getState().wallets.find(w => w.name === 'LateWallet')!.accounts.length).toBe(2);
+    });
+
+    it('unsubscribes a wallet when it unregisters', () => {
+        const wallet = createMockUiWallet({ accounts: [createMockAccount()], name: 'Gone' });
+        registerWallet(wallet);
+        createWalletStore({ chain: 'solana:mainnet', storage: null });
+        expect(walletEventHandlers.has('Gone')).toBe(true);
+        unregisterWallet(wallet);
+        expect(walletEventHandlers.has('Gone')).toBe(false);
+    });
+
+    it('tears down all subscriptions on dispose', () => {
+        registerWallet(createMockUiWallet({ accounts: [createMockAccount()], name: 'W1' }));
+        registerWallet(createMockUiWallet({ accounts: [], name: 'W2' }));
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        expect(walletEventHandlers.size).toBe(2);
+        store[Symbol.dispose]();
+        expect(walletEventHandlers.size).toBe(0);
+    });
+
+    it('does not notify listeners for a no-op change on a non-active wallet', async () => {
+        const account = createMockAccount();
+        const walletA = createMockUiWallet({ accounts: [account], name: 'WalletA' });
+        const walletB = createMockUiWallet({
+            accounts: [createMockAccount('5bV6jUfhDHCQVA1WfKBUnXUsboJgoKgkzkKcxr3joew5')],
+            name: 'WalletB',
+        });
+        registerWallet(walletA);
+        registerWallet(walletB);
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(walletA);
+
+        const listener = vi.fn();
+        store.subscribe(listener);
+        // Fire a change that doesn't alter WalletB's visible set (same accounts).
+        emitWalletChange('WalletB', { accounts: true });
+        expect(listener).not.toHaveBeenCalled();
     });
 });
