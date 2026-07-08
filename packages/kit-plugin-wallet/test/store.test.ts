@@ -1,4 +1,8 @@
-import { SOLANA_ERROR__WALLET__NOT_CONNECTED, SolanaError } from '@solana/kit';
+import {
+    SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE,
+    SOLANA_ERROR__WALLET__NOT_CONNECTED,
+    SolanaError,
+} from '@solana/kit';
 import { isWalletStandardError } from '@wallet-standard/errors';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -456,11 +460,14 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         expect(listener).not.toHaveBeenCalled();
     });
 
-    it('selectAccount throws when not connected', () => {
+    it('selectAccount throws for an unauthorized account when not connected', () => {
         const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
         const account = createMockAccount();
         expect(() => store.selectAccount(account)).toThrow(
-            new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'selectAccount' }),
+            new SolanaError(SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE, {
+                account: account.address,
+                operation: 'selectAccount',
+            }),
         );
     });
 
@@ -531,6 +538,16 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
         await store.connect(mockWallet);
 
+        // Register `staleAccount2` as a real (if short-lived) handle for this
+        // address before the wallet regenerates it again as `refreshedAccount2` —
+        // otherwise handle-based resolution has nothing to resolve `staleAccount2`
+        // against (it was never a handle the registry ever handed out).
+        updateRegisteredWallet(
+            createMockUiWallet({
+                accounts: [account1, staleAccount2],
+                name: 'TestWallet',
+            }),
+        );
         updateRegisteredWallet(
             createMockUiWallet({
                 accounts: [account1, refreshedAccount2],
@@ -1593,7 +1610,9 @@ describe.skipIf(!__BROWSER__)('store action abort signals (browser)', () => {
 
         // disconnect bails before calling the wallet's disconnect feature, so the
         // existing connection is left untouched.
-        await expect(store.disconnect({ abortSignal: controller.signal })).rejects.toThrow('aborted by caller');
+        await expect(store.disconnect(undefined, { abortSignal: controller.signal })).rejects.toThrow(
+            'aborted by caller',
+        );
         expect(disconnectMock).not.toHaveBeenCalled();
         expect(store.getState().status).toBe('connected');
     });
@@ -2567,5 +2586,379 @@ describe.skipIf(!__BROWSER__)('store all-wallets subscription (browser)', () => 
         // Fire a change that doesn't alter WalletB's visible set (same accounts).
         emitWalletChange('WalletB', { accounts: true });
         expect(listener).not.toHaveBeenCalled();
+    });
+});
+
+describe.skipIf(!__BROWSER__)('store selectAccount cross-wallet (browser)', () => {
+    it('switches the active connection to an account of another authorized wallet', async () => {
+        const aAccount = createMockAccount('11111111111111111111111111111111');
+        const bAccount = createMockAccount('3JF3sEqM796hk5WFqA6EtmEwJQ9quALszsfJyvXNQKy3');
+        const walletA = createMockUiWallet({ accounts: [aAccount], name: 'WalletA' });
+        const walletB = createMockUiWallet({ accounts: [bAccount], name: 'WalletB' });
+        registerWallet(walletA);
+        registerWallet(walletB);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(walletA);
+        connectMock.mockClear();
+
+        store.selectAccount(bAccount);
+
+        const state = store.getState();
+        expect(state.connected!.wallet.name).toBe('WalletB');
+        expect(state.connected!.account.address).toBe(bAccount.address);
+        expect(connectMock).not.toHaveBeenCalled(); // synchronous switch, no prompt
+        // WalletA stays authorized in the discovered list.
+        expect(state.wallets.find(w => w.name === 'WalletA')!.accounts.length).toBe(1);
+    });
+
+    it('resolves the owning wallet by account handle, not address', async () => {
+        // Same address authorized in two different wallets — distinct handles.
+        const shared = '4Ss5JMkXAD9Z7cktFEdrqeMuT6jGMF1pVozTyPHZ6zT4';
+        const aAccount = createMockAccount(shared);
+        const bAccount = createMockAccount(shared);
+        const walletA = createMockUiWallet({ accounts: [aAccount], name: 'WalletA' });
+        const walletB = createMockUiWallet({ accounts: [bAccount], name: 'WalletB' });
+        registerWallet(walletA);
+        registerWallet(walletB);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(walletA);
+
+        store.selectAccount(bAccount);
+        expect(store.getState().connected!.wallet.name).toBe('WalletB');
+    });
+
+    it('throws ACCOUNT_NOT_AVAILABLE for an account whose wallet is not authorized', async () => {
+        const walletA = createMockUiWallet({
+            accounts: [createMockAccount('11111111111111111111111111111111')],
+            name: 'WalletA',
+        });
+        registerWallet(walletA);
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(walletA);
+
+        // An account handle never registered in the store.
+        const orphan = createMockAccount('5bV6jUfhDHCQVA1WfKBUnXUsboJgoKgkzkKcxr3joew5');
+        expect(() => store.selectAccount(orphan)).toThrow(
+            new SolanaError(SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE, {
+                account: orphan.address,
+                operation: 'selectAccount',
+            }),
+        );
+    });
+
+    it('still selects within the connected wallet', async () => {
+        const a1 = createMockAccount('11111111111111111111111111111111');
+        const a2 = createMockAccount('3JF3sEqM796hk5WFqA6EtmEwJQ9quALszsfJyvXNQKy3');
+        const walletA = createMockUiWallet({ accounts: [a1, a2], name: 'WalletA' });
+        registerWallet(walletA);
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(walletA);
+
+        store.selectAccount(a2);
+        expect(store.getState().connected!.account.address).toBe(a2.address);
+    });
+
+    it('adopts a connection when selecting an authorized account while disconnected', () => {
+        // No prior connect: status is 'disconnected', but WalletA is discovered
+        // and authorized. The old `if (!state.connectedWallet) throw NOT_CONNECTED`
+        // guard is gone, so this is a valid synchronous adopt (no reconnect prompt).
+        const aAccount = createMockAccount('11111111111111111111111111111111');
+        const walletA = createMockUiWallet({ accounts: [aAccount], name: 'WalletA' });
+        registerWallet(walletA);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        expect(store.getState().status).toBe('disconnected');
+
+        store.selectAccount(aAccount);
+
+        const state = store.getState();
+        expect(state.status).toBe('connected');
+        expect(state.connected!.wallet.name).toBe('WalletA');
+        expect(state.connected!.account.address).toBe(aAccount.address);
+        expect(connectMock).not.toHaveBeenCalled(); // synchronous adopt, no prompt
+    });
+});
+
+describe.skipIf(!__BROWSER__)('store disconnect targeting (browser)', () => {
+    it('disconnects a non-active wallet without touching the active connection', async () => {
+        const aAccount = createMockAccount('11111111111111111111111111111111');
+        const bAccount = createMockAccount('3JF3sEqM796hk5WFqA6EtmEwJQ9quALszsfJyvXNQKy3');
+        const walletA = createMockUiWallet({
+            accounts: [aAccount],
+            features: ['standard:connect', 'standard:disconnect', 'standard:events'],
+            name: 'WalletA',
+        });
+        const walletB = createMockUiWallet({
+            accounts: [bAccount],
+            features: ['standard:connect', 'standard:disconnect', 'standard:events'],
+            name: 'WalletB',
+        });
+        registerWallet(walletA);
+        registerWallet(walletB);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(walletA); // A is active
+
+        // Disconnecting B empties its accounts on the underlying wallet.
+        disconnectMock.mockImplementationOnce(() => {
+            updateRegisteredWallet(
+                createMockUiWallet({
+                    accounts: [],
+                    features: ['standard:connect', 'standard:disconnect', 'standard:events'],
+                    name: 'WalletB',
+                }),
+            );
+            return Promise.resolve();
+        });
+
+        await store.disconnect(walletB);
+
+        const state = store.getState();
+        expect(disconnectMock).toHaveBeenCalledTimes(1);
+        expect(state.status).toBe('connected'); // A untouched
+        expect(state.connected!.wallet.name).toBe('WalletA');
+        expect(state.wallets.find(w => w.name === 'WalletB')!.accounts.length).toBe(0);
+    });
+
+    it('disconnect() with no argument still disconnects the active wallet', async () => {
+        const walletA = createMockUiWallet({
+            accounts: [createMockAccount()],
+            features: ['standard:connect', 'standard:disconnect', 'standard:events'],
+            name: 'WalletA',
+        });
+        registerWallet(walletA);
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(walletA);
+
+        await store.disconnect();
+        expect(store.getState().status).toBe('disconnected');
+        expect(store.getState().connected).toBeNull();
+    });
+
+    it('disconnect(activeWallet) behaves like disconnect()', async () => {
+        const walletA = createMockUiWallet({
+            accounts: [createMockAccount()],
+            features: ['standard:connect', 'standard:disconnect', 'standard:events'],
+            name: 'WalletA',
+        });
+        registerWallet(walletA);
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(walletA);
+        const active = store.getState().connected!.wallet;
+
+        await store.disconnect(active);
+        expect(store.getState().status).toBe('disconnected');
+        expect(store.getState().connected).toBeNull();
+    });
+
+    it('is a no-op for a non-active wallet lacking standard:disconnect', async () => {
+        const walletA = createMockUiWallet({
+            accounts: [createMockAccount('11111111111111111111111111111111')],
+            features: ['standard:connect', 'standard:disconnect', 'standard:events'],
+            name: 'WalletA',
+        });
+        const walletB = createMockUiWallet({
+            accounts: [createMockAccount('3JF3sEqM796hk5WFqA6EtmEwJQ9quALszsfJyvXNQKy3')],
+            features: ['standard:connect', 'standard:events'], // no disconnect
+            name: 'WalletB',
+        });
+        registerWallet(walletA);
+        registerWallet(walletB);
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(walletA);
+
+        await store.disconnect(walletB);
+        expect(disconnectMock).not.toHaveBeenCalled();
+        expect(store.getState().connected!.wallet.name).toBe('WalletA');
+    });
+
+    it('does not re-subscribe wallet events when disposed during an in-flight non-active disconnect', async () => {
+        const walletA = createMockUiWallet({
+            accounts: [createMockAccount('11111111111111111111111111111111')],
+            features: ['standard:connect', 'standard:disconnect', 'standard:events'],
+            name: 'WalletA',
+        });
+        const walletB = createMockUiWallet({
+            accounts: [createMockAccount('3JF3sEqM796hk5WFqA6EtmEwJQ9quALszsfJyvXNQKy3')],
+            features: ['standard:connect', 'standard:disconnect', 'standard:events'],
+            name: 'WalletB',
+        });
+        registerWallet(walletA);
+        registerWallet(walletB);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(walletA); // A active; both A and B subscribed
+        expect(walletEventHandlers.size).toBe(2);
+
+        // B's disconnect hangs until we resolve the gate, then empties B's accounts
+        // — regenerating B's handle so the `finally`'s `reconcileWalletList` returns
+        // a fresh array (which would otherwise re-run `syncWalletEventSubscriptions`).
+        const gate = Promise.withResolvers<void>();
+        disconnectMock.mockImplementationOnce(() =>
+            gate.promise.then(() => {
+                updateRegisteredWallet(
+                    createMockUiWallet({
+                        accounts: [],
+                        features: ['standard:connect', 'standard:disconnect', 'standard:events'],
+                        name: 'WalletB',
+                    }),
+                );
+            }),
+        );
+
+        const pending = store.disconnect(walletB); // suspends at the awaited disconnect
+        store[Symbol.dispose](); // dispose mid-await tears down every subscription
+        expect(walletEventHandlers.size).toBe(0);
+
+        gate.resolve();
+        await pending; // finally runs — must not re-subscribe into the cleared map
+
+        expect(walletEventHandlers.size).toBe(0);
+    });
+
+    it('rejects a targeted non-active disconnect with the signal reason and mutates nothing when already aborted', async () => {
+        const aAccount = createMockAccount('11111111111111111111111111111111');
+        const bAccount = createMockAccount('3JF3sEqM796hk5WFqA6EtmEwJQ9quALszsfJyvXNQKy3');
+        const walletA = createMockUiWallet({
+            accounts: [aAccount],
+            features: ['standard:connect', 'standard:disconnect', 'standard:events'],
+            name: 'WalletA',
+        });
+        const walletB = createMockUiWallet({
+            accounts: [bAccount],
+            features: ['standard:connect', 'standard:disconnect', 'standard:events'],
+            name: 'WalletB',
+        });
+        registerWallet(walletA);
+        registerWallet(walletB);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(walletA); // A is active
+
+        const controller = new AbortController();
+        controller.abort(new Error('aborted by caller'));
+
+        // The pre-await throwIfAborted() is the first thing disconnect does, so the
+        // non-active branch bails before invoking the wallet's disconnect feature or
+        // marking B as the wallet mid-disconnect.
+        await expect(store.disconnect(walletB, { abortSignal: controller.signal })).rejects.toThrow(
+            'aborted by caller',
+        );
+        expect(disconnectMock).not.toHaveBeenCalled();
+
+        // No `disconnectingWalletName` mutation leaked: selecting into B still
+        // succeeds. Had the abort fired after marking B mid-disconnect, this would
+        // throw NOT_CONNECTED via selectAccount's mid-disconnect guard.
+        store.selectAccount(bAccount);
+        expect(store.getState().connected!.wallet.name).toBe('WalletB');
+    });
+
+    it('does not cancel a pending reconnect when disconnecting a non-active wallet', async () => {
+        vi.useFakeTimers();
+
+        const savedAccount = createMockAccount('11111111111111111111111111111111');
+        const otherAccount = createMockAccount('3JF3sEqM796hk5WFqA6EtmEwJQ9quALszsfJyvXNQKy3');
+        // The saved wallet is never registered, so the store stays parked in the
+        // reconnect-wait path. A different wallet is authorized alongside it.
+        const otherWallet = createMockUiWallet({
+            accounts: [otherAccount],
+            features: ['standard:connect', 'standard:disconnect', 'standard:events'],
+            name: 'OtherWallet',
+        });
+        registerWallet(otherWallet);
+
+        const storage = createMockStorage({ 'kit-wallet': `SavedWallet:${savedAccount.address}` });
+        const store = createWalletStore({ chain: 'solana:mainnet', storage });
+
+        await vi.advanceTimersByTimeAsync(0);
+        expect(store.getState().status).toBe('reconnecting');
+
+        // Only a no-target disconnect() cancels the pending reconnect. A targeted
+        // disconnect of some other authorized wallet must leave it armed.
+        await store.disconnect(otherWallet);
+        expect(disconnectMock).toHaveBeenCalledTimes(1);
+        expect(store.getState().status).toBe('reconnecting');
+
+        // Prove the reconnect listener genuinely survived: the saved wallet
+        // registering late still triggers the silent reconnect. Were a refactor
+        // to "tidy up" by calling cancelReconnect() here, this register would go
+        // unheard and the store would never leave 'reconnecting'.
+        lateRegisterWallet(createMockUiWallet({ accounts: [savedAccount], name: 'SavedWallet' }));
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(store.getState().status).toBe('connected');
+        expect(store.getState().connected!.wallet.name).toBe('SavedWallet');
+
+        vi.useRealTimers();
+    });
+
+    it('selectAccount on the active account throws while that wallet is mid-disconnect', async () => {
+        const aAccount = createMockAccount('11111111111111111111111111111111');
+        const walletA = createMockUiWallet({
+            accounts: [aAccount],
+            features: ['standard:connect', 'standard:disconnect', 'standard:events'],
+            name: 'WalletA',
+        });
+        registerWallet(walletA);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(walletA);
+
+        // Hold the wallet-side disconnect pending so WalletA stays marked mid-disconnect.
+        const pendingDisconnect = Promise.withResolvers<void>();
+        disconnectMock.mockReturnValueOnce(pendingDisconnect.promise);
+        const disconnectPromise = store.disconnect(); // active disconnect
+        expect(store.getState().status).toBe('disconnecting');
+
+        // Re-selecting the very account being torn down must reject via the
+        // mid-disconnect guard rather than slip through selectAccount's
+        // same-account no-op fast path. This is the one selectAccount path that
+        // still surfaces NOT_CONNECTED instead of ACCOUNT_NOT_AVAILABLE.
+        expect(() => store.selectAccount(aAccount)).toThrow(
+            new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'selectAccount' }),
+        );
+
+        pendingDisconnect.resolve();
+        await disconnectPromise;
+    });
+
+    it('selectAccount into a non-active wallet throws while that wallet is mid-disconnect', async () => {
+        const aAccount = createMockAccount('11111111111111111111111111111111');
+        const bAccount = createMockAccount('3JF3sEqM796hk5WFqA6EtmEwJQ9quALszsfJyvXNQKy3');
+        const walletA = createMockUiWallet({
+            accounts: [aAccount],
+            features: ['standard:connect', 'standard:disconnect', 'standard:events'],
+            name: 'WalletA',
+        });
+        const walletB = createMockUiWallet({
+            accounts: [bAccount],
+            features: ['standard:connect', 'standard:disconnect', 'standard:events'],
+            name: 'WalletB',
+        });
+        registerWallet(walletA);
+        registerWallet(walletB);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(walletA); // A active, B authorized but non-active
+
+        // Hold B's disconnect pending so B is marked mid-disconnect while A stays live.
+        const pendingDisconnect = Promise.withResolvers<void>();
+        disconnectMock.mockReturnValueOnce(pendingDisconnect.promise);
+        const disconnectPromise = store.disconnect(walletB);
+
+        // Switching into an account of the wallet being deauthorized must reject.
+        // The guard keys off the owner derived from the account handle (B), not the
+        // active connection (A) — so this throws even though A is what's connected.
+        expect(() => store.selectAccount(bAccount)).toThrow(
+            new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'selectAccount' }),
+        );
+
+        // A was never touched by the rejected switch.
+        expect(store.getState().connected!.wallet.name).toBe('WalletA');
+
+        pendingDisconnect.resolve();
+        await disconnectPromise;
     });
 });

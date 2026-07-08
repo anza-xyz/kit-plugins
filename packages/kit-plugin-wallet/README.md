@@ -149,9 +149,9 @@ All wallet state is accessed via `client.wallet.getState()`, which returns a ref
     }
     ```
 
-- **`disconnect()`** — Disconnect the active wallet.
+- **`disconnect(wallet?)`** — Disconnects an authorized wallet. If `wallet` is not provided, disconnects the active wallet.
 
-- **`selectAccount(account)`** — Switch to a different account within an already-authorized wallet without reconnecting.
+- **`selectAccount(account)`** — Switch to a different account within any already-authorized wallet without reconnecting.
 
     ```ts
     client.wallet.selectAccount(accounts[0]);

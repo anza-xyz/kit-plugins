@@ -477,17 +477,14 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         }
     }
 
-    async function disconnect(options?: WalletActionOptions): Promise<void> {
+    async function disconnect(wallet?: UiWallet, options?: WalletActionOptions): Promise<void> {
         options?.abortSignal?.throwIfAborted();
 
-        // No connected wallet, but an auto-reconnect may still be in flight:
-        // during 'reconnecting' a silent reconnect or the late-registration
-        // listener can complete and connect, overriding this explicit
-        // disconnect. Record the user's intent so auto-connect won't re-arm,
-        // tear down the late-registration listener, and bump the generation so
-        // any in-flight connect/signIn/silent-reconnect bails at its guard
-        // instead of resuming.
-        if (!state.connectedWallet) {
+        const target = wallet ?? state.connectedWallet;
+
+        // Nothing to disconnect (no arg, nothing active): cancel any pending reconnect, and
+        // supersede in-flight attempts.
+        if (!target) {
             userHasSelected = true;
             cancelReconnect();
             connectGeneration++;
@@ -496,32 +493,63 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             return;
         }
 
-        const currentWallet = state.connectedWallet;
-        // Bump the generation so this disconnect supersedes any connect/signIn
-        // that was already in flight (its prompt opened before the user chose to
-        // disconnect): that attempt captured an earlier generation, so it will
-        // bail at its guard rather than establishing a connection the user has
-        // since dismissed. Mirrors the not-connected branch above — newest action
-        // wins. A connect/signIn started *after* this disconnect bumps the
-        // generation again, so the `finally` guard skips `disconnectLocally` and
-        // leaves the newer connection intact.
-        const generation = ++connectGeneration;
-        // Mark this wallet as disconnecting
-        disconnectingWalletName = currentWallet.name;
-        updateState({ status: 'disconnecting' });
+        const isActive = state.connectedWallet != null && state.connectedWallet.name === target.name;
 
-        try {
-            if (currentWallet.features.includes(StandardDisconnect)) {
-                const disconnectFeature = getWalletFeature(
-                    currentWallet,
-                    StandardDisconnect,
-                ) as StandardDisconnectFeature[typeof StandardDisconnect];
-                await disconnectFeature.disconnect();
+        if (isActive) {
+            const currentWallet = state.connectedWallet!;
+            // Bump generation so this disconnect supersedes any in-flight connect/signIn.
+            const generation = ++connectGeneration;
+            disconnectingWalletName = currentWallet.name;
+            updateState({ status: 'disconnecting' });
+            try {
+                if (currentWallet.features.includes(StandardDisconnect)) {
+                    const disconnectFeature = getWalletFeature(
+                        currentWallet,
+                        StandardDisconnect,
+                    ) as StandardDisconnectFeature[typeof StandardDisconnect];
+                    await disconnectFeature.disconnect();
+                }
+            } finally {
+                if (generation === connectGeneration) {
+                    disconnectLocally();
+                }
             }
+            return;
+        }
+
+        // targeted disconnect but wallet gone: leave the active connection, status,
+        // and persisted key untouched.
+        if (!isWalletStillAvailable(target)) {
+            return; // already gone / not authorized — forgiving no-op
+        }
+        const refreshedTarget = refreshUiWallet(target);
+        if (!refreshedTarget.features.includes(StandardDisconnect)) {
+            return; // can't deauthorize without standard:disconnect — no-op
+        }
+        // Guard against a concurrent select/connect into this wallet for the await;
+        // restore the prior marker afterward (it may belong to an active disconnect).
+        const prevDisconnecting = disconnectingWalletName;
+        disconnectingWalletName = refreshedTarget.name;
+        try {
+            const disconnectFeature = getWalletFeature(
+                refreshedTarget,
+                StandardDisconnect,
+            ) as StandardDisconnectFeature[typeof StandardDisconnect];
+            await disconnectFeature.disconnect();
         } finally {
-            // Only clean up if no new connect/signIn started while we were awaiting.
-            if (generation === connectGeneration) {
-                disconnectLocally();
+            if (disconnectingWalletName === refreshedTarget.name) {
+                disconnectingWalletName = prevDisconnecting;
+            }
+            // Reflect the now-empty accounts immediately — but only if the store
+            // is still live. If it was disposed while `standard:disconnect`
+            // awaited, the disposer has already torn down every wallet-event
+            // subscription and cleared the map; deauthorizing the target
+            // regenerated its handle, so `reconcileWalletList` returns a fresh
+            // array, and letting `updateState` run here would re-invoke
+            // `syncWalletEventSubscriptions` and re-subscribe every wallet into
+            // the cleared map — listeners the disposer can no longer clean up.
+            if (!disposed) {
+                updateState({ wallets: reconcileWalletList() });
             }
         }
     }
@@ -566,14 +594,34 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
     }
 
     function selectAccount(account: UiWalletAccount): void {
-        if (!state.connectedWallet) {
+        // Derive the owning wallet from the account handle. `getWalletForHandle`
+        // keys a WeakMap on handle identity, so this is unambiguous even when the
+        // same address is authorized in two wallets. A stale/unregistered handle
+        // throws — surface it as ACCOUNT_NOT_AVAILABLE.
+        let owner: UiWallet;
+        try {
+            owner = getOrCreateUiWalletForStandardWallet(getWalletForHandle(account));
+        } catch {
+            throw new SolanaError(SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE, {
+                account: account.address,
+                operation: 'selectAccount',
+            });
+        }
+
+        // The owner must be currently authorized (discovered + passes the filter).
+        if (!isWalletStillAvailable(owner)) {
+            throw new SolanaError(SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE, {
+                account: account.address,
+                operation: 'selectAccount',
+            });
+        }
+
+        // Reject selecting into a wallet that is mid-disconnect.
+        if (owner.name === disconnectingWalletName) {
             throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'selectAccount' });
         }
-        // Reject if this wallet is disconnecting
-        if (state.connectedWallet.name === disconnectingWalletName) {
-            throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'selectAccount' });
-        }
-        const refreshed = refreshUiWallet(state.connectedWallet);
+
+        const refreshed = refreshUiWallet(owner);
         const selectedAccount = refreshed.accounts.find(a => a.address === account.address);
         if (!selectedAccount) {
             throw new SolanaError(SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE, {
@@ -581,16 +629,20 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
                 operation: 'selectAccount',
             });
         }
+
         userHasSelected = true;
-        // Bump the generation so this selection supersedes any in-flight
-        // connect/signIn
+        // Supersede any in-flight connect/signIn.
         ++connectGeneration;
-        // Change status back to `connected` if something in-flight changed it
-        // But skip recreating the signer if account is the same as before
+
+        // No-op fast path: the same account is already active.
         if (selectedAccount === state.account && refreshed === state.connectedWallet) {
             updateState({ status: 'connected' });
             return;
         }
+
+        // Switch the active connection (owner may differ from the current one). The
+        // previously-active wallet is left authorized — we never disconnect it. Its
+        // event subscription persists, so switching back stays live.
         const signer = tryCreateSigner(selectedAccount);
         updateState({ account: selectedAccount, connectedWallet: refreshed, signer, status: 'connected' });
         persistAccount(selectedAccount, refreshed);
