@@ -151,8 +151,8 @@ importers:
         specifier: workspace:*
         version: link:../kit-plugin-instruction-plan
       litesvm:
-        specifier: ^1.2.0
-        version: 1.2.0(typescript@7.0.2)
+        specifier: ^1.2.1
+        version: 1.2.1(typescript@7.0.2)
     devDependencies:
       '@solana-program/system':
         specifier: ^0.12.2
@@ -2126,44 +2126,44 @@ packages:
   lines-and-columns@1.2.4:
     resolution: {integrity: sha512-7ylylesZQ/PV29jhEDl3Ufjo6ZX7gCqJr5F7PKrqc93v7fzSymt1BpwEU8nAUXs8qzzvqhbjhK5QZg6Mt/HkBg==}
 
-  litesvm-darwin-arm64@1.2.0:
-    resolution: {integrity: sha512-gI4oPp/aNY/OAFce70gKmiGHZHq0WJV6GT/o55ixztsvCBTPJ0njITUDcYuViGds9riUGfHGWxNca9Uwu0QL7A==}
+  litesvm-darwin-arm64@1.2.1:
+    resolution: {integrity: sha512-Ws6xkcKOOu5qY67dFG/bUm9HvPe2YoP7/or/FWESeU0hUj7756Z7+Y02zeGmGitGMm+A7rBPNfuPROnUz/+CQg==}
     engines: {node: '>= 20'}
     cpu: [arm64]
     os: [darwin]
 
-  litesvm-darwin-x64@1.2.0:
-    resolution: {integrity: sha512-XeIgtWLKM4TKk/1uNU8BnTd9XiQBVkZMz10Jg183wrgaC2a/iiFBmg9Kt3CQfHdr8XY4Q+cpvrT47olftL6wjA==}
+  litesvm-darwin-x64@1.2.1:
+    resolution: {integrity: sha512-V/rBwLnUdIXEGIBbjyVm5WjcVQTQdB0V08mUyOBl6in4PHj8d81nWK2L4DE58dulEkV40oNmXkeuX3lBTaVilQ==}
     engines: {node: '>= 20'}
     cpu: [x64]
     os: [darwin]
 
-  litesvm-linux-arm64-gnu@1.2.0:
-    resolution: {integrity: sha512-gy9AK/0C0xc4socBeE4udgooOn7v5lLAeTNz48Kv6D0p1m+aDbvo6a8hgpX6im3nJxwSlHTxW3KOcMAoIP1/6g==}
+  litesvm-linux-arm64-gnu@1.2.1:
+    resolution: {integrity: sha512-RxSjDrseyVmWrNqu44b8xb3V7cVV1PCUarRGS3WaEawt1YduDVuyk8T/G12N8c7XptSjoxSjH+Xdhm7bbbLgNw==}
     engines: {node: '>= 20'}
     cpu: [arm64]
     os: [linux]
 
-  litesvm-linux-arm64-musl@1.2.0:
-    resolution: {integrity: sha512-2v+OdqT1qm1S+n1NBagR7zWcnWOsyR8ZpNdD0vXO/91Uc/2VN0JT25wPdri5bmhtUrv2ad7LaNkdRMlXhHxOjQ==}
+  litesvm-linux-arm64-musl@1.2.1:
+    resolution: {integrity: sha512-HM/Q8D52fLzhaXYoaRWZK/KlhMOgR/hVpM+UgurnD8cVwNB8a6xw+2ucESXsWNSJFidBWySi3Kh6nrUR+ICHCw==}
     engines: {node: '>= 20'}
     cpu: [arm64]
     os: [linux]
 
-  litesvm-linux-x64-gnu@1.2.0:
-    resolution: {integrity: sha512-UO5EOJRy90Sb0864iDtqedN5ctXaIp1eM8w+bVx+EwLIVIESR6R3VZseUjj3cRLyhZpe4lCbrzz37GdGHXgRYQ==}
+  litesvm-linux-x64-gnu@1.2.1:
+    resolution: {integrity: sha512-ZkmdoGRhhPvNSAOQ1gzHshjf30Iq68g81Am1YTbbQyu8mGt054OtZBJKkH7fLUXZlNz8L9azUVG3LAjp3XIixw==}
     engines: {node: '>= 20'}
     cpu: [x64]
     os: [linux]
 
-  litesvm-linux-x64-musl@1.2.0:
-    resolution: {integrity: sha512-Ysdi9IzhXAYkQtrqejGryt1nzIqzBXLGgv/sfyVXJLiDfRsaVW03Dn+FYHmm2kMSchNP2XAAwO1ymYN14xJPvg==}
+  litesvm-linux-x64-musl@1.2.1:
+    resolution: {integrity: sha512-Sdtle1h+Ij1LDqs5Uz7m6ug1Jo3ViXYS4YTXacQE9mNxtr/3bbl+4gVYQls0LHvhiXQ0aQXva0cm17gMX1F9+w==}
     engines: {node: '>= 20'}
     cpu: [x64]
     os: [linux]
 
-  litesvm@1.2.0:
-    resolution: {integrity: sha512-r/uGAeSGuCnIa/Aqb4skQDY3/+HXg8UdIHHzIt9u714t+FwL6tk6lj2I65WimQX3Qg3Hzua1ygK1bxkGtQFuwQ==}
+  litesvm@1.2.1:
+    resolution: {integrity: sha512-naz4Orq26cgYl39/FYhz2kCnNN/5BMtc3fdeaWo2Gc2ak5qKKrbD3nf62h+HIYZ3fQ0O2KO0hxAZBqXF4Ncz5w==}
     engines: {node: '>= 20'}
 
   load-tsconfig@0.2.5:
@@ -4335,36 +4335,36 @@ snapshots:
 
   lines-and-columns@1.2.4: {}
 
-  litesvm-darwin-arm64@1.2.0:
+  litesvm-darwin-arm64@1.2.1:
     optional: true
 
-  litesvm-darwin-x64@1.2.0:
+  litesvm-darwin-x64@1.2.1:
     optional: true
 
-  litesvm-linux-arm64-gnu@1.2.0:
+  litesvm-linux-arm64-gnu@1.2.1:
     optional: true
 
-  litesvm-linux-arm64-musl@1.2.0:
+  litesvm-linux-arm64-musl@1.2.1:
     optional: true
 
-  litesvm-linux-x64-gnu@1.2.0:
+  litesvm-linux-x64-gnu@1.2.1:
     optional: true
 
-  litesvm-linux-x64-musl@1.2.0:
+  litesvm-linux-x64-musl@1.2.1:
     optional: true
 
-  litesvm@1.2.0(typescript@7.0.2):
+  litesvm@1.2.1(typescript@7.0.2):
     dependencies:
       '@solana-program/system': 0.12.2(@solana/kit@7.0.0(typescript@7.0.2))
       '@solana-program/token': 0.14.0(@solana/kit@7.0.0(typescript@7.0.2))
       '@solana/kit': 7.0.0(typescript@7.0.2)
     optionalDependencies:
-      litesvm-darwin-arm64: 1.2.0
-      litesvm-darwin-x64: 1.2.0
-      litesvm-linux-arm64-gnu: 1.2.0
-      litesvm-linux-arm64-musl: 1.2.0
-      litesvm-linux-x64-gnu: 1.2.0
-      litesvm-linux-x64-musl: 1.2.0
+      litesvm-darwin-arm64: 1.2.1
+      litesvm-darwin-x64: 1.2.1
+      litesvm-linux-arm64-gnu: 1.2.1
+      litesvm-linux-arm64-musl: 1.2.1
+      litesvm-linux-x64-gnu: 1.2.1
+      litesvm-linux-x64-musl: 1.2.1
     transitivePeerDependencies:
       - bufferutil
       - fastestsmallesttextencoderdecoder
