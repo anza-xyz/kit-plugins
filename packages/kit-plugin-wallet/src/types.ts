@@ -1,4 +1,4 @@
-import type { MessageSigner, SignatureBytes, TransactionSigner } from '@solana/kit';
+import type { MessageSigner, ReadonlyUint8Array, SignatureBytes, TransactionSigner } from '@solana/kit';
 import type { SolanaChain } from '@solana/wallet-standard-chains';
 import type { SolanaSignInInput, SolanaSignInOutput } from '@solana/wallet-standard-features';
 import type { IdentifierString } from '@wallet-standard/base';
@@ -333,7 +333,7 @@ export type WalletNamespace = {
      *   when the action is called. Aborts after the wallet call has been
      *   dispatched do not take effect.
      */
-    signMessage: (message: Uint8Array, options?: WalletActionOptions) => Promise<SignatureBytes>;
+    signMessage: (message: ReadonlyUint8Array, options?: WalletActionOptions) => Promise<SignatureBytes>;
 
     /**
      * Subscribe to any wallet state change. Compatible with React's

@@ -1,4 +1,5 @@
 import {
+    type ReadonlyUint8Array,
     type SignatureBytes,
     SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE,
     SOLANA_ERROR__WALLET__NOT_CONNECTED,
@@ -650,7 +651,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
 
     // -- Message signing ---------------------------------------------------
 
-    async function signMessage(message: Uint8Array, options?: WalletActionOptions): Promise<SignatureBytes> {
+    async function signMessage(message: ReadonlyUint8Array, options?: WalletActionOptions): Promise<SignatureBytes> {
         options?.abortSignal?.throwIfAborted();
         const { connectedWallet, account } = state;
         if (!connectedWallet || !account) {
@@ -667,7 +668,9 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             account,
             SolanaSignMessage,
         ) as SolanaSignMessageFeature[typeof SolanaSignMessage];
-        const [output] = await signMessageFeature.signMessage({ account, message });
+        // The wallet-standard `SolanaSignMessageInput.message` is a mutable `Uint8Array`; signing
+        // only reads the bytes, so coerce the read-only input at this single boundary.
+        const [output] = await signMessageFeature.signMessage({ account, message: message as Uint8Array });
         return output.signature as SignatureBytes;
     }
 
