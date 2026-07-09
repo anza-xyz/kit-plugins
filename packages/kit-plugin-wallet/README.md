@@ -175,11 +175,12 @@ The `@solana/kit-plugin-wallet/react` subpath exposes hooks for reading wallet s
 
 The **state** hooks subscribe via `useSyncExternalStore`, each to a single slice of `WalletState`, so a component only re-renders when the slice it reads changes:
 
-| Hook                 | Returns                                                        |
-| -------------------- | -------------------------------------------------------------- |
-| `useWalletStatus`    | The current `WalletStatus`.                                    |
-| `useConnectedWallet` | The active connection (`{ account, signer, wallet }`) or null. |
-| `useWallets`         | The discovered wallets for the client's chain.                 |
+| Hook                 | Returns                                                                          |
+| -------------------- | -------------------------------------------------------------------------------- |
+| `useWalletStatus`    | The current `WalletStatus`.                                                      |
+| `useConnectedWallet` | The active connection (`{ account, signer, wallet }`) or null.                   |
+| `useWallets`         | The discovered wallets for the client's chain.                                   |
+| `useIsWalletReady`   | `false` while the initial warm-up is in progress (`'pending'`/`'reconnecting'`). |
 
 The **action** hooks wrap the async wallet actions with `useAction` from `@solana/react`, returning its result (`dispatch`, `dispatchAsync`, `data`, `error`, `status`, `isRunning`, `reset`, …). The hook manages the `AbortSignal` internally, so an in-flight call is aborted when a newer one is dispatched:
 
@@ -212,9 +213,63 @@ function WalletButton() {
 }
 ```
 
+### Gating UI on the initial warm-up
+
+A freshly built client runs a silent auto-reconnect on mount, briefly passing through `'pending'` and `'reconnecting'` before it settles. If you render wallet-dependent UI immediately, a persisted wallet flashes "disconnected" for a frame before it reconnects. `useIsWalletReady` reports `false` for the duration of that warm-up and `true` once it settles, so you can hold back the wallet-dependent parts while painting the rest of the app:
+
+```tsx
+import { useIsWalletReady, WalletReadyGate } from '@solana/kit-plugin-wallet/react';
+
+// Hide a whole subtree until the connection settles:
+function App() {
+    return (
+        <WalletReadyGate fallback={<Spinner />}>
+            <WalletDependentUI />
+        </WalletReadyGate>
+    );
+}
+
+// Or read the boolean directly for finer control (e.g. disabling a button):
+function ConnectButton() {
+    const isReady = useIsWalletReady();
+    return <button disabled={!isReady}>Connect</button>;
+}
+```
+
+`WalletReadyGate` is a thin wrapper over `useIsWalletReady`. Its props are shaped like React's `<Suspense fallback>`, but it is synchronous — it renders `fallback` directly off the reactive status rather than suspending, so it needs no `<Suspense>` ancestor. Both gate on the same warm-up set as `whenReady()` below, so they stay in sync — and like `whenReady()`, they ignore user-initiated `'connecting'` / `'disconnecting'`. To genuinely suspend a subtree, throw the Suspense-safe `whenReady()` promise from your own component instead.
+
+### Advanced: seamless client swaps with `whenReady()`
+
+> Most apps don't need this. It only matters if you **rebuild the client at runtime** — for example, to change chain — since each wallet plugin is bound to a single chain.
+
+Every freshly built client runs a silent auto-reconnect that briefly passes through the `'pending'` and `'reconnecting'` statuses. If you publish the new client as soon as you build it, the UI may flash that reconnecting state on every switch. `client.wallet.whenReady()` returns a promise that resolves once the status has left `'pending'` / `'reconnecting'`, so you can build the new client, wait for it to settle, and only then swap it in — keeping the previous client live until the new one is ready:
+
+```ts
+import { createClient } from '@solana/kit';
+import { walletSigner } from '@solana/kit-plugin-wallet';
+
+// On a chain switch, hold the previous client until the rebuilt one is ready:
+const next = createClient().use(walletSigner({ chain }));
+await next.wallet.whenReady();
+swapInClient(next); // publish `next`, then dispose the client it replaced
+```
+
+`whenReady()` deliberately does **not** wait for user-initiated `connect` / `disconnect` / `signIn` (those pass through `'connecting'` / `'disconnecting'`), so it only ever blocks on the initial warm-up — a normal connect stays interactive.
+
+Disposing a client mid-warm-up settles its status to `'disconnected'` and resolves any pending `whenReady()` promise — a superseded client never leaves an `await` hanging. Check `getState()` after awaiting if you need to tell a ready connection from a disposed (or never-connected) client.
+
 ## Framework integration
 
-The plugin exposes `subscribe` and `getState` for binding wallet state to any UI framework.
+The plugin exposes `subscribe` and `getState` for binding wallet state to any UI framework. To gate UI on the initial auto-reconnect warm-up without React, pass `getState().status` through `isWalletWarmingUp` — the same predicate that backs `whenReady()` and the [React readiness helpers](#gating-ui-on-the-initial-warm-up), so all three stay in sync:
+
+```ts
+import { isWalletWarmingUp } from '@solana/kit-plugin-wallet';
+
+client.wallet.subscribe(() => {
+    const { status } = client.wallet.getState();
+    setLoading(isWalletWarmingUp(status)); // true while 'pending' / 'reconnecting'
+});
+```
 
 **React** — prefer the ready-made [React hooks](#react-hooks) above; they wrap the pattern below. To bind state manually (e.g. to read the whole snapshot at once), use `useSyncExternalStore` for concurrent-mode-safe rendering:
 

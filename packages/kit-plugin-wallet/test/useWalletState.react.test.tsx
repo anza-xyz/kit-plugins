@@ -4,7 +4,7 @@ import type { UiWallet } from '@wallet-standard/ui';
 import { createElement, type ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { useConnectedWallet, useWallets, useWalletStatus } from '../src/react';
+import { useConnectedWallet, useIsWalletReady, useWallets, useWalletStatus } from '../src/react';
 import type { WalletState } from '../src/types';
 
 // Unmount rendered trees between tests. This package doesn't enable vitest
@@ -70,6 +70,35 @@ describe('useConnectedWallet', () => {
         const connected = { account: {}, signer: null, wallet: {} } as WalletState['connected'];
         act(() => store.setState({ ...INITIAL, connected, status: 'connected' }));
         expect(result.current).toBe(connected);
+    });
+});
+
+describe('useIsWalletReady', () => {
+    it('reports readiness and re-renders only when the boolean flips', () => {
+        const store = createFakeStore({ ...INITIAL, status: 'pending' });
+        let renderCount = 0;
+        const { result } = renderHook(
+            () => {
+                renderCount++;
+                return useIsWalletReady();
+            },
+            { wrapper: wrapperFor(store) },
+        );
+
+        expect(result.current).toBe(false);
+        const rendersWhileWarmingUp = renderCount;
+
+        // Still warming up (pending -> reconnecting): the boolean stays `false`, so despite the
+        // status changing the hook must not re-render.
+        act(() => store.setState({ ...INITIAL, status: 'reconnecting' }));
+        expect(result.current).toBe(false);
+        expect(renderCount).toBe(rendersWhileWarmingUp);
+
+        // Warm-up settles (reconnecting -> connected): the boolean flips to `true`, triggering a
+        // single re-render.
+        act(() => store.setState({ ...INITIAL, connected: null, status: 'connected' }));
+        expect(result.current).toBe(true);
+        expect(renderCount).toBe(rendersWhileWarmingUp + 1);
     });
 });
 

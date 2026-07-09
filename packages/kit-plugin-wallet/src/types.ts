@@ -347,6 +347,43 @@ export type WalletNamespace = {
      * ```
      */
     subscribe: (listener: () => void) => () => void;
+
+    /**
+     * **Advanced.** Resolves once the initial connection attempt has settled —
+     * i.e. {@link getState}'s `status` is no longer `'pending'` or
+     * `'reconnecting'`.
+     *
+     * You only need this if your app **rebuilds the client at runtime** (for
+     * example, to change chain). Each freshly built client runs a silent
+     * auto-reconnect that briefly passes through `'pending'`/`'reconnecting'`;
+     * awaiting this lets you hold the previous UI until the new client is ready
+     * instead of flashing a "reconnecting" state on every swap. Most apps never
+     * call it — subscribe to `status` with {@link subscribe} instead.
+     *
+     * Does **not** wait for user-initiated `connect`/`disconnect`/`signIn`
+     * (those pass through `'connecting'`/`'disconnecting'`, which count as
+     * ready), so a normal connect never makes this block. While transient it
+     * returns the **same** promise reference on every call, so successive
+     * awaits during one warm-up share a single settlement.
+     *
+     * Disposing the client mid-warm-up settles the status to `'disconnected'`,
+     * so a pending `whenReady()` resolves rather than hanging. Check
+     * {@link getState} after awaiting if you need to distinguish a ready
+     * connection from a disposed (or never-connected) client.
+     *
+     * @returns A promise that resolves with no value once the wallet is past its
+     *   initial `'pending'`/`'reconnecting'` warm-up. Already resolved when the
+     *   status is not transient.
+     *
+     * @example
+     * ```ts
+     * // On a chain switch, hold the old UI until the rebuilt client is ready:
+     * const next = createClient().use(walletSigner({ chain }));
+     * await next.wallet.whenReady();
+     * setClient(next);
+     * ```
+     */
+    whenReady: () => Promise<void>;
 };
 
 /**

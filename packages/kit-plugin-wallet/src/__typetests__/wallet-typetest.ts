@@ -7,6 +7,7 @@ import {
     TransactionSigner,
 } from '@solana/kit';
 
+import { isWalletWarmingUp, type WalletStatus } from '../index';
 import { ClientWithWallet } from '../types';
 import { walletIdentity, walletPayer, walletSigner, walletWithoutSigner } from '../wallet';
 
@@ -94,6 +95,20 @@ const signer = null as unknown as TransactionSigner;
         const result = walletWithoutSigner(config)(base);
         result.payer satisfies TransactionSigner;
         result.identity satisfies TransactionSigner;
+    }
+}
+
+// [DESCRIBE] isWalletWarmingUp
+{
+    // It is exported from the root entry and narrows a status to a boolean.
+    {
+        const status = null as unknown as WalletStatus;
+        isWalletWarmingUp(status) satisfies boolean;
+    }
+    // It requires a WalletStatus argument.
+    {
+        // @ts-expect-error isWalletWarmingUp requires a status argument.
+        isWalletWarmingUp();
     }
 }
 

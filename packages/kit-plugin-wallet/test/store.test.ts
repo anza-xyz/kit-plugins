@@ -78,6 +78,11 @@ describe.skipIf(__BROWSER__)('store (SSR / non-browser)', () => {
         const store = createWalletStore({ chain: 'solana:mainnet' });
         expect(() => store[Symbol.dispose]()).not.toThrow();
     });
+
+    it('whenReady resolves immediately on server', async () => {
+        const store = createWalletStore({ chain: 'solana:mainnet' });
+        await expect(store.whenReady()).resolves.toBeUndefined();
+    });
 });
 
 describe.skipIf(!__BROWSER__)('store (browser)', () => {
@@ -2960,5 +2965,115 @@ describe.skipIf(!__BROWSER__)('store disconnect targeting (browser)', () => {
 
         pendingDisconnect.resolve();
         await disconnectPromise;
+    });
+});
+
+// -- whenReady tests ----------------------------------------------------------
+
+describe.skipIf(!__BROWSER__)('store whenReady (browser)', () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    it('resolves immediately when the status has already settled', async () => {
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        expect(store.getState().status).toBe('disconnected');
+        await expect(store.whenReady()).resolves.toBeUndefined();
+    });
+
+    it('stays pending through the warm-up, hands out a stable reference, and resolves once connected', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({ accounts: [account], name: 'TestWallet' });
+        registerWallet(mockWallet);
+
+        // Hold the silent reconnect so the store lingers in 'reconnecting'.
+        const reconnect = Promise.withResolvers<void>();
+        connectMock.mockReturnValueOnce(reconnect.promise);
+
+        const storage = createMockStorage({ 'kit-wallet': `TestWallet:${account.address}` });
+        const store = createWalletStore({ chain: 'solana:mainnet', storage });
+
+        // 'pending' before the reconnect fires: not resolved, and stable across calls.
+        expect(store.getState().status).toBe('pending');
+        const p = store.whenReady();
+        expect(store.whenReady()).toBe(p);
+
+        await vi.advanceTimersByTimeAsync(0);
+        expect(store.getState().status).toBe('reconnecting');
+        // Same transient episode — still the same promise.
+        expect(store.whenReady()).toBe(p);
+        // If `p` were already resolved the race would pick 'ready'; it is still pending.
+        await expect(Promise.race([p.then(() => 'ready'), Promise.resolve('pending')])).resolves.toBe('pending');
+
+        // Let the reconnect complete.
+        reconnect.resolve();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(store.getState().status).toBe('connected');
+        await expect(p).resolves.toBeUndefined();
+
+        // After settling, a fresh call returns an already-resolved promise, not the old one.
+        const after = store.whenReady();
+        expect(after).not.toBe(p);
+        await expect(after).resolves.toBeUndefined();
+    });
+
+    it('resolves when the warm-up settles to disconnected', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({ accounts: [account], name: 'TestWallet' });
+        registerWallet(mockWallet);
+        connectMock.mockRejectedValueOnce(new Error('Silent connect failed'));
+
+        const storage = createMockStorage({ 'kit-wallet': `TestWallet:${account.address}` });
+        const store = createWalletStore({ chain: 'solana:mainnet', storage });
+
+        expect(store.getState().status).toBe('pending');
+        const p = store.whenReady();
+
+        await vi.advanceTimersByTimeAsync(0);
+        expect(store.getState().status).toBe('disconnected');
+        await expect(p).resolves.toBeUndefined();
+    });
+
+    it('resolves when the store is disposed mid warm-up, settling the status to disconnected', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({ accounts: [account], name: 'TestWallet' });
+        registerWallet(mockWallet);
+
+        // Hold the silent reconnect open so the store lingers in 'reconnecting'.
+        const reconnect = Promise.withResolvers<void>();
+        connectMock.mockReturnValueOnce(reconnect.promise);
+
+        const storage = createMockStorage({ 'kit-wallet': `TestWallet:${account.address}` });
+        const store = createWalletStore({ chain: 'solana:mainnet', storage });
+
+        // Grab a pending `whenReady()` while still warming up.
+        const p = store.whenReady();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(store.getState().status).toBe('reconnecting');
+
+        // Disposal is the warm-up's final settlement: the pending promise
+        // resolves instead of hanging forever, and the status leaves the
+        // transient set so `isWalletWarmingUp` and `whenReady` agree.
+        store[Symbol.dispose]();
+        await expect(p).resolves.toBeUndefined();
+        expect(store.getState().status).toBe('disconnected');
+
+        // Calls made after disposal resolve immediately off the settled status.
+        await expect(store.whenReady()).resolves.toBeUndefined();
+
+        // The reconnect resuming after disposal must not revive the store.
+        reconnect.resolve();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(store.getState().status).toBe('disconnected');
+        expect(store.getState().connected).toBeNull();
+    });
+
+    it('leaves an already-settled status untouched on dispose', async () => {
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(store.getState().status).toBe('disconnected');
+
+        store[Symbol.dispose]();
+        expect(store.getState().status).toBe('disconnected');
+        await expect(store.whenReady()).resolves.toBeUndefined();
     });
 });
