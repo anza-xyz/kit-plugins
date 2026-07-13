@@ -22,7 +22,9 @@ function defineSignerGetter(
 ): void {
     Object.defineProperty(additions, property, {
         configurable: true,
-        enumerable: true,
+        // Non-enumerable on purpose: this getter throws when no signer is connected, so we
+        // don't want things like Object.entries to read it.
+        enumerable: false,
         get() {
             const state = store.getState();
             if (!state.connected) {

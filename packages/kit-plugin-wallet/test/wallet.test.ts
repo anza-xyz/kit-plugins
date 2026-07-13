@@ -142,6 +142,22 @@ describe.skipIf(!__BROWSER__)('walletSigner plugin (browser)', () => {
         expect(() => client.payer).toThrow('No signing wallet connected');
         expect(() => client.identity).toThrow('No signing wallet connected');
     });
+
+    it('does not throw when the disconnected client is enumerated (payer/identity are non-enumerable)', () => {
+        const client = createClient().use(walletSigner({ chain: 'solana:mainnet', storage: null }));
+        // The signer getters throw when disconnected, so they must be non-enumerable — otherwise
+        // any enumeration that reads values (an object spread, `Object.entries`, `structuredClone`,
+        // or React's dev-mode component-render prop diffing) would invoke them and throw while the
+        // client is merely disconnected/pending.
+        expect(() => ({ ...client })).not.toThrow();
+        expect(() => Object.entries(client)).not.toThrow();
+        expect(Object.keys(client)).not.toContain('payer');
+        expect(Object.keys(client)).not.toContain('identity');
+        // They remain detectable as capabilities and still throw on explicit access.
+        expect('payer' in client).toBe(true);
+        expect('identity' in client).toBe(true);
+        expect(() => client.payer).toThrow('No signing wallet connected');
+    });
 });
 
 describe.skipIf(!__BROWSER__)('walletIdentity plugin (browser)', () => {
