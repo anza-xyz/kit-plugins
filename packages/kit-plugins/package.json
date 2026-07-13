@@ -1,6 +1,6 @@
 {
     "name": "@solana/kit-plugins",
-    "version": "0.12.1",
+    "version": "0.13.0",
     "description": "[DEPRECATED] Essential plugins and plugin presets for Solana Kit.",
     "keywords": [
         "kit",

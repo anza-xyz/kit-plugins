@@ -1,6 +1,6 @@
 {
     "name": "@solana/kit-client-litesvm",
-    "version": "0.12.1",
+    "version": "0.13.0",
     "description": "Pre-configured LiteSVM client for Solana Kit",
     "keywords": [
         "LiteSVM",
