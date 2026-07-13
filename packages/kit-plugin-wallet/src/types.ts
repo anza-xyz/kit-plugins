@@ -244,13 +244,19 @@ export type WalletNamespace = {
     connect: (wallet: UiWallet, options?: WalletActionOptions) => Promise<readonly UiWalletAccount[]>;
 
     /**
-     * Disconnect the active wallet. Calls `standard:disconnect` if supported.
+     * Disconnect a wallet. Calls `standard:disconnect` if supported.
+     *
+     * `wallet` defaults to the active wallet. Passing a non-active, currently
+     * authorized wallet deauthorizes it (calling `standard:disconnect` if
+     * supported) while leaving the active connection untouched. A `wallet`
+     * that doesn't support `standard:disconnect`, or one that is already
+     * unauthorized/unregistered, is a forgiving no-op.
      *
      * @throws `options.abortSignal.reason` if the signal is already aborted
      *   when the action is called. Aborts after the wallet call has been
      *   dispatched do not take effect.
      */
-    disconnect: (options?: WalletActionOptions) => Promise<void>;
+    disconnect: (wallet?: UiWallet, options?: WalletActionOptions) => Promise<void>;
 
     // -- State --
     /**
@@ -263,13 +269,19 @@ export type WalletNamespace = {
     getState: () => WalletState;
 
     /**
-     * Switch to a different account within the connected wallet. Creates and
-     * caches a new signer for the selected account.
+     * Select an account, creating and caching a new signer for it.
      *
-     * @throws `SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED)` if no wallet is
-     *   connected, or the connected wallet is currently disconnecting.
+     * The account may belong to any currently authorized wallet, not only the
+     * active one. When it belongs to a different authorized wallet, the active
+     * connection switches to that wallet synchronously (no prompt), leaving the
+     * previously active wallet authorized. If the store is currently 'disconnected',
+     * this allows transitioning to 'connected' synchronously.
+     *
      * @throws `SolanaError(SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE)` if the
-     *   specified account is not among the connected wallet's accounts.
+     *   account's handle cannot be resolved to a currently authorized wallet, or
+     *   the account is not among that wallet's accounts.
+     * @throws `SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED)` if the account's
+     *   wallet is currently disconnecting.
      */
     selectAccount: (account: UiWalletAccount) => void;
 
