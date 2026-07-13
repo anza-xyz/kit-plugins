@@ -98,6 +98,10 @@ vi.mock('@wallet-standard/app', () => ({
 // updates the mapping, so refreshUiWallet returns the updated wallet.
 const rawToUi = new Map<object, UiWallet>();
 const nameToRaw = new Map<string, object>();
+// Maps each account handle (by object identity) to its owning raw wallet, so
+// the `getWalletForHandle` mock resolves account handles the way the real
+// registry's WeakMap does. Populated by registerWallet / updateRegisteredWallet.
+const accountToRaw = new WeakMap<object, object>();
 
 vi.mock('@wallet-standard/ui-registry', () => ({
     getOrCreateUiWalletForStandardWallet: (raw: object) => {
@@ -105,11 +109,13 @@ vi.mock('@wallet-standard/ui-registry', () => ({
         if (!ui) throw new Error('No UiWallet registered for this raw wallet');
         return ui;
     },
-    getWalletForHandle: (ui: UiWallet) => {
-        // Return the latest raw wallet for this name, so refreshUiWallet
-        // picks up updated registrations.
-        const raw = nameToRaw.get(ui.name);
-        if (!raw) throw new Error(`No raw wallet registered for "${ui.name}"`);
+    getWalletForHandle: (handle: UiWallet | UiWalletAccount) => {
+        // Account handle? Resolve by object identity, like the real WeakMap registry.
+        const rawFromAccount = accountToRaw.get(handle as unknown as object);
+        if (rawFromAccount) return rawFromAccount;
+        // Otherwise it's a wallet handle — resolve the latest raw wallet by name.
+        const raw = nameToRaw.get((handle as UiWallet).name);
+        if (!raw) throw new Error(`No raw wallet registered for "${(handle as UiWallet).name}"`);
         return raw;
     },
 }));
@@ -119,14 +125,20 @@ export let connectMock = vi.fn<() => Promise<void>>().mockResolvedValue(undefine
 export let disconnectMock = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
 export let signInMock: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue([{}]);
 export let signMessageMock: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue([{ signature: new Uint8Array(64) }]);
-export let eventListenerCleanup: ReturnType<typeof vi.fn> = vi.fn();
+export let eventListenerCleanup: ReturnType<typeof vi.fn<() => void>> = vi.fn<() => void>();
 
-// Captured wallet event handler — tests call this to simulate wallet change events.
-export let walletEventHandler: ((properties: Record<string, unknown>) => void) | null = null;
+// Active `standard:events` change handlers, keyed by wallet name. The store
+// subscribes to *every* discovered wallet, so a single slot can't represent
+// them; tests fire a specific wallet's handler via `emitWalletChange` and check
+// whether a wallet is subscribed via `walletEventHandlers.has(name)`.
+export const walletEventHandlers = new Map<string, (props: Record<string, unknown>) => void>();
+export function emitWalletChange(name: string, props: Record<string, unknown>): void {
+    walletEventHandlers.get(name)?.(props);
+}
 
 type IdentifierString = `${string}:${string}`;
 
-function resolveFeatureImpl(feature: IdentifierString): unknown {
+function resolveFeatureImpl(feature: IdentifierString, walletName?: string): unknown {
     if (feature === 'standard:connect') {
         return { connect: connectMock, version: '1.0.0' };
     }
@@ -136,8 +148,11 @@ function resolveFeatureImpl(feature: IdentifierString): unknown {
     if (feature === 'standard:events') {
         return {
             on: (_event: string, handler: (properties: Record<string, unknown>) => void) => {
-                walletEventHandler = handler;
-                return eventListenerCleanup;
+                if (walletName) walletEventHandlers.set(walletName, handler);
+                return () => {
+                    if (walletName) walletEventHandlers.delete(walletName);
+                    eventListenerCleanup();
+                };
             },
             version: '1.0.0',
         };
@@ -171,7 +186,7 @@ vi.mock('@wallet-standard/ui-features', () => ({
         if (!wallet.features.includes(feature)) {
             throw new Error(`Wallet "${wallet.name}" does not support ${feature}`);
         }
-        return resolveFeatureImpl(feature);
+        return resolveFeatureImpl(feature, wallet.name);
     },
 }));
 
@@ -194,6 +209,9 @@ export function registerWallet(uiWallet: UiWallet): void {
     const raw = createMockRawWallet(uiWallet);
     rawToUi.set(raw, uiWallet);
     nameToRaw.set(uiWallet.name, raw);
+    for (const account of uiWallet.accounts) {
+        accountToRaw.set(account as unknown as object, raw);
+    }
     registeredWallets.push(raw);
 }
 
@@ -202,6 +220,9 @@ export function updateRegisteredWallet(uiWallet: UiWallet): void {
     const raw = nameToRaw.get(uiWallet.name);
     if (raw) {
         rawToUi.set(raw, uiWallet);
+        for (const account of uiWallet.accounts) {
+            accountToRaw.set(account as unknown as object, raw);
+        }
     }
 }
 
@@ -232,6 +253,7 @@ function clearRegistry(): void {
     nameToRaw.clear();
     registryListeners.register = [];
     registryListeners.unregister = [];
+    walletEventHandlers.clear();
 }
 
 // -- Lifecycle --------------------------------------------------------------
@@ -243,8 +265,7 @@ beforeEach(() => {
     signInMock = vi.fn().mockResolvedValue([{}]);
     signMessageMock = vi.fn().mockResolvedValue([{ signature: new Uint8Array(64) }]);
     createSignerMock = vi.fn<(...args: unknown[]) => unknown>().mockReturnValue(mockSigner);
-    eventListenerCleanup = vi.fn();
-    walletEventHandler = null;
+    eventListenerCleanup = vi.fn<() => void>();
 });
 
 afterEach(() => {
