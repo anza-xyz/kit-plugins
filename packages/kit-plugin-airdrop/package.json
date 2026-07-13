@@ -1,6 +1,6 @@
 {
     "name": "@solana/kit-plugin-airdrop",
-    "version": "0.12.1",
+    "version": "0.13.0",
     "description": "[DEPRECATED] Airdrop helpers for Kit clients",
     "keywords": [
         "airdrop",
