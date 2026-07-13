@@ -281,6 +281,30 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         expect(store.getState().connected!.account.address).toBe(newAccount.address);
     });
 
+    it('reflects accounts authorized during connect in the discovered-wallet list', async () => {
+        // Wallet starts with no authorized accounts (the realistic pre-connect state).
+        const mockWallet = createMockUiWallet({ accounts: [], name: 'TestWallet' });
+        registerWallet(mockWallet);
+
+        // Connect authorizes an account, regenerating the wallet's registry handle.
+        const account = createMockAccount();
+        connectMock.mockImplementationOnce(() => {
+            updateRegisteredWallet(createMockUiWallet({ accounts: [account], name: 'TestWallet' }));
+            return Promise.resolve();
+        });
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(mockWallet);
+
+        // `wallets` must reflect the newly authorized account immediately — not stay
+        // stale until an unrelated `standard:events change` fires. Consumers rendering
+        // the wallet from `useWallets()` rely on `.accounts` to know it is connected.
+        const state = store.getState();
+        expect(state.connected!.wallet.accounts.length).toBe(1);
+        expect(state.wallets[0].accounts.length).toBe(1);
+        expect(state.wallets[0]).toBe(state.connected!.wallet);
+    });
+
     it('transitions through connecting status', async () => {
         const account = createMockAccount();
         const mockWallet = createMockUiWallet({
@@ -659,6 +683,40 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         expect(state.status).toBe('connected');
         expect(state.connected).not.toBeNull();
         expect(state.connected!.account.address).toBe(account.address);
+    });
+
+    it('reflects accounts authorized during signIn in the discovered-wallet list', async () => {
+        // Wallet starts with no authorized accounts (the realistic pre-signIn state).
+        const mockWallet = createMockUiWallet({
+            accounts: [],
+            features: ['standard:connect', 'standard:events', 'solana:signIn'],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        // SIWS authorizes an account, regenerating the wallet's registry handle.
+        const account = createMockAccount();
+        signInMock.mockImplementationOnce(() => {
+            updateRegisteredWallet(
+                createMockUiWallet({
+                    accounts: [account],
+                    features: ['standard:connect', 'standard:events', 'solana:signIn'],
+                    name: 'TestWallet',
+                }),
+            );
+            return Promise.resolve([{ account: { address: account.address } }]);
+        });
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.signIn(mockWallet, {});
+
+        // `wallets` must reflect the newly authorized account immediately — not stay
+        // stale until an unrelated `standard:events change` fires. Consumers rendering
+        // the wallet from `useWallets()` rely on `.accounts` to know it is connected.
+        const state = store.getState();
+        expect(state.connected!.wallet.accounts.length).toBe(1);
+        expect(state.wallets[0].accounts.length).toBe(1);
+        expect(state.wallets[0]).toBe(state.connected!.wallet);
     });
 
     it('signIn reverts to disconnected if rejected', async () => {
@@ -1969,6 +2027,36 @@ describe.skipIf(!__BROWSER__)('store auto-connect (browser)', () => {
         expect(state.status).toBe('connected');
         expect(state.connected!.account.address).toBe(account.address);
         expect(connectMock).toHaveBeenCalledWith({ silent: true });
+    });
+
+    it('reflects accounts authorized during silent reconnect in the discovered-wallet list', async () => {
+        const account = createMockAccount();
+
+        // Wallet is registered but starts with no authorized accounts (the realistic
+        // state before a silent reconnect re-authorizes the saved account).
+        const mockWallet = createMockUiWallet({ accounts: [], name: 'TestWallet' });
+        registerWallet(mockWallet);
+
+        // The silent reconnect re-authorizes the saved account, regenerating the
+        // wallet's registry handle.
+        connectMock.mockImplementationOnce(() => {
+            updateRegisteredWallet(createMockUiWallet({ accounts: [account], name: 'TestWallet' }));
+            return Promise.resolve();
+        });
+
+        const storage = createMockStorage({ 'kit-wallet': `TestWallet:${account.address}` });
+        const store = createWalletStore({ chain: 'solana:mainnet', storage });
+
+        await vi.advanceTimersByTimeAsync(0);
+
+        // `wallets` must reflect the newly authorized account immediately — not stay
+        // stale until an unrelated `standard:events change` fires. Consumers rendering
+        // the wallet from `useWallets()` rely on `.accounts` to know it is connected.
+        const state = store.getState();
+        expect(state.status).toBe('connected');
+        expect(state.connected!.wallet.accounts.length).toBe(1);
+        expect(state.wallets[0].accounts.length).toBe(1);
+        expect(state.wallets[0]).toBe(state.connected!.wallet);
     });
 
     it('transitions to disconnected when storage is empty', async () => {
