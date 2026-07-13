@@ -64,7 +64,8 @@
     "scripts": {
         "build": "rimraf dist && tsup && tsc -p ./tsconfig.declarations.json",
         "dev": "vitest --project node",
-        "test": "pnpm test:types && pnpm test:treeshakability && pnpm test:unit",
+        "test": "pnpm test:types && pnpm test:treeshakability && pnpm test:packaging && pnpm test:unit",
+        "test:packaging": "node ../../scripts/assert-publishable-dist.mjs",
         "test:treeshakability": "for file in dist/index.*.mjs dist/react/index.*.mjs; do agadoo $file; done",
         "test:types": "tsc --noEmit",
         "test:unit": "vitest run"

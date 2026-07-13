@@ -38,6 +38,12 @@ export function getBuildConfig(options: BuildOptions): TsupConfig {
         publicDir: true,
         pure: ['process'],
         sourcemap: true,
+        // Keep every entry point self-contained. tsup defaults ESM `splitting` to `true`, which
+        // hoists code shared between entries (e.g. `./index` and `./react`) into `chunk-*` files.
+        // Those chunks are not matched by packages' `files` allow-lists, so they silently drop out
+        // of the published tarball.
+        // @see scripts/assert-publishable-dist.mjs
+        splitting: false,
         treeshake: {
             moduleSideEffects: id => {
                 // This prevents tsup/Rollup from keeping bare `import 'fs'` in browser/RN builds.
