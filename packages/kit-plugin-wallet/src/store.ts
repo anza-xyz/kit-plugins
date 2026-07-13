@@ -27,6 +27,7 @@ import type { UiWallet, UiWalletAccount } from '@wallet-standard/ui';
 import { getWalletAccountFeature, getWalletFeature } from '@wallet-standard/ui-features';
 import { getOrCreateUiWalletForStandardWallet, getWalletForHandle } from '@wallet-standard/ui-registry';
 
+import { isWalletWarmingUp } from './status';
 import type {
     WalletActionOptions,
     WalletNamespace,
@@ -86,6 +87,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
                 Promise.reject(new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signMessage' })),
             subscribe: () => () => {},
             subscribeSigner: () => () => {},
+            whenReady: () => Promise.resolve(),
             [Symbol.dispose]: () => {},
         };
     }
@@ -113,6 +115,11 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
     let disposed = false;
     // Wallet that is in the process of disconnecting, stored to guard against re-connecting to it if a future connect fails
     let disconnectingWalletName: string | null = null;
+    // Deferred backing `whenReady`. Created lazily while the status is transient
+    // (see `isWalletWarmingUp`) and resolved by `updateState` once the status
+    // settles, so `whenReady` can hand out a stable promise for the duration of
+    // one warm-up episode (required by React Suspense).
+    let readyDeferred: PromiseWithResolvers<void> | null = null;
 
     // Resolve storage: default to localStorage in browser, null to disable.
     // Merely *accessing* `localStorage` throws a `SecurityError` in sandboxed
@@ -160,6 +167,15 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         const prev = state;
         state = { ...state, ...updates };
 
+        // Resolve `whenReady` the moment the status leaves the transient
+        // warm-up set. `readyDeferred` is only ever created while transient (in
+        // `whenReady`), so clearing it here lets the next transient episode arm
+        // a fresh one.
+        if (isWalletWarmingUp(prev.status) && !isWalletWarmingUp(state.status)) {
+            readyDeferred?.resolve();
+            readyDeferred = null;
+        }
+
         if (state.wallets !== prev.wallets) {
             syncWalletEventSubscriptions(state.wallets);
         }
@@ -182,6 +198,18 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         if (signerChanged) {
             signerListeners.forEach(l => l());
         }
+    }
+
+    // Advanced: see the `whenReady` docblock on `WalletNamespace`. Returns a
+    // stable, already-resolved promise once the initial warm-up has settled;
+    // while transient, returns the same pending promise on every call so it is
+    // safe to throw for React Suspense.
+    function whenReady(): Promise<void> {
+        if (!isWalletWarmingUp(state.status)) {
+            return Promise.resolve();
+        }
+        readyDeferred ??= Promise.withResolvers<void>();
+        return readyDeferred.promise;
     }
 
     // -- Signer creation ---------------------------------------------------
@@ -931,6 +959,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
                 signerListeners.delete(listener);
             };
         },
+        whenReady,
         [Symbol.dispose]: () => {
             // Invalidate any in-flight connect/signIn/silent-reconnect so they
             // bail instead of resuming after disposal (which would re-subscribe
@@ -949,6 +978,13 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             cancelReconnect();
             listeners.clear();
             signerListeners.clear();
+            // A store disposed mid-warm-up will never finish warming up, so
+            // settle the status to 'disconnected'.
+            // Runs after the listener sets are cleared, so no one is notified of
+            // the final transition.
+            if (isWalletWarmingUp(state.status)) {
+                updateState({ status: 'disconnected' });
+            }
         },
     };
 }

@@ -2,8 +2,10 @@ import type { ReadonlyUint8Array, SignatureBytes } from '@solana/kit';
 import { type ActionResult, useAction, useClientCapability } from '@solana/react';
 import type { SolanaSignInInput, SolanaSignInOutput } from '@solana/wallet-standard-features';
 import type { UiWallet, UiWalletAccount } from '@wallet-standard/ui';
+import type { ReactNode } from 'react';
 import { useSyncExternalStore } from 'react';
 
+import { isWalletWarmingUp } from '../status';
 import type { ClientWithWallet, WalletNamespace, WalletState, WalletStatus } from '../types';
 
 /**
@@ -94,6 +96,37 @@ export function useWallets(): readonly UiWallet[] {
     const wallet = useWalletNamespace('useWallets');
     const getWallets = () => wallet.getState().wallets;
     return useSyncExternalStore(wallet.subscribe, getWallets, getWallets);
+}
+
+/**
+ * Reports whether the wallet client has finished its initial auto-reconnect "warm-up".
+ *
+ * Returns `false` while the status is `'pending'` or `'reconnecting'` — the transient states a
+ * freshly built client passes through while it silently re-establishes a persisted connection — and
+ * `true` once it settles into any stable state (`'connected'`, `'disconnected'`, or a user-initiated
+ * `'connecting'` / `'disconnecting'`). This is the declarative, render-time counterpart to the
+ * store's imperative `whenReady()`, gating on the exact same set of statuses.
+ *
+ * Use it to hold back wallet-dependent UI until the connection has settled, so a persisted wallet
+ * never flashes "disconnected" before it reconnects. Re-renders only when this readiness boolean
+ * flips, not on every status change. Requires a `ClientProvider` whose client has a wallet plugin
+ * installed; asserts this at mount with {@link useClientCapability}.
+ *
+ * @returns `true` once the warm-up has settled, otherwise `false`.
+ *
+ * @example
+ * ```tsx
+ * const isReady = useIsWalletReady();
+ * return <button disabled={!isReady}>Connect</button>;
+ * ```
+ *
+ * @see {@link WalletReadyGate}
+ * @see {@link useWalletStatus}
+ */
+export function useIsWalletReady(): boolean {
+    const wallet = useWalletNamespace('useIsWalletReady');
+    const getIsReady = () => !isWalletWarmingUp(wallet.getState().status);
+    return useSyncExternalStore(wallet.subscribe, getIsReady, getIsReady);
 }
 
 // -- Action hooks -----------------------------------------------------------
@@ -223,4 +256,46 @@ export function useSignMessage(): ActionResult<[message: ReadonlyUint8Array], Si
  */
 export function useSelectAccount(): WalletNamespace['selectAccount'] {
     return useWalletNamespace('useSelectAccount').selectAccount;
+}
+
+// -- Components -------------------------------------------------------------
+
+/**
+ * Props for {@link WalletReadyGate}.
+ */
+export type WalletReadyGateProps = Readonly<{
+    /** Rendered once the wallet client has finished its initial auto-reconnect warm-up. */
+    children: ReactNode;
+    /** Rendered while the client is still warming up (`'pending'` / `'reconnecting'`). */
+    fallback: ReactNode;
+}>;
+
+/**
+ * Renders `fallback` while the wallet client is still in its initial auto-reconnect warm-up
+ * (`'pending'` / `'reconnecting'`), then reveals `children` once the connection has settled.
+ *
+ * A declarative wrapper over {@link useIsWalletReady} for the common case of holding back a whole
+ * wallet-dependent subtree. Its props are shaped like React's `<Suspense fallback>`, but it is
+ * synchronous — it renders `fallback` directly off the reactive status rather than suspending, so it
+ * needs no `<Suspense>` ancestor. It lets an app paint its chrome immediately while gating only the
+ * wallet-dependent UI, so a persisted wallet never flashes "disconnected" before it silently
+ * reconnects. For finer control (disabling a button, showing an inline spinner) read the boolean from
+ * {@link useIsWalletReady} directly. To actually suspend a subtree instead, throw the Suspense-safe
+ * {@link WalletNamespace.whenReady} promise from your own component.
+ *
+ * Requires a `ClientProvider` whose client has a wallet plugin installed; asserts this at mount with
+ * {@link useClientCapability}.
+ *
+ * @example
+ * ```tsx
+ * <WalletReadyGate fallback={<Spinner />}>
+ *     <WalletDependentApp />
+ * </WalletReadyGate>
+ * ```
+ *
+ * @see {@link useIsWalletReady}
+ * @see {@link useWalletStatus}
+ */
+export function WalletReadyGate({ children, fallback }: WalletReadyGateProps): ReactNode {
+    return useIsWalletReady() ? children : fallback;
 }

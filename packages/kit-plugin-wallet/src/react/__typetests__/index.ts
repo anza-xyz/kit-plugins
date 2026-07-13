@@ -1,16 +1,20 @@
 import type { ReadonlyUint8Array, SignatureBytes } from '@solana/kit';
 import type { SolanaSignInInput, SolanaSignInOutput } from '@solana/wallet-standard-features';
 import type { UiWallet, UiWalletAccount } from '@wallet-standard/ui';
+import type { ReactNode } from 'react';
 
 import type { WalletState, WalletStatus } from '../../types';
 import {
     useConnect,
     useConnectedWallet,
     useDisconnect,
+    useIsWalletReady,
     useSelectAccount,
     useSignIn,
     useSignMessage,
     useWallets,
+    WalletReadyGate,
+    type WalletReadyGateProps,
     useWalletStatus,
 } from '../index';
 
@@ -20,6 +24,25 @@ import {
 {
     const status = useWalletStatus();
     status satisfies WalletStatus;
+}
+
+// [DESCRIBE] useIsWalletReady
+{
+    const isReady = useIsWalletReady();
+    isReady satisfies boolean;
+}
+
+// [DESCRIBE] WalletReadyGate
+{
+    // Both `children` and `fallback` are required `ReactNode` props.
+    ({ children: 'ready', fallback: 'loading' }) satisfies WalletReadyGateProps;
+    // The gate is callable and its return type is assignable to `ReactNode`.
+    const rendered: ReactNode = WalletReadyGate({ children: null, fallback: null });
+    void rendered;
+}
+{
+    // @ts-expect-error `fallback` is required.
+    ({ children: null }) satisfies WalletReadyGateProps;
 }
 
 // [DESCRIBE] useConnectedWallet
