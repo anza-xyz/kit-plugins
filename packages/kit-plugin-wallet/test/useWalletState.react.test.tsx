@@ -1,11 +1,9 @@
-import { ClientProvider } from '@solana/react';
 import { act, cleanup, renderHook } from '@testing-library/react';
 import type { UiWallet } from '@wallet-standard/ui';
-import { createElement, type ReactNode } from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { useConnectedWallet, useIsWalletReady, useWallets, useWalletStatus } from '../src/react';
-import type { WalletState } from '../src/types';
+import type { ClientWithWallet, WalletState } from '../src/types';
 
 // Unmount rendered trees between tests. This package doesn't enable vitest
 // globals, so @testing-library/react's auto-cleanup isn't registered.
@@ -31,27 +29,17 @@ function createFakeStore(initial: WalletState) {
     };
 }
 
-function wrapperFor(wallet: object) {
-    return ({ children }: { children: ReactNode }) =>
-        createElement(ClientProvider, { client: { wallet } as never }, children);
+/** Wrap a wallet namespace in a client so it can be passed to a hook. */
+function clientFor(wallet: object): ClientWithWallet {
+    return { wallet } as never;
 }
 
 const INITIAL: WalletState = { connected: null, status: 'disconnected', wallets: [] };
 
 describe('useWalletStatus', () => {
-    it('throws at mount when the client lacks a wallet namespace', () => {
-        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-        expect(() =>
-            renderHook(() => useWalletStatus(), {
-                wrapper: ({ children }) => createElement(ClientProvider, { client: {} as never }, children),
-            }),
-        ).toThrow(/useWalletStatus/);
-        consoleError.mockRestore();
-    });
-
     it('returns the current status and updates when it changes', () => {
         const store = createFakeStore(INITIAL);
-        const { result } = renderHook(() => useWalletStatus(), { wrapper: wrapperFor(store) });
+        const { result } = renderHook(() => useWalletStatus(clientFor(store)));
 
         expect(result.current).toBe('disconnected');
 
@@ -63,7 +51,7 @@ describe('useWalletStatus', () => {
 describe('useConnectedWallet', () => {
     it('returns the active connection and updates when it changes', () => {
         const store = createFakeStore(INITIAL);
-        const { result } = renderHook(() => useConnectedWallet(), { wrapper: wrapperFor(store) });
+        const { result } = renderHook(() => useConnectedWallet(clientFor(store)));
 
         expect(result.current).toBeNull();
 
@@ -77,13 +65,10 @@ describe('useIsWalletReady', () => {
     it('reports readiness and re-renders only when the boolean flips', () => {
         const store = createFakeStore({ ...INITIAL, status: 'pending' });
         let renderCount = 0;
-        const { result } = renderHook(
-            () => {
-                renderCount++;
-                return useIsWalletReady();
-            },
-            { wrapper: wrapperFor(store) },
-        );
+        const { result } = renderHook(() => {
+            renderCount++;
+            return useIsWalletReady(clientFor(store));
+        });
 
         expect(result.current).toBe(false);
         const rendersWhileWarmingUp = renderCount;
@@ -105,7 +90,7 @@ describe('useIsWalletReady', () => {
 describe('useWallets', () => {
     it('returns the discovered wallets and updates when the list changes', () => {
         const store = createFakeStore(INITIAL);
-        const { result } = renderHook(() => useWallets(), { wrapper: wrapperFor(store) });
+        const { result } = renderHook(() => useWallets(clientFor(store)));
 
         expect(result.current).toEqual([]);
 
