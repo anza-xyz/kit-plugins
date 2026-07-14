@@ -1,6 +1,6 @@
 {
     "name": "@solana/kit-plugin-wallet",
-    "version": "0.13.0",
+    "version": "0.13.1",
     "description": "Wallet connection plugin for Kit clients",
     "keywords": [
         "kit",
