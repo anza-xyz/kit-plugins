@@ -2,6 +2,7 @@ import {
     Address,
     createClient,
     generateKeyPairSigner,
+    getTransactionMessageComputeUnitLimit,
     getTransactionMessageComputeUnitPrice,
     MicroLamports,
     singleInstructionPlan,
@@ -47,6 +48,30 @@ describe('rpcTransactionPlanner', () => {
         const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
         const transactionPlan = (await client.transactionPlanner(instructionPlan)) as SingleTransactionPlan;
         expect(transactionPlan.message.version).toBe(0);
+    });
+
+    it('adds provisory resource limits by default', async () => {
+        const payer = await generateKeyPairSigner();
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(rpcTransactionPlanner());
+
+        const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
+        const transactionPlan = (await client.transactionPlanner(instructionPlan)) as SingleTransactionPlan;
+        const message = transactionPlan.message as TransactionMessage & { version: 'legacy' | 0 };
+        expect(getTransactionMessageComputeUnitLimit(message)).toBe(0);
+    });
+
+    it('does not add provisory resource limits when resource limit estimation is disabled', async () => {
+        const payer = await generateKeyPairSigner();
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(rpcTransactionPlanner({ resourceLimitEstimation: 'none' }));
+
+        const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
+        const transactionPlan = (await client.transactionPlanner(instructionPlan)) as SingleTransactionPlan;
+        const message = transactionPlan.message as TransactionMessage & { version: 'legacy' | 0 };
+        expect(getTransactionMessageComputeUnitLimit(message)).toBeUndefined();
     });
 
     it('creates legacy transaction messages when configured', async () => {

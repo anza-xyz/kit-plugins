@@ -44,6 +44,7 @@ All options are provided via a `SolanaRpcConfig` object:
 - `transactionConfig`: Options to configure how transaction messages are created. See `rpcTransactionPlanner` options below.
 - `maxConcurrency`: Maximum number of concurrent transaction executions. Defaults to 10.
 - `skipPreflight`: Whether to always skip preflight simulation. Defaults to `false`.
+- `resourceLimitEstimation`: Whether to reserve, estimate, and set resource limits. Accepts `'estimate'` or `'none'`. Defaults to `'estimate'`.
 
 ### Features
 
@@ -246,6 +247,7 @@ All options are provided via a `TransactionPlannerConfig` object:
 
 - `version`: The transaction message version to use. Accepts `0` or `'legacy'`. Defaults to `0`.
 - `microLamportsPerComputeUnit`: Priority fees in micro lamports per compute unit. Defaults to no priority fees.
+- `resourceLimitEstimation`: Whether to reserve space for resource limits that the executor can later estimate and set. Accepts `'estimate'` or `'none'`. Defaults to `'estimate'`.
 
 ### Features
 
@@ -278,6 +280,7 @@ const client = await createClient()
 
 - `maxConcurrency`: Maximum number of concurrent executions (default: 10).
 - `skipPreflight`: Whether to skip the preflight simulation when sending transactions (default: `false`).
+- `resourceLimitEstimation`: Whether to estimate and set missing resource limits before sending. Accepts `'estimate'` or `'none'`. Defaults to `'estimate'`.
 
 ### Features
 
@@ -300,6 +303,8 @@ Setting `skipPreflight: true` changes the behavior:
 | Estimation succeeds | Set limits, skip preflight       | Set limits, skip preflight             |
 | Estimation fails    | Throw                            | Use consumed resources, skip preflight |
 | Explicit limits set | Run preflight                    | Skip preflight                         |
+
+Set `resourceLimitEstimation: 'none'` to opt out of automatic resource-limit handling. The RPC planner will not reserve provisional resource-limit instructions, and the RPC executor will not simulate to estimate or inject missing limits. Explicit resource-limit instructions already present in a transaction message are preserved. This can be useful for transactions that are close to the message size limit, where adding a compute-budget instruction would make an otherwise valid transaction too large.
 
 ## Deprecated plugins
 
