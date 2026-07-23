@@ -30,8 +30,8 @@ importers:
         specifier: ^3.0.0
         version: 3.0.0
       happy-dom:
-        specifier: ^20.11.0
-        version: 20.11.0
+        specifier: ^20.11.1
+        version: 20.11.1
       oxfmt:
         specifier: ^0.60.0
         version: 0.60.0
@@ -46,7 +46,7 @@ importers:
         version: 6.1.3
       tsup:
         specifier: ^8.5.1
-        version: 8.5.1(postcss@8.5.21)(typescript@7.0.2)
+        version: 8.5.1(postcss@8.5.22)(typescript@7.0.2)
       turbo:
         specifier: ^2.10.5
         version: 2.10.5
@@ -55,7 +55,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: ^4.1.10
-        version: 4.1.10(@types/node@26.1.1)(happy-dom@20.11.0)(vite@7.3.1(@types/node@26.1.1))
+        version: 4.1.10(@types/node@26.1.1)(happy-dom@20.11.1)(vite@7.3.1(@types/node@26.1.1))
       ws:
         specifier: ^8.21.1
         version: 8.21.1
@@ -2166,8 +2166,8 @@ packages:
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
 
-  happy-dom@20.11.0:
-    resolution: {integrity: sha512-XogN4asPd1a56di9prVG6bZxteNcXsZxxKmAvcEfc5Px5Ca2hMyMgk8wvqK2K1V8zXg40j9VANXsDaJYh9DeNA==}
+  happy-dom@20.11.1:
+    resolution: {integrity: sha512-XSt8tMzbW9ymE7687xztkO1ckR7qJNQ3LywY9vlYGhGi3zXrGBHuUo2Cl1ztZaICW+1eAGdkLbj6iwVqDT33kg==}
     engines: {node: '>=20.0.0'}
 
   human-id@4.1.3:
@@ -2465,8 +2465,8 @@ packages:
       yaml:
         optional: true
 
-  postcss@8.5.21:
-    resolution: {integrity: sha512-v4sDNP3fdNiWMfabO7OwOQdOX8TiQSztKyT1Wj0w+j7LDallJThJRBBBmzVGyYj0crMh7jlV4zepPkiNu9UwDQ==}
+  postcss@8.5.22:
+    resolution: {integrity: sha512-KBDEIpLrvpv16pp3K0Fw+UCoZfopFjjgeB+0tA/aaThfEE74kKDLrgg603YvOWJyg3+WYtyq3xYsQWsIyZlPqQ==}
     engines: {node: ^10 || ^12 || >=14}
 
   prettier@2.8.8:
@@ -4502,7 +4502,7 @@ snapshots:
 
   graceful-fs@4.2.11: {}
 
-  happy-dom@20.11.0:
+  happy-dom@20.11.1:
     dependencies:
       '@types/node': 26.1.1
       '@types/whatwg-mimetype': 3.0.2
@@ -4765,13 +4765,13 @@ snapshots:
       mlly: 1.8.0
       pathe: 2.0.3
 
-  postcss-load-config@6.0.1(postcss@8.5.21):
+  postcss-load-config@6.0.1(postcss@8.5.22):
     dependencies:
       lilconfig: 3.1.3
     optionalDependencies:
-      postcss: 8.5.21
+      postcss: 8.5.22
 
-  postcss@8.5.21:
+  postcss@8.5.22:
     dependencies:
       nanoid: 3.3.16
       picocolors: 1.1.1
@@ -4972,7 +4972,7 @@ snapshots:
 
   ts-interface-checker@0.1.13: {}
 
-  tsup@8.5.1(postcss@8.5.21)(typescript@7.0.2):
+  tsup@8.5.1(postcss@8.5.22)(typescript@7.0.2):
     dependencies:
       bundle-require: 5.1.0(esbuild@0.27.2)
       cac: 6.7.14
@@ -4983,7 +4983,7 @@ snapshots:
       fix-dts-default-cjs-exports: 1.0.1
       joycon: 3.1.1
       picocolors: 1.1.1
-      postcss-load-config: 6.0.1(postcss@8.5.21)
+      postcss-load-config: 6.0.1(postcss@8.5.22)
       resolve-from: 5.0.0
       rollup: 4.53.5
       source-map: 0.7.6
@@ -4992,7 +4992,7 @@ snapshots:
       tinyglobby: 0.2.15
       tree-kill: 1.2.2
     optionalDependencies:
-      postcss: 8.5.21
+      postcss: 8.5.22
       typescript: 7.0.2
     transitivePeerDependencies:
       - jiti
@@ -5045,14 +5045,14 @@ snapshots:
       esbuild: 0.27.7
       fdir: 6.5.0(picomatch@4.0.5)
       picomatch: 4.0.5
-      postcss: 8.5.21
+      postcss: 8.5.22
       rollup: 4.62.2
       tinyglobby: 0.2.17
     optionalDependencies:
       '@types/node': 26.1.1
       fsevents: 2.3.3
 
-  vitest@4.1.10(@types/node@26.1.1)(happy-dom@20.11.0)(vite@7.3.1(@types/node@26.1.1)):
+  vitest@4.1.10(@types/node@26.1.1)(happy-dom@20.11.1)(vite@7.3.1(@types/node@26.1.1)):
     dependencies:
       '@vitest/expect': 4.1.10
       '@vitest/mocker': 4.1.10(vite@7.3.1(@types/node@26.1.1))
@@ -5076,7 +5076,7 @@ snapshots:
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 26.1.1
-      happy-dom: 20.11.0
+      happy-dom: 20.11.1
     transitivePeerDependencies:
       - msw
 
