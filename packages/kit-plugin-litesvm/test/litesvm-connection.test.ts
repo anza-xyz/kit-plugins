@@ -6,6 +6,7 @@ import {
     GetLatestBlockhashApi,
     GetMinimumBalanceForRentExemptionApi,
     GetMultipleAccountsApi,
+    GetProgramAccountsApi,
     GetSlotApi,
     RequestAirdropApi,
     Rpc,
@@ -41,6 +42,7 @@ describe('litesvm', () => {
         expect(client.rpc.getLatestBlockhash).toBeTypeOf('function');
         expect(client.rpc.getMinimumBalanceForRentExemption).toBeTypeOf('function');
         expect(client.rpc.getMultipleAccounts).toBeTypeOf('function');
+        expect(client.rpc.getProgramAccounts).toBeTypeOf('function');
         expect(client.rpc.getSlot).toBeTypeOf('function');
         expect(client.rpc.requestAirdrop).toBeTypeOf('function');
         expectTypeOf(client.rpc).toEqualTypeOf<
@@ -51,6 +53,7 @@ describe('litesvm', () => {
                     GetLatestBlockhashApi &
                     GetMinimumBalanceForRentExemptionApi &
                     GetMultipleAccountsApi &
+                    GetProgramAccountsApi &
                     GetSlotApi &
                     RequestAirdropApi
             >
