@@ -73,7 +73,7 @@ const client = createClient().use(litesvmConnection());
     client.svm.setAccount(myAccount);
     client.svm.addProgramFromFile(myProgramAddress, 'my_program.so');
     ```
-- `rpc`: Call a subset of Solana RPC methods against the LiteSVM instance. Currently supported methods are: `getAccountInfo`, `getBalance`, `getEpochSchedule`, `getLatestBlockhash`, `getMinimumBalanceForRentExemption`, `getMultipleAccounts`, `getSlot`, and `requestAirdrop`.
+- `rpc`: Call a subset of Solana RPC methods against the LiteSVM instance. Currently supported methods are: `getAccountInfo`, `getBalance`, `getEpochSchedule`, `getLatestBlockhash`, `getMinimumBalanceForRentExemption`, `getMultipleAccounts`, `getProgramAccounts`, `getSlot`, and `requestAirdrop`.
     ```ts
     const { value: latestBlockhash } = await client.rpc.getLatestBlockhash().send();
     ```
