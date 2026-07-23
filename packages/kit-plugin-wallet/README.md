@@ -171,7 +171,7 @@ All wallet state is accessed via `client.wallet.getState()`, which returns a ref
 
 ## React hooks
 
-The `@solana/kit-plugin-wallet/react` subpath exposes hooks for reading wallet state and driving wallet actions from React components. Install the optional peer dependencies (`react` and [`@solana/react`](https://www.npmjs.com/package/@solana/react)) and render your tree inside a `ClientProvider` whose client has a wallet plugin installed.
+The `@solana/kit-plugin-wallet/react` subpath exposes hooks for reading wallet state and driving wallet actions from React components. Install the optional peer dependencies (`react` and [`@solana/react`](https://www.npmjs.com/package/@solana/react)). Every hook takes your wallet-enabled `client` — a client built with a wallet plugin such as `walletSigner()` — as its first argument.
 
 The **state** hooks subscribe via `useSyncExternalStore`, each to a single slice of `WalletState`, so a component only re-renders when the slice it reads changes:
 
@@ -192,14 +192,17 @@ The **action** hooks wrap the async wallet actions with `useAction` from `@solan
 | `useSignMessage`   | `client.wallet.signMessage` — `dispatch(message)`                         |
 | `useSelectAccount` | `client.wallet.selectAccount` — returns the synchronous callback directly |
 
+Each component receives the `client` and passes it to the hooks it uses:
+
 ```tsx
+import type { ClientWithWallet } from '@solana/kit-plugin-wallet';
 import { useConnect, useConnectedWallet, useWallets, useWalletStatus } from '@solana/kit-plugin-wallet/react';
 
-function WalletButton() {
-    const status = useWalletStatus();
-    const wallets = useWallets();
-    const connected = useConnectedWallet();
-    const { dispatch: connect, isRunning } = useConnect();
+function WalletButton({ client }: { client: ClientWithWallet }) {
+    const status = useWalletStatus(client);
+    const wallets = useWallets(client);
+    const connected = useConnectedWallet(client);
+    const { dispatch: connect, isRunning } = useConnect(client);
 
     if (status === 'pending') return null; // avoid flashing UI before auto-reconnect resolves
 
@@ -218,20 +221,21 @@ function WalletButton() {
 A freshly built client runs a silent auto-reconnect on mount, briefly passing through `'pending'` and `'reconnecting'` before it settles. If you render wallet-dependent UI immediately, a persisted wallet flashes "disconnected" for a frame before it reconnects. `useIsWalletReady` reports `false` for the duration of that warm-up and `true` once it settles, so you can hold back the wallet-dependent parts while painting the rest of the app:
 
 ```tsx
+import type { ClientWithWallet } from '@solana/kit-plugin-wallet';
 import { useIsWalletReady, WalletReadyGate } from '@solana/kit-plugin-wallet/react';
 
 // Hide a whole subtree until the connection settles:
-function App() {
+function App({ client }: { client: ClientWithWallet }) {
     return (
-        <WalletReadyGate fallback={<Spinner />}>
+        <WalletReadyGate client={client} fallback={<Spinner />}>
             <WalletDependentUI />
         </WalletReadyGate>
     );
 }
 
 // Or read the boolean directly for finer control (e.g. disabling a button):
-function ConnectButton() {
-    const isReady = useIsWalletReady();
+function ConnectButton({ client }: { client: ClientWithWallet }) {
+    const isReady = useIsWalletReady(client);
     return <button disabled={!isReady}>Connect</button>;
 }
 ```
