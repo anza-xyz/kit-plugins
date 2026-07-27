@@ -214,10 +214,10 @@ importers:
     devDependencies:
       '@solana/react':
         specifier: ^7.0.0
-        version: 7.0.0(@solana/kit@7.0.0(typescript@7.0.2))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@7.0.2)
+        version: 7.0.0(@solana/kit@7.0.0(typescript@7.0.2))(react-dom@19.2.8(react@19.2.7))(react@19.2.7)(typescript@7.0.2)
       '@testing-library/react':
         specifier: ^16.0.0
-        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react@19.2.17)(react-dom@19.2.8(react@19.2.7))(react@19.2.7)
       '@types/react':
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.17
@@ -228,8 +228,8 @@ importers:
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.7
       react-dom:
-        specifier: ^18.0.0 || ^19.0.0
-        version: 19.2.7(react@19.2.7)
+        specifier: ^19.2.8
+        version: 19.2.8(react@19.2.7)
 
   packages/kit-plugins:
     dependencies:
@@ -2484,10 +2484,10 @@ packages:
   queue-microtask@1.2.3:
     resolution: {integrity: sha512-NuaNSa6flKT5JaSYQzJok04JzTL1CA6aGhv5rfLW3PgqA+M2ChpZQnAC8h8i4ZFkBS8X5RqkDBHA7r4hej3K9A==}
 
-  react-dom@19.2.7:
-    resolution: {integrity: sha512-t0BRVXvbiE/o20Hfw669rLbMCDWtYZLvmJigy2f0MxsXF+71pxhR3xOkspmsO8h3ZlNzyibAmtCa3l4lYKk6gQ==}
+  react-dom@19.2.8:
+    resolution: {integrity: sha512-rVprimfGBG3DR+Tq0IQG2DT5PxKth1WIGDmj5yPmlzr4YBe7uyE+Du4oVqTDXZSHGGGXRtTJEGSSePyQCMBglQ==}
     peerDependencies:
-      react: ^19.2.7
+      react: ^19.2.8
 
   react-is@17.0.2:
     resolution: {integrity: sha512-w2GsyukL62IJnlaff/nRegPQR94C/XXamvMWmSHRJ4y7Ts/4ocGRmTHvOs8PSE6pB3dWOrD/nueuU5sduBsQ4w==}
@@ -3718,7 +3718,7 @@ snapshots:
     optionalDependencies:
       typescript: 7.0.2
 
-  '@solana/react@7.0.0(@solana/kit@7.0.0(typescript@7.0.2))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@7.0.2)':
+  '@solana/react@7.0.0(@solana/kit@7.0.0(typescript@7.0.2))(react-dom@19.2.8(react@19.2.7))(react@19.2.7)(typescript@7.0.2)':
     dependencies:
       '@solana/kit': 7.0.0(typescript@7.0.2)
       '@solana/promises': 7.0.0(typescript@7.0.2)
@@ -3729,7 +3729,7 @@ snapshots:
       '@solana/wallet-standard-features': 1.4.0
       '@wallet-standard/base': 1.1.1
       '@wallet-standard/errors': 0.1.2
-      '@wallet-standard/react': 1.0.3(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@wallet-standard/react': 1.0.3(react-dom@19.2.8(react@19.2.7))(react@19.2.7)
       '@wallet-standard/ui': 1.0.3
       '@wallet-standard/ui-registry': 1.1.1
     optionalDependencies:
@@ -4029,12 +4029,12 @@ snapshots:
       picocolors: 1.1.1
       pretty-format: 27.5.1
 
-  '@testing-library/react@16.3.2(@testing-library/dom@10.4.1)(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@testing-library/react@16.3.2(@testing-library/dom@10.4.1)(@types/react@19.2.17)(react-dom@19.2.8(react@19.2.7))(react@19.2.7)':
     dependencies:
       '@babel/runtime': 7.29.2
       '@testing-library/dom': 10.4.1
       react: 19.2.7
-      react-dom: 19.2.7(react@19.2.7)
+      react-dom: 19.2.8(react@19.2.7)
     optionalDependencies:
       '@types/react': 19.2.17
 
@@ -4205,7 +4205,7 @@ snapshots:
     dependencies:
       '@wallet-standard/base': 1.1.1
 
-  '@wallet-standard/react-core@1.0.3(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@wallet-standard/react-core@1.0.3(react-dom@19.2.8(react@19.2.7))(react@19.2.7)':
     dependencies:
       '@wallet-standard/app': 1.1.1
       '@wallet-standard/base': 1.1.1
@@ -4215,11 +4215,11 @@ snapshots:
       '@wallet-standard/ui': 1.0.3
       '@wallet-standard/ui-registry': 1.1.1
       react: 19.2.7
-      react-dom: 19.2.7(react@19.2.7)
+      react-dom: 19.2.8(react@19.2.7)
 
-  '@wallet-standard/react@1.0.3(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@wallet-standard/react@1.0.3(react-dom@19.2.8(react@19.2.7))(react@19.2.7)':
     dependencies:
-      '@wallet-standard/react-core': 1.0.3(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@wallet-standard/react-core': 1.0.3(react-dom@19.2.8(react@19.2.7))(react@19.2.7)
     transitivePeerDependencies:
       - react
       - react-dom
@@ -4789,7 +4789,7 @@ snapshots:
 
   queue-microtask@1.2.3: {}
 
-  react-dom@19.2.7(react@19.2.7):
+  react-dom@19.2.8(react@19.2.7):
     dependencies:
       react: 19.2.7
       scheduler: 0.27.0
