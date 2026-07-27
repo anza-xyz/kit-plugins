@@ -2,16 +2,18 @@ import {
     Address,
     createClient,
     generateKeyPairSigner,
+    getTransactionMessageComputeUnitLimit,
     getTransactionMessageComputeUnitPrice,
+    Lamports,
     MicroLamports,
     singleInstructionPlan,
     SingleTransactionPlan,
     TransactionMessage,
     TransactionSigner,
 } from '@solana/kit';
-import { describe, expect, it } from 'vitest';
+import { assertType, describe, expect, it } from 'vitest';
 
-import { rpcTransactionPlanner } from '../src';
+import { rpcTransactionPlanner, TransactionPlannerConfig } from '../src';
 
 const MOCK_INSTRUCTION = {
     programAddress: '11111111111111111111111111111111' as Address,
@@ -84,8 +86,60 @@ describe('rpcTransactionPlanner', () => {
         expect(getTransactionMessageComputeUnitPrice(message)).toBe(100n);
     });
 
+    it('fills provisory resource limits by default', async () => {
+        const payer = await generateKeyPairSigner();
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(rpcTransactionPlanner());
+
+        const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
+        const transactionPlan = (await client.transactionPlanner(instructionPlan)) as SingleTransactionPlan;
+        // A provisory compute unit limit of 0 is reserved for the executor to estimate.
+        expect(getTransactionMessageComputeUnitLimit(transactionPlan.message)).toBe(0);
+    });
+
+    it('does not fill provisory resource limits when estimation is disabled', async () => {
+        const payer = await generateKeyPairSigner();
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(rpcTransactionPlanner({ estimateResourceLimits: false }));
+
+        const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
+        const transactionPlan = (await client.transactionPlanner(instructionPlan)) as SingleTransactionPlan;
+        expect(getTransactionMessageComputeUnitLimit(transactionPlan.message)).toBeUndefined();
+    });
+
+    it('throws when configured with version 1 transactions', () => {
+        const payer = {} as TransactionSigner;
+        expect(() =>
+            createClient()
+                .use(() => ({ payer }))
+                .use(rpcTransactionPlanner({ version: 1 })),
+        ).toThrow(/Version 1 transactions are not yet supported/);
+    });
+
     it('requires a payer on the client', () => {
         // @ts-expect-error TypeScript fails but we don't throw an error at runtime.
         expect(() => createClient().use(rpcTransactionPlanner())).not.toThrow();
+    });
+
+    it('discriminates the config shape on the transaction version', () => {
+        // Legacy and version 0 accept `microLamportsPerComputeUnit` but not `priorityFeeLamports`.
+        assertType<TransactionPlannerConfig>({ microLamportsPerComputeUnit: 1n as MicroLamports, version: 0 });
+        // @ts-expect-error `priorityFeeLamports` is only valid for version 1.
+        assertType<TransactionPlannerConfig>({ priorityFeeLamports: 1n as Lamports, version: 0 });
+
+        // Version 1 accepts `priorityFeeLamports` but not `microLamportsPerComputeUnit`.
+        assertType<TransactionPlannerConfig>({ priorityFeeLamports: 1n as Lamports, version: 1 });
+        // @ts-expect-error `microLamportsPerComputeUnit` is only valid for legacy and version 0.
+        assertType<TransactionPlannerConfig>({ microLamportsPerComputeUnit: 1n as MicroLamports, version: 1 });
+
+        // `estimateResourceLimits` is shared across all versions.
+        assertType<TransactionPlannerConfig>({ estimateResourceLimits: false });
+        assertType<TransactionPlannerConfig>({
+            estimateResourceLimits: false,
+            priorityFeeLamports: 1n as Lamports,
+            version: 1,
+        });
     });
 });

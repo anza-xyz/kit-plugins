@@ -3,6 +3,7 @@ import {
     createClient,
     createTransactionMessage,
     generateKeyPairSigner,
+    getTransactionMessageComputeUnitLimit,
     parallelTransactionPlan,
     pipe,
     Rpc,
@@ -358,6 +359,249 @@ describe('rpcTransactionPlanExecutor', () => {
             commitment: 'confirmed',
             skipPreflight: false,
         });
+    });
+
+    it('does not simulate to estimate when resource limit estimation is disabled', async () => {
+        const payer = await generateKeyPairSigner();
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        const simulateTransaction = vi.fn();
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: simulateTransaction }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
+        const sendAndConfirmTransaction = vi.fn().mockResolvedValue('MockTransactionSignature');
+        (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
+
+        const client = createClient()
+            .use(() => ({ payer, rpc, rpcSubscriptions }))
+            .use(rpcTransactionPlanner({ estimateResourceLimits: false }))
+            .use(rpcTransactionPlanExecutor({ estimateResourceLimits: false }));
+
+        const transactionPlan = await client.transactionPlanner(singleInstructionPlan(MOCK_INSTRUCTION));
+        await client.transactionPlanExecutor(transactionPlan);
+
+        // No estimation simulation should have been performed.
+        expect(simulateTransaction).not.toHaveBeenCalled();
+
+        // Preflight runs as the only simulation, so it is not skipped.
+        expect(sendAndConfirmTransaction).toHaveBeenCalledExactlyOnceWith(expect.anything(), {
+            commitment: 'confirmed',
+            skipPreflight: false,
+        });
+    });
+
+    it('performs no simulation when estimation is disabled and preflight is skipped', async () => {
+        const payer = await generateKeyPairSigner();
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        const simulateTransaction = vi.fn();
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: simulateTransaction }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
+        const sendAndConfirmTransaction = vi.fn().mockResolvedValue('MockTransactionSignature');
+        (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
+
+        const client = createClient()
+            .use(() => ({ payer, rpc, rpcSubscriptions }))
+            .use(rpcTransactionPlanner({ estimateResourceLimits: false }))
+            .use(rpcTransactionPlanExecutor({ estimateResourceLimits: false, skipPreflight: true }));
+
+        const transactionPlan = await client.transactionPlanner(singleInstructionPlan(MOCK_INSTRUCTION));
+        await client.transactionPlanExecutor(transactionPlan);
+
+        // No estimation simulation and no preflight: zero simulations overall.
+        expect(simulateTransaction).not.toHaveBeenCalled();
+        expect(sendAndConfirmTransaction).toHaveBeenCalledExactlyOnceWith(expect.anything(), {
+            commitment: 'confirmed',
+            skipPreflight: true,
+        });
+    });
+
+    it('adds the minimum compute unit buffer of 300 to a small estimate', async () => {
+        const payer = await generateKeyPairSigner();
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        // A tiny estimate whose percentage margin (42 * ~0.1 = 5) is below the
+        // 300 buffer floor, so the flat 300 buffer is added instead: 42 + 300.
+        const simulateTransaction = vi.fn().mockResolvedValue({ value: { unitsConsumed: 42n } });
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: simulateTransaction }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
+        const sendAndConfirmTransaction = vi.fn().mockResolvedValue('MockTransactionSignature');
+        (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
+
+        const client = createClient()
+            .use(() => ({ payer, rpc, rpcSubscriptions }))
+            .use(rpcTransactionPlanExecutor());
+
+        const txMessage = setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }));
+        const result = (await client.transactionPlanExecutor(
+            singleTransactionPlan(txMessage),
+        )) as SingleTransactionPlanResult;
+
+        expect(getTransactionMessageComputeUnitLimit(result.context.message!)).toBe(342);
+    });
+
+    it('adds the minimum compute unit buffer when the percentage margin is below 300', async () => {
+        const payer = await generateKeyPairSigner();
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        // 1,000 CU sits in the decaying region but its margin (1,000 * ~0.09984
+        // = 100) is below the 300 buffer floor, so the flat 300 buffer wins:
+        // 1,000 + 300 = 1,300.
+        const simulateTransaction = vi.fn().mockResolvedValue({ value: { unitsConsumed: 1_000n } });
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: simulateTransaction }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
+        const sendAndConfirmTransaction = vi.fn().mockResolvedValue('MockTransactionSignature');
+        (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
+
+        const client = createClient()
+            .use(() => ({ payer, rpc, rpcSubscriptions }))
+            .use(rpcTransactionPlanExecutor());
+
+        const txMessage = setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }));
+        const result = (await client.transactionPlanExecutor(
+            singleTransactionPlan(txMessage),
+        )) as SingleTransactionPlanResult;
+
+        expect(getTransactionMessageComputeUnitLimit(result.context.message!)).toBe(1_300);
+    });
+
+    it('applies the default compute unit buffer to a mid-range estimate', async () => {
+        const payer = await generateKeyPairSigner();
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        // 50,000 CU sits in the decaying region: margin = 0.1 - 0.08 * (50000 / 500000) = 0.092.
+        // The percentage buffer (50,000 * 0.092 = 4,600) exceeds the 300 floor,
+        // so it wins: 50,000 + 4,600 = 54,600.
+        const simulateTransaction = vi.fn().mockResolvedValue({ value: { unitsConsumed: 50_000n } });
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: simulateTransaction }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
+        const sendAndConfirmTransaction = vi.fn().mockResolvedValue('MockTransactionSignature');
+        (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
+
+        const client = createClient()
+            .use(() => ({ payer, rpc, rpcSubscriptions }))
+            .use(rpcTransactionPlanExecutor());
+
+        const txMessage = setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }));
+        const result = (await client.transactionPlanExecutor(
+            singleTransactionPlan(txMessage),
+        )) as SingleTransactionPlanResult;
+
+        expect(getTransactionMessageComputeUnitLimit(result.context.message!)).toBe(54_600);
+    });
+
+    it('uses a custom getComputeUnitLimitFromEstimate function when provided', async () => {
+        const payer = await generateKeyPairSigner();
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        const simulateTransaction = vi.fn().mockResolvedValue({ value: { unitsConsumed: 1_000n } });
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: simulateTransaction }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
+        const sendAndConfirmTransaction = vi.fn().mockResolvedValue('MockTransactionSignature');
+        (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
+
+        const getComputeUnitLimitFromEstimate = vi.fn((estimatedComputeUnits: number) => estimatedComputeUnits * 2);
+        const client = createClient()
+            .use(() => ({ payer, rpc, rpcSubscriptions }))
+            .use(rpcTransactionPlanExecutor({ getComputeUnitLimitFromEstimate }));
+
+        const txMessage = setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }));
+        const result = (await client.transactionPlanExecutor(
+            singleTransactionPlan(txMessage),
+        )) as SingleTransactionPlanResult;
+
+        // The custom function receives the raw estimate and its result is used verbatim.
+        expect(getComputeUnitLimitFromEstimate).toHaveBeenCalledWith(1_000);
+        expect(getTransactionMessageComputeUnitLimit(result.context.message!)).toBe(2_000);
+    });
+
+    it('applies the compute unit buffer on the recovery path when estimation fails and skipPreflight is true', async () => {
+        const payer = await generateKeyPairSigner();
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        // The estimation simulation fails but reports the consumed units.
+        const simulateTransaction = vi
+            .fn()
+            .mockResolvedValue({ value: { err: 'AccountNotFound', unitsConsumed: 50_000n } });
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: simulateTransaction }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
+        const sendAndConfirmTransaction = vi.fn().mockResolvedValue('MockTransactionSignature');
+        (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
+
+        const client = createClient()
+            .use(() => ({ payer, rpc, rpcSubscriptions }))
+            .use(rpcTransactionPlanExecutor({ skipPreflight: true }));
+
+        const txMessage = setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }));
+        const result = (await client.transactionPlanExecutor(
+            singleTransactionPlan(txMessage),
+        )) as SingleTransactionPlanResult;
+
+        // The recovered 50,000 CU is buffered the same way as a successful estimate.
+        expect(getTransactionMessageComputeUnitLimit(result.context.message!)).toBe(54_600);
+    });
+
+    it('caps the default buffered compute unit limit at the per-transaction maximum', async () => {
+        const payer = await generateKeyPairSigner();
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        // 1,390,000 CU buffered by 2% would be ~1,417,800, above the 1,400,000 max.
+        const simulateTransaction = vi.fn().mockResolvedValue({ value: { unitsConsumed: 1_390_000n } });
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: simulateTransaction }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
+        const sendAndConfirmTransaction = vi.fn().mockResolvedValue('MockTransactionSignature');
+        (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
+
+        const client = createClient()
+            .use(() => ({ payer, rpc, rpcSubscriptions }))
+            .use(rpcTransactionPlanExecutor());
+
+        const txMessage = setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }));
+        const result = (await client.transactionPlanExecutor(
+            singleTransactionPlan(txMessage),
+        )) as SingleTransactionPlanResult;
+
+        expect(getTransactionMessageComputeUnitLimit(result.context.message!)).toBe(1_400_000);
+    });
+
+    it('caps a custom getComputeUnitLimitFromEstimate result at the per-transaction maximum', async () => {
+        const payer = await generateKeyPairSigner();
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        const simulateTransaction = vi.fn().mockResolvedValue({ value: { unitsConsumed: 1_000n } });
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: simulateTransaction }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
+        const sendAndConfirmTransaction = vi.fn().mockResolvedValue('MockTransactionSignature');
+        (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
+
+        const client = createClient()
+            .use(() => ({ payer, rpc, rpcSubscriptions }))
+            // A custom function that returns an out-of-range value must still be capped.
+            .use(rpcTransactionPlanExecutor({ getComputeUnitLimitFromEstimate: () => 2_000_000 }));
+
+        const txMessage = setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }));
+        const result = (await client.transactionPlanExecutor(
+            singleTransactionPlan(txMessage),
+        )) as SingleTransactionPlanResult;
+
+        expect(getTransactionMessageComputeUnitLimit(result.context.message!)).toBe(1_400_000);
     });
 
     it('limits the number of concurrent executions for parallel transaction plans', async () => {

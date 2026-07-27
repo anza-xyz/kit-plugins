@@ -3,6 +3,7 @@ import {
     createTransactionMessage,
     createTransactionPlanner,
     extendClient,
+    Lamports,
     MicroLamports,
     pipe,
     setTransactionMessageComputeUnitPrice,
@@ -15,6 +16,10 @@ import {
  * The planner creates transaction messages with:
  * - The configured fee payer.
  * - Optional priority fees.
+ *
+ * Unlike the RPC planner, the LiteSVM planner does not estimate resource limits,
+ * since LiteSVM executes transactions locally without a simulation-based
+ * estimation step.
  *
  * @param config - Optional configuration for the planner.
  * @returns A plugin that adds `transactionPlanner` to the client.
@@ -34,15 +39,28 @@ import {
  */
 export function litesvmTransactionPlanner(config: TransactionPlannerConfig = {}) {
     return <T extends ClientWithPayer>(client: T) => {
+        if (config.version === 1) {
+            // The v1 transaction path is defined at the type level for forward
+            // compatibility, but `createTransactionMessage` cannot yet build v1
+            // messages, so we fail loudly rather than silently misbehave.
+            throw new Error(
+                'Version 1 transactions are not yet supported by `litesvmTransactionPlanner`. ' +
+                    'Use version 0 or legacy transactions for now.',
+            );
+        }
+
+        const version = config.version ?? 0;
+        const microLamportsPerComputeUnit = config.microLamportsPerComputeUnit;
+
         const transactionPlanner = createTransactionPlanner({
             createTransactionMessage: () => {
                 return pipe(
-                    createTransactionMessage({ version: config.version ?? 0 }),
+                    createTransactionMessage({ version }),
                     tx => setTransactionMessageFeePayerSigner(client.payer, tx),
                     tx =>
-                        config.microLamportsPerComputeUnit
-                            ? setTransactionMessageComputeUnitPrice(config.microLamportsPerComputeUnit, tx)
-                            : tx,
+                        microLamportsPerComputeUnit === undefined
+                            ? tx
+                            : setTransactionMessageComputeUnitPrice(microLamportsPerComputeUnit, tx),
                 );
             },
         });
@@ -52,18 +70,17 @@ export function litesvmTransactionPlanner(config: TransactionPlannerConfig = {})
 }
 
 /**
- * Configuration options for the transaction planner.
+ * Configuration options for the transaction planner when creating legacy or
+ * version 0 transaction messages.
  *
- * The `version` field is used to determine the transaction version
- * to use when creating transaction messages and determines the shape
- * of the rest of the configuration options, as some options are only
- * applicable to certain transaction versions.
+ * For these versions, priority fees are expressed as a `setComputeUnitPrice`
+ * compute budget instruction appended to the transaction.
  */
-// TODO(loris): Add support for v1 transactions when LiteSVM supports them.
-// This includes: `version: 1` and `priorityFees?: Lamports` in a new union variant.
-export type TransactionPlannerConfig = {
+export type TransactionPlannerConfigLegacy = {
     /**
-     * The priority fees to be set on the transaction in micro lamports per compute unit.
+     * The priority fee to set on the transaction, in micro-lamports per compute
+     * unit, added as a `setComputeUnitPrice` instruction.
+     *
      * Defaults to using no priority fees.
      */
     microLamportsPerComputeUnit?: MicroLamports;
@@ -73,3 +90,42 @@ export type TransactionPlannerConfig = {
      */
     version?: 'legacy' | 0;
 };
+
+/**
+ * Configuration options for the transaction planner when creating version 1
+ * transaction messages.
+ *
+ * For version 1, priority fees live in a structured resource header rather than
+ * a compute budget instruction, and are expressed as a total amount in lamports
+ * rather than a per-compute-unit price.
+ *
+ * @remarks
+ * Version 1 transactions are not yet buildable by `@solana/kit`, so this branch
+ * is currently inert: passing `version: 1` throws at runtime. The shape is
+ * defined now so that enabling version 1 later is not a breaking change.
+ */
+export type TransactionPlannerConfigV1 = {
+    /**
+     * The total priority fee to set on the transaction, in lamports, written to
+     * the version 1 resource header.
+     *
+     * Defaults to using no priority fees.
+     */
+    priorityFeeLamports?: Lamports;
+    /**
+     * The transaction message version to use when creating transaction messages.
+     */
+    version: 1;
+};
+
+/**
+ * Configuration options for the transaction planner.
+ *
+ * The `version` field determines the transaction version to use when creating
+ * transaction messages and discriminates the shape of the rest of the
+ * configuration, as some options are only applicable to certain versions.
+ *
+ * @see {@link TransactionPlannerConfigLegacy}
+ * @see {@link TransactionPlannerConfigV1}
+ */
+export type TransactionPlannerConfig = TransactionPlannerConfigLegacy | TransactionPlannerConfigV1;

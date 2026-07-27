@@ -242,10 +242,15 @@ const client = await createClient()
 
 ### Options
 
-All options are provided via a `TransactionPlannerConfig` object:
+All options are provided via a `TransactionPlannerConfig` object. Its shape is discriminated by the transaction `version`.
+
+For legacy and version 0 transactions:
 
 - `version`: The transaction message version to use. Accepts `0` or `'legacy'`. Defaults to `0`.
-- `microLamportsPerComputeUnit`: Priority fees in micro lamports per compute unit. Defaults to no priority fees.
+- `microLamportsPerComputeUnit`: The priority fee in micro-lamports per compute unit, added as a `setComputeUnitPrice` instruction. Defaults to no priority fees.
+- `estimateResourceLimits`: Whether to estimate and set resource limits by simulating before sending. Set to `false` to skip estimation and reserve no provisory limits, which is useful for transactions close to the message size limit. Defaults to `true`.
+
+Version 1 transactions are defined for forward compatibility but are not yet buildable by `@solana/kit`; passing `version: 1` currently throws. When available, version 1 will accept `priorityFeeLamports` (a flat total in lamports) instead of `microLamportsPerComputeUnit`, alongside the shared `estimateResourceLimits` option.
 
 ### Features
 
@@ -276,6 +281,8 @@ const client = await createClient()
 
 ### Options
 
+- `estimateResourceLimits`: Whether to estimate and set resource limits by simulating before sending (default: `true`). This should match the `estimateResourceLimits` option on the planner; `solanaRpc` keeps them in sync automatically.
+- `getComputeUnitLimitFromEstimate`: A `(estimatedComputeUnits: number) => number` function that maps the estimated compute unit consumption to the compute unit limit to set, adding headroom for variation between simulation and execution. Defaults to a function that adds a buffer on top of the estimate of at least 300 compute units, or a margin that decays linearly from 10% at low estimates to 2% at 500,000 compute units and above, whichever is greater. The result is always capped at 1,400,000 (the per-transaction maximum).
 - `maxConcurrency`: Maximum number of concurrent executions (default: 10).
 - `skipPreflight`: Whether to skip the preflight simulation when sending transactions (default: `false`).
 
@@ -293,13 +300,49 @@ By default, the executor estimates resource limits by simulating the transaction
 Setting `skipPreflight: true` changes the behavior:
 
 - Preflight is always skipped regardless of whether estimation was performed.
-- If the resource limit estimation simulation fails, the consumed resources from the failed simulation are used to set the limits (with a 10% buffer on compute units) so the transaction still reaches the validator. This is useful for debugging failed transactions in an explorer.
+- If the resource limit estimation simulation fails, the consumed resources from the failed simulation are used to set the limits (with the compute unit buffer from `getComputeUnitLimitFromEstimate` applied) so the transaction still reaches the validator. This is useful for debugging failed transactions in an explorer.
 
 | Scenario            | `skipPreflight: false` (default) | `skipPreflight: true`                  |
 | ------------------- | -------------------------------- | -------------------------------------- |
 | Estimation succeeds | Set limits, skip preflight       | Set limits, skip preflight             |
 | Estimation fails    | Throw                            | Use consumed resources, skip preflight |
 | Explicit limits set | Run preflight                    | Skip preflight                         |
+
+Set `estimateResourceLimits: false` to opt out of resource limit estimation entirely. The planner then reserves no provisory resource limits and the executor does not simulate to estimate or inject any; any explicit resource limits already present on the message are preserved. This is useful for transactions close to the message size limit, where adding a compute budget instruction would make an otherwise valid transaction too large.
+
+Note that disabling estimation does not disable preflight. When `estimateResourceLimits: false` and `skipPreflight` is left at its default `false`, the executor still runs a preflight simulation when sending — this becomes the only simulation. To avoid all simulation overhead, set `skipPreflight: true` as well.
+
+When using `solanaRpc`, both the planner and executor read `estimateResourceLimits` from a single place: `transactionConfig`.
+
+```ts
+const client = createClient()
+    .use(payer(myPayer))
+    .use(
+        solanaRpc({
+            rpcUrl: 'https://api.mainnet-beta.solana.com',
+            skipPreflight: true,
+            transactionConfig: { estimateResourceLimits: false },
+        }),
+    );
+```
+
+#### Compute unit buffer
+
+Because a transaction can consume slightly more compute units at execution time than during simulation, the executor adds a buffer to the estimated compute unit limit. By default this buffer is the greater of a fixed minimum of 300 compute units and a margin that decays linearly from 10% at low estimates to 2% at 500,000 compute units and above, added on top of the estimate.
+
+Override this by passing a `getComputeUnitLimitFromEstimate` function that maps the raw estimate to the limit to set. It is applied on both successful estimation and the `skipPreflight` recovery path. The resulting limit is always capped at 1,400,000, the maximum number of compute units allowed per transaction, including for custom functions.
+
+```ts
+const client = createClient()
+    .use(payer(myPayer))
+    .use(
+        solanaRpc({
+            rpcUrl: 'https://api.mainnet-beta.solana.com',
+            // Add a flat 20% buffer instead of the default curve.
+            getComputeUnitLimitFromEstimate: estimatedComputeUnits => Math.ceil(estimatedComputeUnits * 1.2),
+        }),
+    );
+```
 
 ## Deprecated plugins
 
