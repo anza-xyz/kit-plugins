@@ -6,4 +6,9 @@ updates:
       interval: daily
       time: '01:00'
       timezone: America/Los_Angeles
+    groups:
+      react:
+        patterns:
+          - 'react'
+          - 'react-dom'
     open-pull-requests-limit: 10
