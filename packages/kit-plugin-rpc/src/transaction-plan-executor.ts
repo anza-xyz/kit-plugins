@@ -50,6 +50,43 @@ import {
 export function rpcTransactionPlanExecutor(
     config: {
         /**
+         * Whether to estimate and set resource limits (the compute unit limit
+         * and, for version 1 transactions, the loaded accounts data size limit)
+         * by simulating the transaction before sending.
+         *
+         * When `true` (default), any resource limit that is still provisory or
+         * unset is estimated via a simulation and replaced with the estimated
+         * value (with a compute unit buffer applied via
+         * `getComputeUnitLimitFromEstimate`). When `false`, no estimation
+         * simulation is performed and the message is sent with exactly the
+         * resource limits it already carries.
+         *
+         * This should match the `estimateResourceLimits` option passed to
+         * {@link rpcTransactionPlanner}, which controls whether provisory limits
+         * are reserved in the first place. {@link solanaRpc} keeps them in sync
+         * automatically.
+         *
+         * Defaults to `true`.
+         */
+        estimateResourceLimits?: boolean;
+        /**
+         * Maps the estimated compute unit consumption from simulation to the
+         * compute unit limit to set on the transaction, adding headroom to
+         * account for variation between simulation and execution.
+         *
+         * By default, a function is used that adds a buffer on top of the
+         * estimate of at least 300 compute units, or a margin that decays
+         * linearly from 10% at low estimates to 2% at 500,000 compute units and
+         * above, whichever is greater.
+         *
+         * The returned value is always capped at 1,400,000, the maximum number of
+         * compute units allowed per transaction.
+         *
+         * @param estimatedComputeUnits - The compute units consumed during simulation.
+         * @returns The compute unit limit to set on the transaction.
+         */
+        getComputeUnitLimitFromEstimate?: (estimatedComputeUnits: number) => number;
+        /**
          * The maximum number of concurrent executions allowed.
          * Defaults to 10.
          */
@@ -60,7 +97,8 @@ export function rpcTransactionPlanExecutor(
          * When `false` (default), preflight is skipped only if a resource limit
          * estimation simulation was already performed for that transaction.
          * If every applicable resource limit is already explicitly set (i.e. no
-         * estimation was needed), preflight runs as the only simulation.
+         * estimation was needed) or estimation is disabled, preflight runs as the
+         * only simulation.
          *
          * When `true`, preflight is always skipped and the transaction is sent
          * directly to the validator. Additionally, if the resource limit estimation
@@ -97,6 +135,9 @@ export function rpcTransactionPlanExecutor(
             rpcSubscriptions: client.rpcSubscriptions,
         });
         const estimateResourceLimits = estimateResourceLimitsFactory({ rpc: client.rpc });
+        const shouldEstimateResourceLimits = config.estimateResourceLimits ?? true;
+        const getComputeUnitLimitFromEstimate =
+            config.getComputeUnitLimitFromEstimate ?? getDefaultComputeUnitLimitFromEstimate;
         const skipPreflight = config.skipPreflight ?? false;
 
         const transactionPlanExecutor = createTransactionPlanExecutor({
@@ -109,16 +150,24 @@ export function rpcTransactionPlanExecutor(
                 // skip the redundant preflight simulation while sending.
                 let didSimulateToEstimate = false;
                 const estimateAndSetResourceLimits = estimateAndSetResourceLimitsFactory(
-                    bufferAndRecoverResourceLimits(estimateResourceLimits, skipPreflight, () => {
-                        didSimulateToEstimate = true;
-                    }),
+                    bufferAndRecoverResourceLimits(
+                        estimateResourceLimits,
+                        getComputeUnitLimitFromEstimate,
+                        skipPreflight,
+                        () => {
+                            didSimulateToEstimate = true;
+                        },
+                    ),
                 );
 
                 const signedTransaction = await pipe(
                     transactionMessage,
                     tx => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, tx),
                     tx => (context.message = tx),
-                    async tx => await estimateAndSetResourceLimits(tx, executorConfig),
+                    // Skip the estimation step entirely when disabled, so the
+                    // message is sent with exactly the resource limits it carries.
+                    async tx =>
+                        shouldEstimateResourceLimits ? await estimateAndSetResourceLimits(tx, executorConfig) : tx,
                     async tx => (context.message = await tx),
                     async tx => await signTransactionMessageWithSigners(await tx, executorConfig),
                     async tx => (context.transaction = await tx),
@@ -138,8 +187,50 @@ export function rpcTransactionPlanExecutor(
 }
 
 /**
- * Wraps a resource limit estimator to add a 10% compute unit buffer and,
- * optionally, recover from failed estimation simulations.
+ * The minimum compute unit buffer added on top of the estimate by
+ * {@link getDefaultComputeUnitLimitFromEstimate}.
+ *
+ * This value (300) reserves headroom that covers, at minimum, the two Compute
+ * Budget instructions the executor prepends to the transaction (a
+ * `SetComputeUnitLimit` and a `SetComputeUnitPrice`), each of which consumes a
+ * fixed 150 compute units as builtin instructions.
+ */
+const MIN_COMPUTE_UNIT_BUFFER = 300;
+/** The maximum compute unit limit allowed per transaction. */
+const MAX_COMPUTE_UNIT_LIMIT = 1_400_000;
+/** The estimated compute units at which the default margin reaches its floor. */
+const COMPUTE_UNIT_MARGIN_CAP = 500_000;
+/** The margin added to low compute unit estimates (10%). */
+const MAX_COMPUTE_UNIT_MARGIN = 0.1;
+/** The margin added to compute unit estimates at or above the cap (2%). */
+const MIN_COMPUTE_UNIT_MARGIN = 0.02;
+
+/**
+ * The default function used to derive a compute unit limit from an estimate.
+ *
+ * It adds a buffer on top of the estimate that is the greater of a fixed
+ * minimum ({@link MIN_COMPUTE_UNIT_BUFFER}) and a margin that decays linearly
+ * from {@link MAX_COMPUTE_UNIT_MARGIN} at low estimates to
+ * {@link MIN_COMPUTE_UNIT_MARGIN} at {@link COMPUTE_UNIT_MARGIN_CAP} compute
+ * units and above. This guarantees a meaningful cushion for cheap transactions
+ * while keeping the overhead small for expensive ones, accounting for variation
+ * between simulation and execution.
+ *
+ * @param estimatedComputeUnits - The compute units consumed during simulation.
+ * @returns The compute unit limit to set on the transaction.
+ */
+function getDefaultComputeUnitLimitFromEstimate(estimatedComputeUnits: number): number {
+    const progress = Math.min(estimatedComputeUnits / COMPUTE_UNIT_MARGIN_CAP, 1);
+    const margin = MAX_COMPUTE_UNIT_MARGIN - (MAX_COMPUTE_UNIT_MARGIN - MIN_COMPUTE_UNIT_MARGIN) * progress;
+    // Compute the extra units separately and round them up before adding, so we
+    // avoid floating-point artefacts from multiplying by `1 + margin` directly.
+    const extraComputeUnits = Math.ceil(estimatedComputeUnits * margin);
+    return estimatedComputeUnits + Math.max(MIN_COMPUTE_UNIT_BUFFER, extraComputeUnits);
+}
+
+/**
+ * Wraps a resource limit estimator to buffer the estimated compute unit limit
+ * and, optionally, recover from failed estimation simulations.
  *
  * The returned estimator is intended to be passed to
  * {@link estimateAndSetResourceLimitsFactory}, which only calls it when a
@@ -147,8 +238,11 @@ export function rpcTransactionPlanExecutor(
  * therefore invoked exactly once an estimation simulation has been performed
  * and we are proceeding to send (i.e. not on a non-recoverable failure).
  *
- * A 10% buffer is applied to the compute unit limit only, to account for
- * variations between simulation and execution.
+ * The `getComputeUnitLimitFromEstimate` function is applied to the compute unit
+ * limit only, to account for variations between simulation and execution. It is
+ * applied on both the success path and the recovery path, and its result is
+ * rounded up to an integer and capped at {@link MAX_COMPUTE_UNIT_LIMIT} (the
+ * per-transaction maximum).
  *
  * When `skipPreflight` is `true` and the estimation simulation fails, the
  * consumed resources from the failed simulation are used so the transaction
@@ -156,12 +250,14 @@ export function rpcTransactionPlanExecutor(
  *
  * @param estimateResourceLimits - The underlying estimator, typically created by
  *   {@link estimateResourceLimitsFactory}.
+ * @param getComputeUnitLimitFromEstimate - Maps the estimated compute units to the limit to set.
  * @param skipPreflight - Whether to recover from failed simulations using consumed resources.
  * @param onSimulate - Called once a simulation has been performed and an estimate produced.
  * @returns An estimator that applies a compute unit buffer and recovery behaviour.
  */
 function bufferAndRecoverResourceLimits(
     estimateResourceLimits: ReturnType<typeof estimateResourceLimitsFactory>,
+    getComputeUnitLimitFromEstimate: (estimatedComputeUnits: number) => number,
     skipPreflight: boolean,
     onSimulate: () => void,
 ): ReturnType<typeof estimateResourceLimitsFactory> {
@@ -196,10 +292,14 @@ function bufferAndRecoverResourceLimits(
         // above and never gets here.
         onSimulate();
 
-        // Multiply the estimated compute unit limit by 1.1 to add a 10% buffer.
+        // Apply the compute unit buffer to the estimated compute unit limit,
+        // rounding up to an integer and capping at the per-transaction maximum.
         return {
             ...estimate,
-            computeUnitLimit: Math.ceil(estimate.computeUnitLimit * 1.1),
+            computeUnitLimit: Math.min(
+                MAX_COMPUTE_UNIT_LIMIT,
+                Math.ceil(getComputeUnitLimitFromEstimate(estimate.computeUnitLimit)),
+            ),
         } as ResourceLimitsEstimate<typeof transactionMessage>;
     };
 }

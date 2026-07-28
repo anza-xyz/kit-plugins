@@ -153,10 +153,16 @@ const client = await createClient()
 
 ### Options
 
-All options are provided via a `TransactionPlannerConfig` object:
+All options are provided via a `TransactionPlannerConfig` object. Its shape is discriminated by the transaction `version`.
+
+For legacy and version 0 transactions:
 
 - `version`: The transaction message version to use. Accepts `0` or `'legacy'`. Defaults to `0`.
-- `microLamportsPerComputeUnit`: Priority fees in micro lamports per compute unit. Defaults to no priority fees.
+- `microLamportsPerComputeUnit`: The priority fee in micro-lamports per compute unit, added as a `setComputeUnitPrice` instruction. Defaults to no priority fees.
+
+Unlike the RPC planner, the LiteSVM planner does not estimate resource limits, since LiteSVM executes transactions locally without a simulation-based estimation step.
+
+Version 1 transactions are defined for forward compatibility but are not yet buildable by `@solana/kit`; passing `version: 1` currently throws. When available, version 1 will accept `priorityFeeLamports` (a flat total in lamports) instead of `microLamportsPerComputeUnit`.
 
 ### Features
 

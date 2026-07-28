@@ -60,6 +60,20 @@ export type SolanaRpcConnectionConfig<TClusterUrl extends ClusterUrl = ClusterUr
  */
 export type SolanaRpcConfig<TClusterUrl extends ClusterUrl = ClusterUrl> = SolanaRpcConnectionConfig<TClusterUrl> & {
     /**
+     * Maps the estimated compute unit consumption from simulation to the compute
+     * unit limit to set on the transaction, adding headroom to account for
+     * variation between simulation and execution.
+     *
+     * By default, a function is used that adds a buffer on top of the estimate
+     * of at least 300 compute units, or a margin that decays linearly from 10%
+     * at low estimates to 2% at 500,000 compute units and above, whichever is
+     * greater.
+     *
+     * The returned value is always capped at 1,400,000, the maximum number of
+     * compute units allowed per transaction.
+     */
+    getComputeUnitLimitFromEstimate?: (estimatedComputeUnits: number) => number;
+    /**
      * The maximum number of concurrent transaction executions allowed.
      * Defaults to 10.
      */
@@ -67,18 +81,25 @@ export type SolanaRpcConfig<TClusterUrl extends ClusterUrl = ClusterUrl> = Solan
     /**
      * Whether to skip the preflight simulation when sending transactions.
      *
-     * When `false` (default), preflight is skipped only if a compute unit
+     * When `false` (default), preflight is skipped only if a resource limit
      * estimation simulation was already performed for that transaction.
      *
      * When `true`, preflight is always skipped and the transaction is sent
      * directly to the validator.
      *
+     * This is independent of `transactionConfig.estimateResourceLimits`:
+     * disabling estimation does not disable preflight. Set both to send a
+     * transaction with no simulation at all.
+     *
      * Defaults to `false`.
      */
     skipPreflight?: boolean;
     /**
-     * Options to configure how transaction messages are created such as
-     * choosing a transaction version or setting priority fees.
+     * Options to configure how transaction messages are created, such as
+     * choosing a transaction version, configuring priority fees, or toggling
+     * resource limit estimation. This is the single source for
+     * `estimateResourceLimits`, which is applied to both the planner and the
+     * executor.
      */
     transactionConfig?: TransactionPlannerConfig;
 };
@@ -117,7 +138,12 @@ export function solanaRpc<TClusterUrl extends ClusterUrl>(config: SolanaRpcConfi
             solanaRpcConnection<TClusterUrl>(config),
             rpcGetMinimumBalance(),
             rpcTransactionPlanner(config.transactionConfig),
-            rpcTransactionPlanExecutor({ maxConcurrency: config.maxConcurrency, skipPreflight: config.skipPreflight }),
+            rpcTransactionPlanExecutor({
+                estimateResourceLimits: config.transactionConfig?.estimateResourceLimits,
+                getComputeUnitLimitFromEstimate: config.getComputeUnitLimitFromEstimate,
+                maxConcurrency: config.maxConcurrency,
+                skipPreflight: config.skipPreflight,
+            }),
             planAndSendTransactions(),
         );
 }
