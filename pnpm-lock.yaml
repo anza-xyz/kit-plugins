@@ -93,49 +93,6 @@ importers:
         specifier: workspace:*
         version: link:../../packages/kit-plugin-signer
 
-  packages/kit-client-litesvm:
-    dependencies:
-      '@solana/kit':
-        specifier: ^7.0.0
-        version: 7.0.0(typescript@7.0.2)
-      '@solana/kit-plugin-instruction-plan':
-        specifier: workspace:*
-        version: link:../kit-plugin-instruction-plan
-      '@solana/kit-plugin-litesvm':
-        specifier: workspace:*
-        version: link:../kit-plugin-litesvm
-      '@solana/kit-plugin-payer':
-        specifier: workspace:*
-        version: link:../kit-plugin-payer
-
-  packages/kit-client-rpc:
-    dependencies:
-      '@solana/kit':
-        specifier: ^7.0.0
-        version: 7.0.0(typescript@7.0.2)
-      '@solana/kit-plugin-instruction-plan':
-        specifier: workspace:*
-        version: link:../kit-plugin-instruction-plan
-      '@solana/kit-plugin-payer':
-        specifier: workspace:*
-        version: link:../kit-plugin-payer
-      '@solana/kit-plugin-rpc':
-        specifier: workspace:*
-        version: link:../kit-plugin-rpc
-
-  packages/kit-plugin-airdrop:
-    dependencies:
-      '@solana/kit':
-        specifier: ^7.0.0
-        version: 7.0.0(typescript@7.0.2)
-    devDependencies:
-      '@solana/kit-plugin-litesvm':
-        specifier: workspace:*
-        version: link:../kit-plugin-litesvm
-      '@solana/kit-plugin-rpc':
-        specifier: workspace:*
-        version: link:../kit-plugin-rpc
-
   packages/kit-plugin-instruction-plan:
     dependencies:
       '@solana/kit':
@@ -157,12 +114,6 @@ importers:
       '@solana-program/system':
         specifier: ^0.13.0
         version: 0.13.0(@solana/kit@7.0.0(typescript@7.0.2))
-
-  packages/kit-plugin-payer:
-    dependencies:
-      '@solana/kit':
-        specifier: ^7.0.0
-        version: 7.0.0(typescript@7.0.2)
 
   packages/kit-plugin-rpc:
     dependencies:
@@ -230,33 +181,6 @@ importers:
       react-dom:
         specifier: ^19.2.8
         version: 19.2.8(react@19.2.8)
-
-  packages/kit-plugins:
-    dependencies:
-      '@solana/kit':
-        specifier: ^7.0.0
-        version: 7.0.0(typescript@7.0.2)
-      '@solana/kit-client-litesvm':
-        specifier: workspace:*
-        version: link:../kit-client-litesvm
-      '@solana/kit-client-rpc':
-        specifier: workspace:*
-        version: link:../kit-client-rpc
-      '@solana/kit-plugin-airdrop':
-        specifier: workspace:*
-        version: link:../kit-plugin-airdrop
-      '@solana/kit-plugin-instruction-plan':
-        specifier: workspace:*
-        version: link:../kit-plugin-instruction-plan
-      '@solana/kit-plugin-litesvm':
-        specifier: workspace:*
-        version: link:../kit-plugin-litesvm
-      '@solana/kit-plugin-payer':
-        specifier: workspace:*
-        version: link:../kit-plugin-payer
-      '@solana/kit-plugin-rpc':
-        specifier: workspace:*
-        version: link:../kit-plugin-rpc
 
 packages:
 

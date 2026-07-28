@@ -6,7 +6,7 @@
   ],
   "commit": false,
   "fixed": [],
-  "linked": [["@solana/kit-plugins", "@solana/kit-plugin-*", "@solana/kit-client-*"]],
+  "linked": [["@solana/kit-plugin-*"]],
   "access": "public",
   "baseBranch": "main",
   "privatePackages": {
