@@ -8,7 +8,7 @@
 [npm-url]: https://www.npmjs.com/package/@solana/kit-plugin-payer
 
 > [!WARNING]
-> This package is deprecated. Use [`@solana/kit-plugin-signer`](../kit-plugin-signer) instead, which provides the same payer plugins plus new `identity` and `signer` variants.
+> This package is deprecated. Use [`@solana/kit-plugin-signer`](https://github.com/anza-xyz/kit-plugins/tree/497b55f/packages/kit-plugin-signer) instead, which provides the same payer plugins plus new `identity` and `signer` variants.
 
 ## Migration
 

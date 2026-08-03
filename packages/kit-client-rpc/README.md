@@ -8,12 +8,12 @@
 [npm-url]: https://www.npmjs.com/package/@solana/kit-client-rpc
 
 > [!WARNING]
-> This package is deprecated. Add a payer to your client using any payer plugin from [`@solana/kit-plugin-payer`](../kit-plugin-payer), then use the all-in-one plugins from [`@solana/kit-plugin-rpc`](../kit-plugin-rpc) instead.
+> This package is deprecated. Add a payer to your client using any payer plugin from [`@solana/kit-plugin-payer`](https://github.com/anza-xyz/kit-plugins/tree/497b55f/packages/kit-plugin-payer), then use the all-in-one plugins from [`@solana/kit-plugin-rpc`](https://github.com/anza-xyz/kit-plugins/tree/497b55f/packages/kit-plugin-rpc) instead.
 >
-> | Deprecated export            | Use instead                                                                     |
-> | ---------------------------- | ------------------------------------------------------------------------------- |
-> | `createClient({ url, ... })` | `solanaRpc({ rpcUrl, ... })` from [`@solana/kit-plugin-rpc`](../kit-plugin-rpc) |
-> | `createLocalClient()`        | `solanaLocalRpc()` from [`@solana/kit-plugin-rpc`](../kit-plugin-rpc)           |
+> | Deprecated export            | Use instead                                                                                                                                |
+> | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+> | `createClient({ url, ... })` | `solanaRpc({ rpcUrl, ... })` from [`@solana/kit-plugin-rpc`](https://github.com/anza-xyz/kit-plugins/tree/497b55f/packages/kit-plugin-rpc) |
+> | `createLocalClient()`        | `solanaLocalRpc()` from [`@solana/kit-plugin-rpc`](https://github.com/anza-xyz/kit-plugins/tree/497b55f/packages/kit-plugin-rpc)           |
 
 ## Migration
 

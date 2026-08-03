@@ -8,11 +8,11 @@
 [npm-url]: https://www.npmjs.com/package/@solana/kit-client-litesvm
 
 > [!WARNING]
-> This package is deprecated. Add a payer to your client using any payer plugin from [`@solana/kit-plugin-payer`](../kit-plugin-payer), then use the `litesvm` all-in-one plugin from [`@solana/kit-plugin-litesvm`](../kit-plugin-litesvm) instead.
+> This package is deprecated. Add a payer to your client using any payer plugin from [`@solana/kit-plugin-payer`](https://github.com/anza-xyz/kit-plugins/tree/497b55f/packages/kit-plugin-payer), then use the `litesvm` all-in-one plugin from [`@solana/kit-plugin-litesvm`](https://github.com/anza-xyz/kit-plugins/tree/497b55f/packages/kit-plugin-litesvm) instead.
 >
-> | Deprecated export | Use instead                                                            |
-> | ----------------- | ---------------------------------------------------------------------- |
-> | `createClient()`  | `litesvm()` from [`@solana/kit-plugin-litesvm`](../kit-plugin-litesvm) |
+> | Deprecated export | Use instead                                                                                                                       |
+> | ----------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+> | `createClient()`  | `litesvm()` from [`@solana/kit-plugin-litesvm`](https://github.com/anza-xyz/kit-plugins/tree/497b55f/packages/kit-plugin-litesvm) |
 
 ## Migration
 
