@@ -1,7 +1,7 @@
 {
     "name": "@solana/kit-client-rpc",
     "version": "0.15.0",
-    "description": "Pre-configured RPC clients for Solana Kit",
+    "description": "[DEPRECATED] Pre-configured RPC clients for Solana Kit",
     "keywords": [
         "client",
         "kit",

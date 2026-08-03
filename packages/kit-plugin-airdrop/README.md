@@ -8,7 +8,7 @@
 [npm-url]: https://www.npmjs.com/package/@solana/kit-plugin-airdrop
 
 > [!WARNING]
-> This package is deprecated. Use `rpcAirdrop` from [`@solana/kit-plugin-rpc`](../kit-plugin-rpc) or `litesvmAirdrop` from [`@solana/kit-plugin-litesvm`](../kit-plugin-litesvm) instead.
+> This package is deprecated. Use `rpcAirdrop` from [`@solana/kit-plugin-rpc`](https://github.com/anza-xyz/kit-plugins/tree/497b55f/packages/kit-plugin-rpc) or `litesvmAirdrop` from [`@solana/kit-plugin-litesvm`](https://github.com/anza-xyz/kit-plugins/tree/497b55f/packages/kit-plugin-litesvm) instead.
 
 ## Migration
 
