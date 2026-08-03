@@ -97,6 +97,29 @@ _See `solanaRpc` for available features, plus:_
     await client.airdrop(address('HQVxiMVDoV9jzG4tpoxmDZsNfWvaHXm8DGGv93Gka75v'), lamports(1_000_000_000n));
     ```
 
+## `solanaTestnetRpc` plugin
+
+A convenience wrapper around `solanaRpc` that defaults to the public testnet endpoint (`https://api.testnet.solana.com`) and includes airdrop support for requesting SOL from the faucet.
+
+### Installation
+
+```ts
+import { createClient } from '@solana/kit';
+import { solanaTestnetRpc } from '@solana/kit-plugin-rpc';
+import { payerFromFile } from '@solana/kit-plugin-signer';
+
+const client = createClient().use(payerFromFile('~/.config/solana/id.json')).use(solanaTestnetRpc());
+```
+
+### Features
+
+_See `solanaRpc` for available features, plus:_
+
+- `airdrop`: Request SOL from the testnet faucet.
+    ```ts
+    await client.airdrop(address('HQVxiMVDoV9jzG4tpoxmDZsNfWvaHXm8DGGv93Gka75v'), lamports(1_000_000_000n));
+    ```
+
 ## `solanaLocalRpc` plugin
 
 A convenience wrapper around `solanaRpc` that defaults to `http://127.0.0.1:8899` for the RPC and `ws://127.0.0.1:8900` for subscriptions, and includes airdrop support.
