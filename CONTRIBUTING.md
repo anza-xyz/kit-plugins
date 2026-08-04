@@ -16,8 +16,6 @@ This is a monorepo managed with [pnpm](https://pnpm.io/) and [Turborepo](https:/
 | [`@solana/kit-plugin-instruction-plan`](./packages/kit-plugin-instruction-plan) | Transaction planning and execution plugins. |
 | [`@solana/kit-plugin-wallet`](./packages/kit-plugin-wallet)                     | Browser wallet support plugins.             |
 
-The repo also contains a deprecated umbrella package (`@solana/kit-plugins`) and several deprecated single-purpose packages (`@solana/kit-plugin-payer`, `@solana/kit-plugin-airdrop`, `@solana/kit-client-rpc`, `@solana/kit-client-litesvm`). They re-export from the active packages via `export *` for backward compatibility, but new code should import from the individual `kit-plugin-*` packages above directly.
-
 ## Getting started
 
 ```sh
@@ -79,10 +77,6 @@ Every new feature or bug fix should include tests. This project uses [Vitest](ht
 ### README
 
 When adding a new public API to a package, update that package's `README.md` with a new section following the existing structure (description, installation example, features). When modifying an existing API, keep the README in sync. See the existing READMEs for the expected format, or use the [`.claude/skills/ts-readme/SKILL.md`](./.claude/skills/ts-readme/SKILL.md) guide.
-
-### Umbrella package (deprecated)
-
-The umbrella package (`@solana/kit-plugins`) is deprecated. It still re-exports everything from the individual plugin packages via `export *` for backward compatibility, but all documentation and examples should import from the individual `kit-plugin-*` packages directly. Do not add new exports or functionality to the umbrella.
 
 ## Pull request workflow
 
