@@ -11,6 +11,7 @@ import {
     solanaRpc,
     solanaRpcConnection,
     solanaRpcSubscriptionsConnection,
+    solanaTestnetRpc,
 } from '../src';
 
 vi.mock('@solana/kit', async () => {
@@ -210,6 +211,27 @@ describe('solanaDevnetRpc', () => {
         const client = createClient()
             .use(() => ({ payer }))
             .use(solanaDevnetRpc({ rpcUrl: 'https://my-devnet-rpc.com' }));
+        expect(client).toHaveProperty('rpc');
+    });
+});
+
+describe('solanaTestnetRpc', () => {
+    const payer = {} as TransactionSigner;
+
+    it('sets up a full testnet RPC client with airdrop', () => {
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(solanaTestnetRpc());
+        expect(client).toHaveProperty('rpc');
+        expect(client).toHaveProperty('rpcSubscriptions');
+        expect(client).toHaveProperty('sendTransactions');
+        expect(client).toHaveProperty('airdrop');
+    });
+
+    it('accepts custom config overrides', () => {
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(solanaTestnetRpc({ rpcUrl: 'https://my-testnet-rpc.com' }));
         expect(client).toHaveProperty('rpc');
     });
 });

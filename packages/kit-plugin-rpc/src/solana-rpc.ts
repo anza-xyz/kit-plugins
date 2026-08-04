@@ -13,6 +13,7 @@ import {
     RpcSubscriptions,
     SolanaRpcApiFromClusterUrl,
     SolanaRpcSubscriptionsApi,
+    TestnetUrl,
 } from '@solana/kit';
 import { planAndSendTransactions } from '@solana/kit-plugin-instruction-plan';
 
@@ -129,6 +130,7 @@ export type SolanaRpcConfig<TClusterUrl extends ClusterUrl = ClusterUrl> = Solan
  *
  * @see {@link solanaMainnetRpc}
  * @see {@link solanaDevnetRpc}
+ * @see {@link solanaTestnetRpc}
  * @see {@link solanaLocalRpc}
  */
 export function solanaRpc<TClusterUrl extends ClusterUrl>(config: SolanaRpcConfig<TClusterUrl>) {
@@ -171,6 +173,7 @@ export function solanaRpc<TClusterUrl extends ClusterUrl>(config: SolanaRpcConfi
  *
  * @see {@link solanaRpc}
  * @see {@link solanaDevnetRpc}
+ * @see {@link solanaTestnetRpc}
  * @see {@link solanaLocalRpc}
  */
 export function solanaMainnetRpc(config: SolanaRpcConfig<string>) {
@@ -203,6 +206,7 @@ export function solanaMainnetRpc(config: SolanaRpcConfig<string>) {
  *
  * @see {@link solanaRpc}
  * @see {@link solanaMainnetRpc}
+ * @see {@link solanaTestnetRpc}
  * @see {@link solanaLocalRpc}
  */
 export function solanaDevnetRpc(config?: Partial<SolanaRpcConfig<string>>) {
@@ -213,6 +217,46 @@ export function solanaDevnetRpc(config?: Partial<SolanaRpcConfig<string>>) {
                 ...config,
                 rpcUrl: config?.rpcUrl ?? 'https://api.devnet.solana.com',
             } as SolanaRpcConfig<DevnetUrl>),
+            rpcAirdrop(),
+        );
+}
+
+/**
+ * Enhances a client with a full Solana testnet RPC setup.
+ *
+ * This is a convenience wrapper around {@link solanaRpc} that defaults to
+ * the public testnet endpoint and includes {@link rpcAirdrop} for requesting
+ * SOL from the faucet.
+ *
+ * @param config - Optional configuration overrides. Defaults `rpcUrl` to
+ * `https://api.testnet.solana.com`.
+ * @return A plugin that applies {@link solanaRpc} with a testnet URL type
+ * and airdrop support.
+ *
+ * @example
+ * ```ts
+ * import { createClient } from '@solana/kit';
+ * import { solanaTestnetRpc } from '@solana/kit-plugin-rpc';
+ * import { payerFromFile } from '@solana/kit-plugin-signer';
+ *
+ * const client = createClient()
+ *     .use(payerFromFile("~/.config/solana/id.json"))
+ *     .use(solanaTestnetRpc());
+ * ```
+ *
+ * @see {@link solanaRpc}
+ * @see {@link solanaMainnetRpc}
+ * @see {@link solanaDevnetRpc}
+ * @see {@link solanaLocalRpc}
+ */
+export function solanaTestnetRpc(config?: Partial<SolanaRpcConfig<string>>) {
+    return <T extends ClientWithPayer>(client: T) =>
+        pipe(
+            client,
+            solanaRpc<TestnetUrl>({
+                ...config,
+                rpcUrl: config?.rpcUrl ?? 'https://api.testnet.solana.com',
+            } as SolanaRpcConfig<TestnetUrl>),
             rpcAirdrop(),
         );
 }
@@ -261,6 +305,7 @@ function deriveRpcSubscriptionsUrl(rpcUrl: string): string {
  * @see {@link solanaRpc}
  * @see {@link solanaMainnetRpc}
  * @see {@link solanaDevnetRpc}
+ * @see {@link solanaTestnetRpc}
  */
 export function solanaLocalRpc(config?: Partial<SolanaRpcConfig<string>>) {
     return <T extends ClientWithPayer>(client: T) =>
