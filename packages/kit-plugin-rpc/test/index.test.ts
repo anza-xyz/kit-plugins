@@ -1,7 +1,20 @@
-import { createClient, createSolanaRpc, createSolanaRpcSubscriptions, mainnet, TransactionSigner } from '@solana/kit';
+import {
+    Address,
+    createClient,
+    createSolanaRpc,
+    createSolanaRpcSubscriptions,
+    createTransactionMessage,
+    mainnet,
+    setTransactionMessageFeePayer,
+    Signature,
+    singleTransactionPlan,
+    successfulSingleTransactionPlanResult,
+    TransactionSigner,
+} from '@solana/kit';
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 import {
+    createRpcTransactionSendingExecutor,
     rpc,
     rpcConnection,
     rpcSubscriptionsConnection,
@@ -20,6 +33,16 @@ vi.mock('@solana/kit', async () => {
         ...actual,
         createSolanaRpc: vi.fn(actual.createSolanaRpc),
         createSolanaRpcSubscriptions: vi.fn(actual.createSolanaRpcSubscriptions),
+    };
+});
+
+vi.mock('../src/transaction-plan-executor', async () => {
+    const actual = await vi.importActual<typeof import('../src/transaction-plan-executor')>(
+        '../src/transaction-plan-executor',
+    );
+    return {
+        ...actual,
+        createRpcTransactionSendingExecutor: vi.fn(actual.createRpcTransactionSendingExecutor),
     };
 });
 
@@ -171,6 +194,66 @@ describe('solanaRpc', () => {
                 }),
             );
         expect(client).toHaveProperty('rpcSubscriptions');
+    });
+
+    it('adds the signing functions to the client', () => {
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(solanaRpc({ rpcUrl: 'http://127.0.0.1:8899' }));
+
+        expect(client).toHaveProperty('signTransaction');
+        expect(client).toHaveProperty('signTransactions');
+    });
+
+    it('still exposes the deprecated transactionPlanExecutor', () => {
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(solanaRpc({ rpcUrl: 'http://127.0.0.1:8899' }));
+
+        // Retained so that this change is not breaking; removal is a later major.
+        expect(client).toHaveProperty('transactionPlanExecutor');
+    });
+
+    it('installs the very sending executor instance created for it as the deprecated transactionPlanExecutor, not an equivalent second one', () => {
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(solanaRpc({ rpcUrl: 'http://127.0.0.1:8899' }));
+
+        // Only one sending executor is ever constructed for this client...
+        expect(createRpcTransactionSendingExecutor).toHaveBeenCalledTimes(1);
+        // ...and the deprecated property holds exactly that instance (not a second one
+        // built from the same config, which would double effective concurrency for
+        // anyone using `transactionPlanExecutor` alongside `sendTransaction`).
+        expect(client.transactionPlanExecutor).toBe(
+            vi.mocked(createRpcTransactionSendingExecutor).mock.results[0].value,
+        );
+    });
+
+    it('routes client.sendTransaction to the sending executor it built, not the signing one', async () => {
+        // A transaction message (rather than an instruction) is passed as input so that
+        // planning is skipped entirely (see `parseInstructionOrTransactionPlanInput`) and
+        // the call goes straight to whichever executor `sendTransaction` is wired to. This
+        // isolates the executor-routing behavior from the real `rpcTransactionPlanner`.
+        const transactionMessage = setTransactionMessageFeePayer(
+            '11111111111111111111111111111111' as Address,
+            createTransactionMessage({ version: 0 }),
+        );
+        const sentResult = successfulSingleTransactionPlanResult(transactionMessage, {
+            signature: 'signature' as Signature,
+        });
+        const sendingExecutorMock = vi.fn().mockResolvedValue(sentResult);
+        vi.mocked(createRpcTransactionSendingExecutor).mockReturnValueOnce(sendingExecutorMock);
+
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(solanaRpc({ rpcUrl: 'http://127.0.0.1:8899' }));
+
+        const result = await client.sendTransaction(transactionMessage);
+
+        expect(result).toBe(sentResult);
+        expect(sendingExecutorMock).toHaveBeenCalledExactlyOnceWith(singleTransactionPlan(transactionMessage), {
+            abortSignal: undefined,
+        });
     });
 });
 

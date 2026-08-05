@@ -4,3 +4,4 @@ export * from './rpc';
 export * from './solana-rpc';
 export * from './transaction-plan-executor';
 export * from './transaction-planner';
+export * from './transaction-signing-executor';

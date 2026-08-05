@@ -15,13 +15,17 @@ import {
     SolanaRpcSubscriptionsApi,
     TestnetUrl,
 } from '@solana/kit';
-import { planAndSendTransactions } from '@solana/kit-plugin-instruction-plan';
+import { transactionPlanning, transactionSending, transactionSigning } from '@solana/kit-plugin-instruction-plan';
 
 import { rpcAirdrop } from './airdrop';
 import { rpcGetMinimumBalance } from './get-minimum-balance';
 import { rpcSubscriptionsConnection } from './rpc';
-import { rpcTransactionPlanExecutor } from './transaction-plan-executor';
+import {
+    ClientWithDeprecatedTransactionPlanExecutor,
+    createRpcTransactionSendingExecutor,
+} from './transaction-plan-executor';
 import { rpcTransactionPlanner, TransactionPlannerConfig } from './transaction-planner';
+import { createRpcTransactionSigningExecutor } from './transaction-signing-executor';
 
 /**
  * Configuration for {@link solanaRpcConnection}.
@@ -114,8 +118,9 @@ export type SolanaRpcConfig<TClusterUrl extends ClusterUrl = ClusterUrl> = Solan
  *
  * @param config - Configuration for the Solana RPC connection.
  * @return A plugin that adds `client.rpc`, `client.rpcSubscriptions`,
- * `client.getMinimumBalance`, `client.transactionPlanner`,
- * `client.transactionPlanExecutor`, and `client.sendTransactions`.
+ * `client.getMinimumBalance`, `client.transactionPlanner`, `client.planTransaction(s)`,
+ * `client.signTransaction(s)`, `client.sendTransaction(s)`, and the deprecated
+ * `client.transactionPlanExecutor`.
  *
  * @example
  * ```ts
@@ -134,19 +139,53 @@ export type SolanaRpcConfig<TClusterUrl extends ClusterUrl = ClusterUrl> = Solan
  * @see {@link solanaLocalRpc}
  */
 export function solanaRpc<TClusterUrl extends ClusterUrl>(config: SolanaRpcConfig<TClusterUrl>) {
+    const executorConfig = {
+        estimateResourceLimits: config.transactionConfig?.estimateResourceLimits,
+        getComputeUnitLimitFromEstimate: config.getComputeUnitLimitFromEstimate,
+        skipPreflight: config.skipPreflight,
+    };
     return <T extends ClientWithPayer>(client: T) =>
         pipe(
             client,
             solanaRpcConnection<TClusterUrl>(config),
             rpcGetMinimumBalance(),
             rpcTransactionPlanner(config.transactionConfig),
-            rpcTransactionPlanExecutor({
-                estimateResourceLimits: config.transactionConfig?.estimateResourceLimits,
-                getComputeUnitLimitFromEstimate: config.getComputeUnitLimitFromEstimate,
-                maxConcurrency: config.maxConcurrency,
-                skipPreflight: config.skipPreflight,
-            }),
-            planAndSendTransactions(),
+            c => {
+                const transactionSendingExecutor = createRpcTransactionSendingExecutor({
+                    ...executorConfig,
+                    maxConcurrency: config.maxConcurrency,
+                    rpc: c.rpc,
+                    rpcSubscriptions: c.rpcSubscriptions,
+                });
+                // Typed via `ClientWithDeprecatedTransactionPlanExecutor` (rather than an
+                // inline object literal) so the property keeps the `@deprecated` JSDoc tag
+                // declared on that shared type, instead of losing it to a fresh anonymous type.
+                const deprecatedTransactionPlanExecutor: ClientWithDeprecatedTransactionPlanExecutor = {
+                    transactionPlanExecutor: transactionSendingExecutor,
+                };
+                return pipe(
+                    c,
+                    transactionPlanning({ transactionPlanner: c.transactionPlanner }),
+                    transactionSigning({
+                        transactionPlanner: c.transactionPlanner,
+                        transactionSigningExecutor: createRpcTransactionSigningExecutor({
+                            ...executorConfig,
+                            rpc: c.rpc,
+                        }),
+                    }),
+                    // The same `transactionSendingExecutor` instance built above is passed
+                    // here, and installed below as the deprecated `transactionPlanExecutor`,
+                    // rather than each reading off a second instance built from the same
+                    // config: every executor carries its own concurrency limiter, so a
+                    // second instance would double effective concurrency.
+                    transactionSending({ transactionPlanner: c.transactionPlanner, transactionSendingExecutor }),
+                    // Deprecated, retained for one release so that reading the executor off
+                    // a `solanaRpc` client keeps working. The same instance is installed
+                    // rather than a second one, because each executor carries its own
+                    // concurrency limiter.
+                    withClient => extendClient(withClient, deprecatedTransactionPlanExecutor),
+                );
+            },
         );
 }
 

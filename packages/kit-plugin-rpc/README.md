@@ -51,8 +51,10 @@ All options are provided via a `SolanaRpcConfig` object:
 - `rpcSubscriptions`: Subscribe to Solana RPC notifications.
 - `getMinimumBalance`: Compute minimum lamports for rent exemption.
 - `transactionPlanner`: Plan instructions into transaction messages.
-- `transactionPlanExecutor`: Sign and send planned transactions.
-- `sendTransaction(s)` / `planTransaction(s)`: Convenience helpers that combine planning and execution.
+- `planTransaction(s)`: Plan instructions or an instruction plan into a transaction plan without executing it.
+- `signTransaction(s)`: Plan and partially sign transactions without sending them, so other parties can add their signatures before the transaction is sent.
+- `sendTransaction(s)`: Plan, sign, and send transactions.
+- `transactionPlanExecutor` **(deprecated)**: The executor used by `sendTransaction(s)`, retained on the client for backward compatibility. Use `sendTransaction(s)` instead of reading the executor off the client.
 
 ## `solanaMainnetRpc` plugin
 
@@ -284,6 +286,37 @@ Version 1 transactions are defined for forward compatibility but are not yet bui
 
 ## `rpcTransactionPlanExecutor` plugin
 
+> **Deprecated:** use [`createRpcTransactionSendingExecutor`](#createrpctransactionsendingexecutor) instead and pass the executor explicitly to `transactionSending`. Now that signing and sending are separate capabilities, naming one executor `transactionPlanExecutor` wrongly implies it is the only one.
+>
+> ```ts
+> // Before: this plugin put the executor on the client, and `planAndSendTransactions` read it back off.
+> const client = await createClient()
+>     .use(solanaRpcConnection({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
+>     .use(generatedPayer())
+>     .use(rpcTransactionPlanner())
+>     .use(rpcTransactionPlanExecutor())
+>     .use(planAndSendTransactions());
+>
+> // After: build the executor yourself and hand it to `transactionSending`.
+> const clientWithPlanner = await createClient()
+>     .use(solanaRpcConnection({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
+>     .use(generatedPayer())
+>     .use(rpcTransactionPlanner());
+>
+> const transactionPlanner = clientWithPlanner.transactionPlanner;
+> const client = clientWithPlanner.use(transactionPlanning({ transactionPlanner })).use(
+>     transactionSending({
+>         transactionPlanner,
+>         transactionSendingExecutor: createRpcTransactionSendingExecutor({
+>             rpc: clientWithPlanner.rpc,
+>             rpcSubscriptions: clientWithPlanner.rpcSubscriptions,
+>         }),
+>     }),
+> );
+> ```
+>
+> If you want the whole bundle rather than the individual pieces, [`solanaRpc`](#solanarpc) already composes the planner, both executors and all three capability plugins.
+
 This plugin provides a default transaction plan executor that estimates resource limits, signs, and sends transactions via RPC. Resource limit estimation covers the compute unit limit and, for version 1 transactions, the loaded accounts data size limit.
 
 ### Installation
@@ -315,6 +348,37 @@ const client = await createClient()
     ```ts
     const transactionPlanResult = await client.transactionPlanExecutor(myTransactionPlan);
     ```
+
+## `createRpcTransactionSendingExecutor`
+
+Creates the transaction plan executor used by `solanaRpc`. It assigns the transaction lifetime, estimates and sets resource limits by simulating, signs, then sends and confirms, with a concurrency limit to avoid rate limits.
+
+```ts
+import { createRpcTransactionSendingExecutor } from '@solana/kit-plugin-rpc';
+
+const transactionSendingExecutor = createRpcTransactionSendingExecutor({
+    rpc: client.rpc,
+    rpcSubscriptions: client.rpcSubscriptions,
+});
+```
+
+### Options
+
+Accepts the same `estimateResourceLimits`, `getComputeUnitLimitFromEstimate`, and `skipPreflight` options as [`rpcTransactionPlanExecutor`](#rpctransactionplanexecutor-plugin) above, plus:
+
+- `maxConcurrency`: Maximum number of concurrent executions (default: 10).
+
+## `createRpcTransactionSigningExecutor`
+
+Creates an executor that does everything the sending executor does except broadcast: it assigns the transaction lifetime, estimates and sets resource limits by simulating, and signs. Because it never reaches the network it needs only an `rpc` — no RPC Subscriptions, and no concurrency limit.
+
+```ts
+import { createRpcTransactionSigningExecutor } from '@solana/kit-plugin-rpc';
+
+const transactionSigningExecutor = createRpcTransactionSigningExecutor({ rpc: client.rpc });
+```
+
+Signing is partial by design: the transactions it produces are not guaranteed to be fully signed, so that other parties can add their signatures before the transaction is sent. A transaction must be fully signed before it can be sent.
 
 ### Preflight and Resource Limit Estimation
 

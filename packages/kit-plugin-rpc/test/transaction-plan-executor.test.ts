@@ -20,7 +20,7 @@ import {
 } from '@solana/kit';
 import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
-import { rpcTransactionPlanExecutor, rpcTransactionPlanner } from '../src';
+import { createRpcTransactionSendingExecutor, rpcTransactionPlanExecutor, rpcTransactionPlanner } from '../src';
 
 const MOCK_BLOCKHASH = { blockhash: '11111111111111111111111111111111', lastValidBlockHeight: 0n };
 const MOCK_INSTRUCTION = {
@@ -34,6 +34,36 @@ vi.mock('@solana/kit', async () => {
 
 beforeEach(() => {
     vi.clearAllMocks();
+});
+
+describe('createRpcTransactionSendingExecutor', () => {
+    it('signs and sends the transaction, returning a result that carries it', async () => {
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
+        const sendAndConfirmTransaction = vi.fn().mockResolvedValue(undefined);
+        (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
+
+        const executor = createRpcTransactionSendingExecutor({
+            estimateResourceLimits: false,
+            rpc,
+            rpcSubscriptions,
+        });
+
+        const payer = await generateKeyPairSigner();
+        const message = setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }));
+        const result = (await executor(singleTransactionPlan(message))) as SingleTransactionPlanResult;
+
+        expect(result.kind).toBe('single');
+        expect(result).toHaveProperty('status', 'successful');
+        expect(sendAndConfirmTransaction).toHaveBeenCalledOnce();
+        expect(sendAndConfirmTransaction.mock.calls[0][1]).toMatchObject({
+            commitment: 'confirmed',
+            skipPreflight: false,
+        });
+    });
 });
 
 describe('rpcTransactionPlanExecutor', () => {
