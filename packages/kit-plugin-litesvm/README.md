@@ -38,7 +38,7 @@ const client = createClient().use(payer(myPayer)).use(litesvm());
 
 All options are provided via a `LiteSvmConfig` object:
 
-- `transactionConfig`: Options to configure how transaction messages are created. See `litesvmTransactionPlanner` options below.
+- `transactionConfig`: Options to configure how transaction messages are created. See the `litesvmTransactionPlanner` options below.
 
 ### Features
 
@@ -46,9 +46,9 @@ All options are provided via a `LiteSvmConfig` object:
 - `rpc`: Call a subset of Solana RPC methods against the LiteSVM instance.
 - `airdrop`: Request SOL from the LiteSVM faucet.
 - `getMinimumBalance`: Compute minimum lamports for rent exemption.
-- `transactionPlanner`: Plan instructions into transaction messages.
-- `transactionPlanExecutor`: Sign and send planned transactions.
-- `sendTransaction(s)` / `planTransaction(s)`: Convenience helpers that combine planning and execution.
+- `planTransaction(s)`: Plan instructions into transaction messages without executing them.
+- `sendTransaction(s)`: Plan and execute instructions, instruction plans, or transaction messages in one call.
+- `transactionPlanner` / `transactionPlanExecutor` (deprecated): Fields kept for backward compatibility. Use `planTransaction(s)` / `sendTransaction(s)` instead.
 
 ## `litesvmConnection` plugin
 
@@ -129,18 +129,18 @@ const client = createClient().use(litesvmConnection()).use(litesvmGetMinimumBala
 
 ## `litesvmTransactionPlanner` plugin
 
-This plugin provides a default transaction planner that creates transaction messages with a fee payer and optional priority fees.
+Adds `planTransaction` and `planTransactions` to the client, using a planner that plans instructions into transaction messages with a fee payer and optional priority fees. The fee payer is read from `client.payer` lazily, at plan time, so a dynamic payer (such as a connected wallet) is always respected.
 
-### Installation
+### Usage
 
-The client must have a `payer` set before applying this plugin.
+The client must have a `payer` set before installing the plugin.
 
 ```ts
 import { createClient } from '@solana/kit';
 import {
     litesvmConnection,
+    litesvmTransactionPlanSendingExecutor,
     litesvmTransactionPlanner,
-    litesvmTransactionPlanExecutor,
 } from '@solana/kit-plugin-litesvm';
 import { generatedPayer } from '@solana/kit-plugin-signer';
 
@@ -148,7 +148,9 @@ const client = await createClient()
     .use(litesvmConnection())
     .use(generatedPayer())
     .use(litesvmTransactionPlanner())
-    .use(litesvmTransactionPlanExecutor());
+    .use(litesvmTransactionPlanSendingExecutor());
+
+const transactionPlan = await client.planTransactions(myInstructionPlan);
 ```
 
 ### Options
@@ -164,27 +166,20 @@ Unlike the RPC planner, the LiteSVM planner does not estimate resource limits, s
 
 Version 1 transactions are defined for forward compatibility but are not yet buildable by `@solana/kit`; passing `version: 1` currently throws. When available, version 1 will accept `priorityFeeLamports` (a flat total in lamports) instead of `microLamportsPerComputeUnit`.
 
-### Features
+## `litesvmTransactionPlanSendingExecutor` plugin
 
-- `transactionPlanner`: A function that plans instructions into transaction messages.
-    ```ts
-    const transactionPlan = await client.transactionPlanner(myInstructionPlan);
-    ```
+Adds `sendTransaction` and `sendTransactions` to the client, using an executor that signs and sends transactions to the LiteSVM instance. When a transaction fails, it throws a `SolanaError` with the same error codes the RPC executor would produce. The executor stores the LiteSVM transaction metadata (`FailedTransactionMetadata` or `TransactionMetadata`) on `context.transactionMetadata`, so consumers can inspect logs, compute units consumed, and return data from the plan result.
 
-## `litesvmTransactionPlanExecutor` plugin
+### Usage
 
-This plugin provides a default transaction plan executor that signs and sends transactions to the LiteSVM instance.
-
-### Installation
-
-This plugin requires an `svm` instance to be configured on the client.
+The client must have an `svm` instance configured, and a transaction planner installed, before installing this plugin — sending plans through the client's planning functions.
 
 ```ts
 import { createClient } from '@solana/kit';
 import {
     litesvmConnection,
+    litesvmTransactionPlanSendingExecutor,
     litesvmTransactionPlanner,
-    litesvmTransactionPlanExecutor,
 } from '@solana/kit-plugin-litesvm';
 import { generatedPayer } from '@solana/kit-plugin-signer';
 
@@ -192,12 +187,24 @@ const client = await createClient()
     .use(litesvmConnection())
     .use(generatedPayer())
     .use(litesvmTransactionPlanner())
-    .use(litesvmTransactionPlanExecutor());
+    .use(litesvmTransactionPlanSendingExecutor());
+
+const transactionPlanResult = await client.sendTransactions(myInstructionPlan);
 ```
 
-### Features
+## Deprecated plugins
 
-- `transactionPlanExecutor`: A function that executes planned transactions.
+The following plugins are still exported for backward compatibility but are deprecated.
+
+- `litesvmTransactionPlanExecutor()`: Only sets the deprecated `client.transactionPlanExecutor` field. Use `litesvmTransactionPlanSendingExecutor` instead, which installs `sendTransaction` and `sendTransactions` alongside the executor.
+
     ```ts
-    const transactionPlanResult = await client.transactionPlanExecutor(myTransactionPlan);
+    // Before
+    const client = await createClient()
+        .use(litesvmTransactionPlanner())
+        .use(litesvmTransactionPlanExecutor())
+        .use(planAndSendTransactions());
+
+    // After
+    const client = await createClient().use(litesvmTransactionPlanner()).use(litesvmTransactionPlanSendingExecutor());
     ```

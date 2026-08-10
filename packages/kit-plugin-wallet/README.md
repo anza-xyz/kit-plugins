@@ -30,12 +30,10 @@ pnpm install @solana/kit-plugin-wallet
 import { createClient } from '@solana/kit';
 import { solanaRpc } from '@solana/kit-plugin-rpc';
 import { walletSigner } from '@solana/kit-plugin-wallet';
-import { planAndSendTransactions } from '@solana/kit-plugin-instruction-plan';
 
 const client = createClient()
     .use(walletSigner({ chain: 'solana:mainnet' }))
-    .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
-    .use(planAndSendTransactions());
+    .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
 
 // Read discovered wallets from state
 const { wallets } = client.wallet.getState();
@@ -56,8 +54,7 @@ import { walletSigner } from '@solana/kit-plugin-wallet';
 
 const client = createClient()
     .use(walletSigner({ chain: 'solana:mainnet' }))
-    .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
-    .use(planAndSendTransactions());
+    .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
 ```
 
 ## `walletPayer` plugin
@@ -69,8 +66,7 @@ import { walletPayer } from '@solana/kit-plugin-wallet';
 
 const client = createClient()
     .use(walletPayer({ chain: 'solana:mainnet' }))
-    .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
-    .use(planAndSendTransactions());
+    .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
 ```
 
 ## `walletIdentity` plugin
@@ -84,8 +80,7 @@ import { walletIdentity } from '@solana/kit-plugin-wallet';
 const client = createClient()
     .use(payer(relayerKeypair))
     .use(walletIdentity({ chain: 'solana:mainnet' }))
-    .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
-    .use(planAndSendTransactions());
+    .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
 
 // client.payer is always relayerKeypair
 // client.identity is the connected wallet's signer
@@ -102,8 +97,7 @@ import { walletWithoutSigner } from '@solana/kit-plugin-wallet';
 const client = createClient()
     .use(payer(backendKeypair))
     .use(walletWithoutSigner({ chain: 'solana:mainnet' }))
-    .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
-    .use(planAndSendTransactions());
+    .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
 
 // client.payer is always backendKeypair
 // client.wallet.getState().connected?.signer for manual use
@@ -377,8 +371,7 @@ React Native is treated the same way as the server: wallet-standard browser disc
 ```ts
 const client = createClient()
     .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
-    .use(walletSigner({ chain: 'solana:mainnet' }))
-    .use(planAndSendTransactions());
+    .use(walletSigner({ chain: 'solana:mainnet' }));
 
 // Server: status === 'pending', client.payer throws
 // Browser: auto-connects, client.payer becomes the wallet signer

@@ -2,10 +2,10 @@ import {
     assertIsTransactionWithBlockhashLifetime,
     ClientWithRpc,
     ClientWithRpcSubscriptions,
+    ClientWithTransactionPlanning,
     createTransactionPlanExecutor,
     estimateAndSetResourceLimitsFactory,
     estimateResourceLimitsFactory,
-    extendClient,
     GetEpochInfoApi,
     GetLatestBlockhashApi,
     GetSignatureStatusesApi,
@@ -20,8 +20,59 @@ import {
     SimulateTransactionApi,
     SlotNotificationsApi,
     SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_RESOURCE_LIMITS,
+    TransactionPlanExecutor,
     TransactionPlanExecutorConfig,
 } from '@solana/kit';
+import { transactionPlanExecutor, transactionPlanSendingExecutor } from '@solana/kit-plugin-instruction-plan';
+
+/**
+ * A plugin that adds `sendTransaction` and `sendTransactions` to the client
+ * using a default transaction plan executor backed by RPC.
+ *
+ * The executor handles resource limit estimation (compute units and, for
+ * version 1 transactions, the loaded accounts data size), transaction signing,
+ * and sending via RPC. A concurrency limit can be set to avoid hitting rate
+ * limits when sending many transactions in parallel.
+ *
+ * Since sending goes through the client's planning functions,
+ * {@link rpcTransactionPlanner} — or another `transactionPlanner` plugin — must
+ * be installed first.
+ *
+ * @param config - Optional configuration for the executor.
+ * @returns A plugin that adds `client.sendTransaction` and `client.sendTransactions`.
+ * @throws If the client has no `rpc` or no `rpcSubscriptions` set, or no
+ * transaction planning functions set.
+ *
+ * @example
+ * ```ts
+ * import { createClient } from '@solana/kit';
+ * import { solanaRpcConnection, rpcTransactionPlanner, rpcTransactionPlanSendingExecutor } from '@solana/kit-plugin-rpc';
+ * import { generatedPayer } from '@solana/kit-plugin-signer';
+ *
+ * const client = await createClient()
+ *     .use(solanaRpcConnection({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
+ *     .use(generatedPayer())
+ *     .use(rpcTransactionPlanner())
+ *     .use(rpcTransactionPlanSendingExecutor());
+ * ```
+ *
+ * @see {@link rpcTransactionPlanner}
+ */
+export function rpcTransactionPlanSendingExecutor(config: RpcTransactionPlanExecutorConfig = {}) {
+    return <
+        T extends ClientWithRpc<
+            GetEpochInfoApi &
+                GetLatestBlockhashApi &
+                GetSignatureStatusesApi &
+                SendTransactionApi &
+                SimulateTransactionApi
+        > &
+            ClientWithRpcSubscriptions<SignatureNotificationsApi & SlotNotificationsApi> &
+            ClientWithTransactionPlanning,
+    >(
+        client: T,
+    ) => transactionPlanSendingExecutor(createExecutor(client, config))(client);
+}
 
 /**
  * A plugin that provides a default transaction plan executor using RPC.
@@ -34,83 +85,24 @@ import {
  * @param config - Optional configuration for the executor.
  * @returns A plugin that adds `transactionPlanExecutor` to the client.
  *
- * @example
- * ```ts
- * import { createClient } from '@solana/kit';
- * import { solanaRpcConnection, rpcTransactionPlanner, rpcTransactionPlanExecutor } from '@solana/kit-plugin-rpc';
- * import { generatedPayer } from '@solana/kit-plugin-signer';
+ * @deprecated Use {@link rpcTransactionPlanSendingExecutor} instead, which
+ * installs `sendTransaction` and `sendTransactions` alongside the executor. This
+ * plugin only sets the deprecated `transactionPlanExecutor` field.
  *
+ * ```ts
+ * // Before
  * const client = await createClient()
- *     .use(solanaRpcConnection({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
- *     .use(generatedPayer())
  *     .use(rpcTransactionPlanner())
- *     .use(rpcTransactionPlanExecutor());
+ *     .use(rpcTransactionPlanExecutor())
+ *     .use(planAndSendTransactions());
+ *
+ * // After
+ * const client = await createClient()
+ *     .use(rpcTransactionPlanner())
+ *     .use(rpcTransactionPlanSendingExecutor());
  * ```
  */
-export function rpcTransactionPlanExecutor(
-    config: {
-        /**
-         * Whether to estimate and set resource limits (the compute unit limit
-         * and, for version 1 transactions, the loaded accounts data size limit)
-         * by simulating the transaction before sending.
-         *
-         * When `true` (default), any resource limit that is still provisory or
-         * unset is estimated via a simulation and replaced with the estimated
-         * value (with a compute unit buffer applied via
-         * `getComputeUnitLimitFromEstimate`). When `false`, no estimation
-         * simulation is performed and the message is sent with exactly the
-         * resource limits it already carries.
-         *
-         * This should match the `estimateResourceLimits` option passed to
-         * {@link rpcTransactionPlanner}, which controls whether provisory limits
-         * are reserved in the first place. {@link solanaRpc} keeps them in sync
-         * automatically.
-         *
-         * Defaults to `true`.
-         */
-        estimateResourceLimits?: boolean;
-        /**
-         * Maps the estimated compute unit consumption from simulation to the
-         * compute unit limit to set on the transaction, adding headroom to
-         * account for variation between simulation and execution.
-         *
-         * By default, a function is used that adds a buffer on top of the
-         * estimate of at least 300 compute units, or a margin that decays
-         * linearly from 10% at low estimates to 2% at 500,000 compute units and
-         * above, whichever is greater.
-         *
-         * The returned value is always capped at 1,400,000, the maximum number of
-         * compute units allowed per transaction.
-         *
-         * @param estimatedComputeUnits - The compute units consumed during simulation.
-         * @returns The compute unit limit to set on the transaction.
-         */
-        getComputeUnitLimitFromEstimate?: (estimatedComputeUnits: number) => number;
-        /**
-         * The maximum number of concurrent executions allowed.
-         * Defaults to 10.
-         */
-        maxConcurrency?: number;
-        /**
-         * Whether to skip the preflight simulation when sending transactions.
-         *
-         * When `false` (default), preflight is skipped only if a resource limit
-         * estimation simulation was already performed for that transaction.
-         * If every applicable resource limit is already explicitly set (i.e. no
-         * estimation was needed) or estimation is disabled, preflight runs as the
-         * only simulation.
-         *
-         * When `true`, preflight is always skipped and the transaction is sent
-         * directly to the validator. Additionally, if the resource limit estimation
-         * simulation fails, the consumed resources from the failed simulation are
-         * used to set the limits so the transaction still reaches the validator.
-         * This is useful for debugging failed transactions in an explorer.
-         *
-         * Defaults to `false`.
-         */
-        skipPreflight?: boolean;
-    } = {},
-) {
+export function rpcTransactionPlanExecutor(config: RpcTransactionPlanExecutorConfig = {}) {
     return <
         T extends ClientWithRpc<
             GetEpochInfoApi &
@@ -122,68 +114,147 @@ export function rpcTransactionPlanExecutor(
             ClientWithRpcSubscriptions<SignatureNotificationsApi & SlotNotificationsApi>,
     >(
         client: T,
-    ) => {
-        if (!client.rpc || !client.rpcSubscriptions) {
-            throw new Error(
-                'An RPC instance with subscriptions is required on the client to create the RPC transaction plan executor. ' +
-                    'Please add the RPC plugin to your client before using this plugin.',
+    ) => transactionPlanExecutor(createExecutor(client, config))(client);
+}
+
+/**
+ * Configuration for {@link rpcTransactionPlanSendingExecutor}.
+ *
+ * @see {@link rpcTransactionPlanSendingExecutor}
+ */
+export type RpcTransactionPlanExecutorConfig = {
+    /**
+     * Whether to estimate and set resource limits (the compute unit limit
+     * and, for version 1 transactions, the loaded accounts data size limit)
+     * by simulating the transaction before sending.
+     *
+     * When `true` (default), any resource limit that is still provisory or
+     * unset is estimated via a simulation and replaced with the estimated
+     * value (with a compute unit buffer applied via
+     * `getComputeUnitLimitFromEstimate`). When `false`, no estimation
+     * simulation is performed and the message is sent with exactly the
+     * resource limits it already carries.
+     *
+     * This should match the `estimateResourceLimits` option passed to
+     * {@link rpcTransactionPlanner}, which controls whether provisory limits
+     * are reserved in the first place. {@link solanaRpc} keeps them in sync
+     * automatically.
+     *
+     * Defaults to `true`.
+     */
+    estimateResourceLimits?: boolean;
+    /**
+     * Maps the estimated compute unit consumption from simulation to the
+     * compute unit limit to set on the transaction, adding headroom to
+     * account for variation between simulation and execution.
+     *
+     * By default, a function is used that adds a buffer on top of the
+     * estimate of at least 300 compute units, or a margin that decays
+     * linearly from 10% at low estimates to 2% at 500,000 compute units and
+     * above, whichever is greater.
+     *
+     * The returned value is always capped at 1,400,000, the maximum number of
+     * compute units allowed per transaction.
+     *
+     * @param estimatedComputeUnits - The compute units consumed during simulation.
+     * @returns The compute unit limit to set on the transaction.
+     */
+    getComputeUnitLimitFromEstimate?: (estimatedComputeUnits: number) => number;
+    /**
+     * The maximum number of concurrent executions allowed.
+     * Defaults to 10.
+     */
+    maxConcurrency?: number;
+    /**
+     * Whether to skip the preflight simulation when sending transactions.
+     *
+     * When `false` (default), preflight is skipped only if a resource limit
+     * estimation simulation was already performed for that transaction.
+     * If every applicable resource limit is already explicitly set (i.e. no
+     * estimation was needed) or estimation is disabled, preflight runs as the
+     * only simulation.
+     *
+     * When `true`, preflight is always skipped and the transaction is sent
+     * directly to the validator. Additionally, if the resource limit estimation
+     * simulation fails, the consumed resources from the failed simulation are
+     * used to set the limits so the transaction still reaches the validator.
+     * This is useful for debugging failed transactions in an explorer.
+     *
+     * Defaults to `false`.
+     */
+    skipPreflight?: boolean;
+};
+
+/**
+ * Creates the transaction plan executor installed by
+ * {@link rpcTransactionPlanSendingExecutor}, which signs and sends planned
+ * transaction messages using the client's RPC and RPC Subscriptions.
+ */
+function createExecutor(
+    client: ClientWithRpc<
+        GetEpochInfoApi & GetLatestBlockhashApi & GetSignatureStatusesApi & SendTransactionApi & SimulateTransactionApi
+    > &
+        ClientWithRpcSubscriptions<SignatureNotificationsApi & SlotNotificationsApi>,
+    config: RpcTransactionPlanExecutorConfig,
+): TransactionPlanExecutor {
+    if (!client.rpc || !client.rpcSubscriptions) {
+        throw new Error(
+            'An RPC instance with subscriptions is required on the client to create the RPC transaction plan executor. ' +
+                'Please add the RPC plugin to your client before using this plugin.',
+        );
+    }
+
+    const sendAndConfirmTransaction = sendAndConfirmTransactionFactory({
+        rpc: client.rpc,
+        rpcSubscriptions: client.rpcSubscriptions,
+    });
+    const estimateResourceLimits = estimateResourceLimitsFactory({ rpc: client.rpc });
+    const shouldEstimateResourceLimits = config.estimateResourceLimits ?? true;
+    const getComputeUnitLimitFromEstimate =
+        config.getComputeUnitLimitFromEstimate ?? getDefaultComputeUnitLimitFromEstimate;
+    const skipPreflight = config.skipPreflight ?? false;
+
+    return createTransactionPlanExecutor({
+        executeTransactionMessage: limitFunction(async (context, transactionMessage, executorConfig) => {
+            const { value: latestBlockhash } = await client.rpc.getLatestBlockhash().send(executorConfig);
+
+            // `estimateAndSetResourceLimits` only invokes our estimator when a
+            // resource limit actually needs estimating, so this flag tells us
+            // whether an estimation simulation was performed. When it was, we
+            // skip the redundant preflight simulation while sending.
+            let didSimulateToEstimate = false;
+            const estimateAndSetResourceLimits = estimateAndSetResourceLimitsFactory(
+                bufferAndRecoverResourceLimits(
+                    estimateResourceLimits,
+                    getComputeUnitLimitFromEstimate,
+                    skipPreflight,
+                    () => {
+                        didSimulateToEstimate = true;
+                    },
+                ),
             );
-        }
 
-        const sendAndConfirmTransaction = sendAndConfirmTransactionFactory({
-            rpc: client.rpc,
-            rpcSubscriptions: client.rpcSubscriptions,
-        });
-        const estimateResourceLimits = estimateResourceLimitsFactory({ rpc: client.rpc });
-        const shouldEstimateResourceLimits = config.estimateResourceLimits ?? true;
-        const getComputeUnitLimitFromEstimate =
-            config.getComputeUnitLimitFromEstimate ?? getDefaultComputeUnitLimitFromEstimate;
-        const skipPreflight = config.skipPreflight ?? false;
-
-        const transactionPlanExecutor = createTransactionPlanExecutor({
-            executeTransactionMessage: limitFunction(async (context, transactionMessage, executorConfig) => {
-                const { value: latestBlockhash } = await client.rpc.getLatestBlockhash().send(executorConfig);
-
-                // `estimateAndSetResourceLimits` only invokes our estimator when a
-                // resource limit actually needs estimating, so this flag tells us
-                // whether an estimation simulation was performed. When it was, we
-                // skip the redundant preflight simulation while sending.
-                let didSimulateToEstimate = false;
-                const estimateAndSetResourceLimits = estimateAndSetResourceLimitsFactory(
-                    bufferAndRecoverResourceLimits(
-                        estimateResourceLimits,
-                        getComputeUnitLimitFromEstimate,
-                        skipPreflight,
-                        () => {
-                            didSimulateToEstimate = true;
-                        },
-                    ),
-                );
-
-                const signedTransaction = await pipe(
-                    transactionMessage,
-                    tx => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, tx),
-                    tx => (context.message = tx),
-                    // Skip the estimation step entirely when disabled, so the
-                    // message is sent with exactly the resource limits it carries.
-                    async tx =>
-                        shouldEstimateResourceLimits ? await estimateAndSetResourceLimits(tx, executorConfig) : tx,
-                    async tx => (context.message = await tx),
-                    async tx => await signTransactionMessageWithSigners(await tx, executorConfig),
-                    async tx => (context.transaction = await tx),
-                );
-                assertIsTransactionWithBlockhashLifetime(signedTransaction);
-                await sendAndConfirmTransaction(signedTransaction, {
-                    commitment: 'confirmed',
-                    skipPreflight: skipPreflight || didSimulateToEstimate,
-                    ...executorConfig,
-                });
-                return signedTransaction;
-            }, config.maxConcurrency ?? 10),
-        } satisfies TransactionPlanExecutorConfig);
-
-        return extendClient(client, { transactionPlanExecutor });
-    };
+            const signedTransaction = await pipe(
+                transactionMessage,
+                tx => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, tx),
+                tx => (context.message = tx),
+                // Skip the estimation step entirely when disabled, so the
+                // message is sent with exactly the resource limits it carries.
+                async tx =>
+                    shouldEstimateResourceLimits ? await estimateAndSetResourceLimits(tx, executorConfig) : tx,
+                async tx => (context.message = await tx),
+                async tx => await signTransactionMessageWithSigners(await tx, executorConfig),
+                async tx => (context.transaction = await tx),
+            );
+            assertIsTransactionWithBlockhashLifetime(signedTransaction);
+            await sendAndConfirmTransaction(signedTransaction, {
+                commitment: 'confirmed',
+                skipPreflight: skipPreflight || didSimulateToEstimate,
+                ...executorConfig,
+            });
+            return signedTransaction;
+        }, config.maxConcurrency ?? 10),
+    } satisfies TransactionPlanExecutorConfig);
 }
 
 /**

@@ -15,12 +15,11 @@ import {
     SolanaRpcSubscriptionsApi,
     TestnetUrl,
 } from '@solana/kit';
-import { planAndSendTransactions } from '@solana/kit-plugin-instruction-plan';
 
 import { rpcAirdrop } from './airdrop';
 import { rpcGetMinimumBalance } from './get-minimum-balance';
 import { rpcSubscriptionsConnection } from './rpc';
-import { rpcTransactionPlanExecutor } from './transaction-plan-executor';
+import { rpcTransactionPlanSendingExecutor } from './transaction-plan-executor';
 import { rpcTransactionPlanner, TransactionPlannerConfig } from './transaction-planner';
 
 /**
@@ -114,8 +113,8 @@ export type SolanaRpcConfig<TClusterUrl extends ClusterUrl = ClusterUrl> = Solan
  *
  * @param config - Configuration for the Solana RPC connection.
  * @return A plugin that adds `client.rpc`, `client.rpcSubscriptions`,
- * `client.getMinimumBalance`, `client.transactionPlanner`,
- * `client.transactionPlanExecutor`, and `client.sendTransactions`.
+ * `client.getMinimumBalance`, `client.planTransaction`, `client.planTransactions`,
+ * `client.sendTransaction` and `client.sendTransactions`.
  *
  * @example
  * ```ts
@@ -140,13 +139,12 @@ export function solanaRpc<TClusterUrl extends ClusterUrl>(config: SolanaRpcConfi
             solanaRpcConnection<TClusterUrl>(config),
             rpcGetMinimumBalance(),
             rpcTransactionPlanner(config.transactionConfig),
-            rpcTransactionPlanExecutor({
+            rpcTransactionPlanSendingExecutor({
                 estimateResourceLimits: config.transactionConfig?.estimateResourceLimits,
                 getComputeUnitLimitFromEstimate: config.getComputeUnitLimitFromEstimate,
                 maxConcurrency: config.maxConcurrency,
                 skipPreflight: config.skipPreflight,
             }),
-            planAndSendTransactions(),
         );
 }
 
