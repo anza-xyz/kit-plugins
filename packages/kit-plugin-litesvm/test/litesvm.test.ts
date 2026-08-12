@@ -1,5 +1,6 @@
-import { createClient, TransactionSigner } from '@solana/kit';
-import { describe, expect, it } from 'vitest';
+import { createClient, TransactionPlanExecutor, TransactionSigner } from '@solana/kit';
+import type { FailedTransactionMetadata, TransactionMetadata } from 'litesvm';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import { litesvm as nodeLitesvm } from '../src/index';
 import { litesvm as browserLitesvm } from '../src/index.browser';
@@ -25,6 +26,18 @@ describe('litesvm', () => {
         expect(client).toHaveProperty('getMinimumBalance');
         expect(client).toHaveProperty('transactionPlanner');
         expect(client).toHaveProperty('transactionPlanExecutor');
-        expect(client).toHaveProperty('sendTransactions');
+        expect(client.planTransaction).toBeTypeOf('function');
+        expect(client.planTransactions).toBeTypeOf('function');
+        expect(client.sendTransaction).toBeTypeOf('function');
+        expect(client.sendTransactions).toBeTypeOf('function');
+    });
+
+    it('preserves the LiteSVM transaction metadata context on the executor', () => {
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(nodeLitesvm());
+        expectTypeOf(client.transactionPlanExecutor).toEqualTypeOf<
+            TransactionPlanExecutor<{ transactionMetadata: FailedTransactionMetadata | TransactionMetadata }>
+        >();
     });
 });

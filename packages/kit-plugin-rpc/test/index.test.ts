@@ -151,7 +151,10 @@ describe('solanaRpc', () => {
         expect(client).toHaveProperty('getMinimumBalance');
         expect(client).toHaveProperty('transactionPlanner');
         expect(client).toHaveProperty('transactionPlanExecutor');
-        expect(client).toHaveProperty('sendTransactions');
+        expect(client.planTransaction).toBeTypeOf('function');
+        expect(client.planTransactions).toBeTypeOf('function');
+        expect(client.sendTransaction).toBeTypeOf('function');
+        expect(client.sendTransactions).toBeTypeOf('function');
     });
 
     it('derives the WebSocket URL from the RPC URL by default', () => {

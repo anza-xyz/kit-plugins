@@ -18,26 +18,114 @@ import {
     TransactionPlanExecutor,
     TransactionPlanner,
     TransactionPlanResult,
+    TransactionPlanResultContext,
 } from '@solana/kit';
 
 /**
- * A plugin that sets the transactionPlanner on the client.
+ * A plugin that adds `planTransaction` and `planTransactions` functions to the
+ * client, using the provided transaction planner.
+ *
+ * The `planTransactions` function plans instructions, instruction plans or
+ * transaction messages into a transaction plan. The `planTransaction` function
+ * does the same but asserts that the resulting plan contains a single
+ * transaction message, and returns that message.
+ *
+ * For backwards compatibility this plugin also sets a `transactionPlanner`
+ * field on the client, but that field is deprecated in favour of the two
+ * functions above.
+ *
+ * @param transactionPlanner - The transaction planner to plan instructions with.
+ * @returns A plugin that adds `client.planTransaction` and `client.planTransactions`.
  *
  * @example
  * ```ts
  * import { createClient, createTransactionPlanner } from '@solana/kit';
  * import { transactionPlanner } from '@solana/kit-plugin-instruction-plan';
  *
- * // Install the transactionPlanner plugin using a custom transaction planner.
- * const client = createClient()
- *     .use(transactionPlanner(createTransactionPlanner(...)));
+ * const client = createClient().use(transactionPlanner(createTransactionPlanner(...)));
  *
- * // Use the transaction planner.
- * const transactionPlan = await client.transactionPlanner(myInstructionPlan);
+ * const transactionPlan = await client.planTransactions(myInstructionPlan);
+ * const transactionMessage = await client.planTransaction(myInstructionPlan);
  * ```
+ *
+ * @see {@link transactionPlanSendingExecutor}
  */
 export function transactionPlanner(transactionPlanner: TransactionPlanner) {
-    return <T extends object>(client: T) => extendClient(client, { transactionPlanner });
+    return <T extends object>(client: T) => {
+        const additions: ClientWithTransactionPlanning & {
+            /** @deprecated Use `planTransaction` or `planTransactions` instead. */
+            transactionPlanner: TransactionPlanner;
+        } = {
+            ...getTransactionPlanningFunctions(transactionPlanner),
+            transactionPlanner,
+        };
+        return extendClient(client, additions);
+    };
+}
+
+/**
+ * A plugin that adds `sendTransaction` and `sendTransactions` functions to the
+ * client, using the client's planning functions and the provided transaction
+ * plan executor.
+ *
+ * Both functions accept transaction messages, instructions, instruction plans
+ * or transaction plans as input, planning the input first when it is not
+ * already a transaction plan. Planning goes through the client's
+ * `planTransaction` and `planTransactions` functions, so the
+ * {@link transactionPlanner} plugin must be installed first.
+ *
+ * Note that `sendTransaction` asserts that the transaction plan result is both
+ * successful and contains a single transaction. This differs from
+ * `sendTransactions`, which returns the full transaction plan result as
+ * produced by the executor.
+ *
+ * For backwards compatibility this plugin also sets a `transactionPlanExecutor`
+ * field on the client, but that field is deprecated in favour of the two
+ * functions above.
+ *
+ * @typeParam TContext - The extra context type provided by the transaction plan
+ * executor on its transaction plan results. It is inferred from the executor and
+ * preserved on the deprecated `transactionPlanExecutor` field.
+ *
+ * @param transactionPlanExecutor - The transaction plan executor used to execute
+ * planned transactions.
+ * @returns A plugin that adds `client.sendTransaction` and `client.sendTransactions`.
+ * @throws If the client has no `planTransaction` or `planTransactions` set.
+ *
+ * @example
+ * ```ts
+ * import { createClient } from '@solana/kit';
+ * import { transactionPlanner, transactionPlanSendingExecutor } from '@solana/kit-plugin-instruction-plan';
+ *
+ * const client = createClient()
+ *     .use(transactionPlanner(myTransactionPlanner))
+ *     .use(transactionPlanSendingExecutor(myTransactionPlanExecutor));
+ *
+ * const singleResult = await client.sendTransaction(myInstructionPlan);
+ * const result = await client.sendTransactions(myInstructionPlan);
+ * ```
+ *
+ * @see {@link transactionPlanner}
+ */
+export function transactionPlanSendingExecutor<
+    TContext extends TransactionPlanResultContext = TransactionPlanResultContext,
+>(transactionPlanExecutor: TransactionPlanExecutor<TContext>) {
+    return <T extends ClientWithTransactionPlanning>(client: T) => {
+        if (!client.planTransaction || !client.planTransactions) {
+            throw new Error(
+                'Transaction planning functions are required on the client to send transactions. ' +
+                    'Please add a transaction planner plugin to your client before using this plugin.',
+            );
+        }
+        const additions: ClientWithTransactionSending & {
+            /** @deprecated Use `sendTransaction` or `sendTransactions` instead. */
+            transactionPlanExecutor: TransactionPlanExecutor<TContext>;
+        } = {
+            ...getTransactionSendingFunctions(client, transactionPlanExecutor),
+            transactionPlanExecutor,
+        };
+        return extendClient(client, additions);
+    };
 }
 
 /**
@@ -55,8 +143,31 @@ export function transactionPlanner(transactionPlanner: TransactionPlanner) {
  * // Use the transaction plan executor.
  * const transactionPlanResult = await client.transactionPlanExecutor(myTransactionPlan);
  * ```
+ *
+ * @typeParam TContext - The extra context type provided by the transaction plan
+ * executor on its transaction plan results. It is inferred from the executor and
+ * preserved on the `transactionPlanExecutor` field.
+ *
+ * @deprecated Use {@link transactionPlanSendingExecutor} instead, which installs
+ * `sendTransaction` and `sendTransactions` alongside the executor. This plugin
+ * only sets the deprecated `transactionPlanExecutor` field.
+ *
+ * ```ts
+ * // Before
+ * const client = createClient()
+ *     .use(transactionPlanner(myTransactionPlanner))
+ *     .use(transactionPlanExecutor(myTransactionPlanExecutor))
+ *     .use(planAndSendTransactions());
+ *
+ * // After
+ * const client = createClient()
+ *     .use(transactionPlanner(myTransactionPlanner))
+ *     .use(transactionPlanSendingExecutor(myTransactionPlanExecutor));
+ * ```
  */
-export function transactionPlanExecutor(transactionPlanExecutor: TransactionPlanExecutor) {
+export function transactionPlanExecutor<TContext extends TransactionPlanResultContext = TransactionPlanResultContext>(
+    transactionPlanExecutor: TransactionPlanExecutor<TContext>,
+) {
     return <T extends object>(client: T) => extendClient(client, { transactionPlanExecutor });
 }
 
@@ -96,21 +207,46 @@ export function transactionPlanExecutor(transactionPlanExecutor: TransactionPlan
  * const singleResult = await client.sendTransaction(myInstructionPlan);
  * const result = await client.sendTransactions(myInstructionPlan);
  * ```
+ *
+ * @deprecated No longer needed. {@link transactionPlanner} now installs
+ * `planTransaction` and `planTransactions`, and
+ * {@link transactionPlanSendingExecutor} installs `sendTransaction` and
+ * `sendTransactions`.
+ *
+ * ```ts
+ * // Before
+ * const client = createClient()
+ *     .use(transactionPlanner(myTransactionPlanner))
+ *     .use(transactionPlanExecutor(myTransactionPlanExecutor))
+ *     .use(planAndSendTransactions());
+ *
+ * // After
+ * const client = createClient()
+ *     .use(transactionPlanner(myTransactionPlanner))
+ *     .use(transactionPlanSendingExecutor(myTransactionPlanExecutor));
+ * ```
  */
 export function planAndSendTransactions() {
     return <T extends { transactionPlanExecutor: TransactionPlanExecutor; transactionPlanner: TransactionPlanner }>(
         client: T,
-    ) => extendClient(client, getTransactionPlanningAndSendingFunctions(client));
+    ) => {
+        const planner: TransactionPlanner = (instructionPlan, config) =>
+            client.transactionPlanner(instructionPlan, config);
+        const executor: TransactionPlanExecutor = (transactionPlan, config) =>
+            client.transactionPlanExecutor(transactionPlan, config);
+        const planningFunctions = getTransactionPlanningFunctions(planner);
+        return extendClient(client, {
+            ...planningFunctions,
+            ...getTransactionSendingFunctions(planningFunctions, executor),
+        });
+    };
 }
 
-function getTransactionPlanningAndSendingFunctions(client: {
-    transactionPlanExecutor: TransactionPlanExecutor;
-    transactionPlanner: TransactionPlanner;
-}): ClientWithTransactionPlanning & ClientWithTransactionSending {
+function getTransactionPlanningFunctions(planner: TransactionPlanner): ClientWithTransactionPlanning {
     const planTransactions: ClientWithTransactionPlanning['planTransactions'] = async (input, config = {}) => {
         const instructionPlan = parseInstructionPlanInput(input);
         config?.abortSignal?.throwIfAborted();
-        return await client.transactionPlanner(instructionPlan, config);
+        return await planner(instructionPlan, config);
     };
 
     const planTransaction: ClientWithTransactionPlanning['planTransaction'] = async (input, config = {}) => {
@@ -119,13 +255,20 @@ function getTransactionPlanningAndSendingFunctions(client: {
         return transactionPlan.message;
     };
 
+    return { planTransaction, planTransactions };
+}
+
+function getTransactionSendingFunctions(
+    client: ClientWithTransactionPlanning,
+    executor: TransactionPlanExecutor,
+): ClientWithTransactionSending {
     const sendTransactions: ClientWithTransactionSending['sendTransactions'] = async (input, config = {}) => {
         const plan = parseInstructionOrTransactionPlanInput(input);
         config?.abortSignal?.throwIfAborted();
-        const transactionPlan = isTransactionPlan(plan) ? plan : await planTransactions(plan, config);
+        const transactionPlan = isTransactionPlan(plan) ? plan : await client.planTransactions(plan, config);
         config?.abortSignal?.throwIfAborted();
         try {
-            return await client.transactionPlanExecutor(transactionPlan, config);
+            return await executor(transactionPlan, config);
         } catch (error) {
             if (!isSolanaError(error, SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN)) {
                 throw error;
@@ -142,10 +285,10 @@ function getTransactionPlanningAndSendingFunctions(client: {
         config?.abortSignal?.throwIfAborted();
         const transactionPlan = isTransactionPlan(plan)
             ? plan
-            : singleTransactionPlan(await planTransaction(plan, config));
+            : singleTransactionPlan(await client.planTransaction(plan, config));
         config?.abortSignal?.throwIfAborted();
         try {
-            const result = await client.transactionPlanExecutor(transactionPlan, config);
+            const result = await executor(transactionPlan, config);
             assertIsSuccessfulSingleTransactionPlanResult(result);
             return result;
         } catch (error) {
@@ -162,5 +305,5 @@ function getTransactionPlanningAndSendingFunctions(client: {
         }
     };
 
-    return { planTransaction, planTransactions, sendTransaction, sendTransactions };
+    return { sendTransaction, sendTransactions };
 }

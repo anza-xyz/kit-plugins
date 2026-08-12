@@ -96,8 +96,7 @@ function createPlugin<TAdditions extends ClientWithWallet>(
  * ```ts
  * const client = createClient()
  *   .use(walletSigner({ chain: 'solana:mainnet' }))
- *   .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
- *   .use(planAndSendTransactions());
+ *   .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
  * ```
  *
  * @param config - Plugin configuration.
@@ -135,8 +134,7 @@ export function walletSigner(config: WalletPluginConfig) {
  * const client = createClient()
  *   .use(payer(relayerKeypair))
  *   .use(walletIdentity({ chain: 'solana:mainnet' }))
- *   .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
- *   .use(planAndSendTransactions());
+ *   .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
  * ```
  *
  * @param config - Plugin configuration.
@@ -168,8 +166,7 @@ export function walletIdentity(config: WalletPluginConfig) {
  * ```ts
  * const client = createClient()
  *   .use(walletPayer({ chain: 'solana:mainnet' }))
- *   .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
- *   .use(planAndSendTransactions());
+ *   .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
  * ```
  *
  * @param config - Plugin configuration.
@@ -199,8 +196,7 @@ export function walletPayer(config: WalletPluginConfig) {
  * const client = createClient()
  *   .use(payer(backendKeypair))
  *   .use(walletWithoutSigner({ chain: 'solana:mainnet' }))
- *   .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
- *   .use(planAndSendTransactions());
+ *   .use(solanaRpc({ rpcUrl: 'https://api.mainnet-beta.solana.com' }));
  *
  * // client.payer is always backendKeypair
  * // client.wallet.getState().connected?.signer for manual use

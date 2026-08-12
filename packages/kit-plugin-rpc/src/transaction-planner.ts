@@ -2,14 +2,15 @@ import {
     ClientWithPayer,
     createTransactionMessage,
     createTransactionPlanner,
-    extendClient,
     fillTransactionMessageProvisoryResourceLimits,
     Lamports,
     MicroLamports,
     pipe,
     setTransactionMessageComputeUnitPrice,
     setTransactionMessageFeePayerSigner,
+    TransactionPlanner,
 } from '@solana/kit';
+import { transactionPlanner } from '@solana/kit-plugin-instruction-plan';
 
 /**
  * A plugin that provides a default transaction planner using RPC.
@@ -21,20 +22,24 @@ import {
  *   unless `estimateResourceLimits` is `false`.
  * - Optional priority fees.
  *
+ * The fee payer is read from `client.payer` lazily, at plan time, so that a
+ * dynamic payer (such as a connected wallet) is always respected.
+ *
  * @param config - Optional configuration for the planner.
- * @returns A plugin that adds `transactionPlanner` to the client.
+ * @returns A plugin that adds `client.planTransaction` and `client.planTransactions`.
+ * @throws If `config.version` is `1`, which `@solana/kit` cannot yet build.
  *
  * @example
  * ```ts
  * import { createClient } from '@solana/kit';
- * import { solanaRpcConnection, rpcTransactionPlanner, rpcTransactionPlanExecutor } from '@solana/kit-plugin-rpc';
+ * import { solanaRpcConnection, rpcTransactionPlanner, rpcTransactionPlanSendingExecutor } from '@solana/kit-plugin-rpc';
  * import { generatedPayer } from '@solana/kit-plugin-signer';
  *
  * const client = await createClient()
  *     .use(solanaRpcConnection({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
  *     .use(generatedPayer())
  *     .use(rpcTransactionPlanner())
- *     .use(rpcTransactionPlanExecutor());
+ *     .use(rpcTransactionPlanSendingExecutor());
  * ```
  *
  * @example
@@ -44,39 +49,47 @@ import {
  * ```ts
  * rpcTransactionPlanner({ estimateResourceLimits: false });
  * ```
+ *
+ * @see {@link rpcTransactionPlanSendingExecutor}
  */
 export function rpcTransactionPlanner(config: TransactionPlannerConfig = {}) {
-    return <T extends ClientWithPayer>(client: T) => {
-        if (config.version === 1) {
-            // The v1 transaction path is defined at the type level for forward
-            // compatibility, but `createTransactionMessage` cannot yet build v1
-            // messages, so we fail loudly rather than silently misbehave.
-            throw new Error(
-                'Version 1 transactions are not yet supported by `rpcTransactionPlanner`. ' +
-                    'Use version 0 or legacy transactions for now.',
+    return <T extends ClientWithPayer>(client: T) => transactionPlanner(createPlanner(client, config))(client);
+}
+
+/**
+ * Creates the transaction planner installed by {@link rpcTransactionPlanner}.
+ *
+ * The fee payer is read from the client at plan time rather than at
+ * construction time, so a dynamic `client.payer` is always respected.
+ */
+function createPlanner(client: ClientWithPayer, config: TransactionPlannerConfig): TransactionPlanner {
+    if (config.version === 1) {
+        // The v1 transaction path is defined at the type level for forward
+        // compatibility, but `createTransactionMessage` cannot yet build v1
+        // messages, so we fail loudly rather than silently misbehave.
+        throw new Error(
+            'Version 1 transactions are not yet supported by `rpcTransactionPlanner`. ' +
+                'Use version 0 or legacy transactions for now.',
+        );
+    }
+
+    const version = config.version ?? 0;
+    const estimateResourceLimits = config.estimateResourceLimits ?? true;
+    const microLamportsPerComputeUnit = config.microLamportsPerComputeUnit;
+
+    return createTransactionPlanner({
+        createTransactionMessage: () => {
+            return pipe(
+                createTransactionMessage({ version }),
+                tx => setTransactionMessageFeePayerSigner(client.payer, tx),
+                tx => (estimateResourceLimits ? fillTransactionMessageProvisoryResourceLimits(tx) : tx),
+                tx =>
+                    microLamportsPerComputeUnit === undefined
+                        ? tx
+                        : setTransactionMessageComputeUnitPrice(microLamportsPerComputeUnit, tx),
             );
-        }
-
-        const version = config.version ?? 0;
-        const estimateResourceLimits = config.estimateResourceLimits ?? true;
-        const microLamportsPerComputeUnit = config.microLamportsPerComputeUnit;
-
-        const transactionPlanner = createTransactionPlanner({
-            createTransactionMessage: () => {
-                return pipe(
-                    createTransactionMessage({ version }),
-                    tx => setTransactionMessageFeePayerSigner(client.payer, tx),
-                    tx => (estimateResourceLimits ? fillTransactionMessageProvisoryResourceLimits(tx) : tx),
-                    tx =>
-                        microLamportsPerComputeUnit === undefined
-                            ? tx
-                            : setTransactionMessageComputeUnitPrice(microLamportsPerComputeUnit, tx),
-                );
-            },
-        });
-
-        return extendClient(client, { transactionPlanner });
-    };
+        },
+    });
 }
 
 /**

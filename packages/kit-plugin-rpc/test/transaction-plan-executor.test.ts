@@ -20,7 +20,7 @@ import {
 } from '@solana/kit';
 import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
-import { rpcTransactionPlanExecutor, rpcTransactionPlanner } from '../src';
+import { rpcTransactionPlanExecutor, rpcTransactionPlanner, rpcTransactionPlanSendingExecutor } from '../src';
 
 const MOCK_BLOCKHASH = { blockhash: '11111111111111111111111111111111', lastValidBlockHeight: 0n };
 const MOCK_INSTRUCTION = {
@@ -36,13 +36,17 @@ beforeEach(() => {
     vi.clearAllMocks();
 });
 
-describe('rpcTransactionPlanExecutor', () => {
-    it('provides a transactionPlanExecutor on the client', () => {
+describe('rpcTransactionPlanSendingExecutor', () => {
+    it('adds sendTransaction and sendTransactions to the client', async () => {
+        const payer = await generateKeyPairSigner();
         const rpc = {} as Rpc<SolanaRpcApi>;
         const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
         const client = createClient()
-            .use(() => ({ rpc, rpcSubscriptions }))
-            .use(rpcTransactionPlanExecutor());
+            .use(() => ({ payer, rpc, rpcSubscriptions }))
+            .use(rpcTransactionPlanner())
+            .use(rpcTransactionPlanSendingExecutor());
+        expect(client).toHaveProperty('sendTransaction');
+        expect(client).toHaveProperty('sendTransactions');
         expect(client).toHaveProperty('transactionPlanExecutor');
     });
 
@@ -61,7 +65,7 @@ describe('rpcTransactionPlanExecutor', () => {
         const client = createClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
             .use(rpcTransactionPlanner())
-            .use(rpcTransactionPlanExecutor());
+            .use(rpcTransactionPlanSendingExecutor());
 
         const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
         const transactionPlan = await client.transactionPlanner(instructionPlan);
@@ -88,7 +92,8 @@ describe('rpcTransactionPlanExecutor', () => {
 
         const client = createClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
-            .use(rpcTransactionPlanExecutor());
+            .use(rpcTransactionPlanner())
+            .use(rpcTransactionPlanSendingExecutor());
 
         await client.transactionPlanExecutor(
             singleTransactionPlan(setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }))),
@@ -118,7 +123,8 @@ describe('rpcTransactionPlanExecutor', () => {
 
         const client = createClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
-            .use(rpcTransactionPlanExecutor());
+            .use(rpcTransactionPlanner())
+            .use(rpcTransactionPlanSendingExecutor());
 
         // Create a transaction message with an explicit (non-provisory) compute unit limit.
         const txMessage = pipe(
@@ -152,7 +158,8 @@ describe('rpcTransactionPlanExecutor', () => {
 
         const client = createClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
-            .use(rpcTransactionPlanExecutor({ skipPreflight: true }));
+            .use(rpcTransactionPlanner())
+            .use(rpcTransactionPlanSendingExecutor({ skipPreflight: true }));
 
         // Create a transaction message with an explicit (non-provisory) compute unit limit.
         const txMessage = pipe(
@@ -188,7 +195,8 @@ describe('rpcTransactionPlanExecutor', () => {
 
         const client = createClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
-            .use(rpcTransactionPlanExecutor());
+            .use(rpcTransactionPlanner())
+            .use(rpcTransactionPlanSendingExecutor());
 
         const txMessage = setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }));
         const promise = client.transactionPlanExecutor(singleTransactionPlan(txMessage));
@@ -216,7 +224,8 @@ describe('rpcTransactionPlanExecutor', () => {
 
         const client = createClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
-            .use(rpcTransactionPlanExecutor({ skipPreflight: true }));
+            .use(rpcTransactionPlanner())
+            .use(rpcTransactionPlanSendingExecutor({ skipPreflight: true }));
 
         const txMessage = setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }));
         await client.transactionPlanExecutor(singleTransactionPlan(txMessage));
@@ -245,7 +254,8 @@ describe('rpcTransactionPlanExecutor', () => {
 
         const client = createClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
-            .use(rpcTransactionPlanExecutor());
+            .use(rpcTransactionPlanner())
+            .use(rpcTransactionPlanSendingExecutor());
 
         const txMessage = setTransactionMessageFeePayerSigner(
             payer,
@@ -278,7 +288,8 @@ describe('rpcTransactionPlanExecutor', () => {
         const client = createClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
             // Even with skipPreflight, a missing data size cannot be recovered.
-            .use(rpcTransactionPlanExecutor({ skipPreflight: true }));
+            .use(rpcTransactionPlanner())
+            .use(rpcTransactionPlanSendingExecutor({ skipPreflight: true }));
 
         const txMessage = setTransactionMessageFeePayerSigner(
             payer,
@@ -309,7 +320,8 @@ describe('rpcTransactionPlanExecutor', () => {
 
         const client = createClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
-            .use(rpcTransactionPlanExecutor({ skipPreflight: true }));
+            .use(rpcTransactionPlanner())
+            .use(rpcTransactionPlanSendingExecutor({ skipPreflight: true }));
 
         const txMessage = setTransactionMessageFeePayerSigner(
             payer,
@@ -339,7 +351,8 @@ describe('rpcTransactionPlanExecutor', () => {
 
         const client = createClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
-            .use(rpcTransactionPlanExecutor());
+            .use(rpcTransactionPlanner())
+            .use(rpcTransactionPlanSendingExecutor());
 
         // Both applicable resource limits are explicit, so no estimation is needed.
         const txMessage = pipe(
@@ -376,7 +389,7 @@ describe('rpcTransactionPlanExecutor', () => {
         const client = createClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
             .use(rpcTransactionPlanner({ estimateResourceLimits: false }))
-            .use(rpcTransactionPlanExecutor({ estimateResourceLimits: false }));
+            .use(rpcTransactionPlanSendingExecutor({ estimateResourceLimits: false }));
 
         const transactionPlan = await client.transactionPlanner(singleInstructionPlan(MOCK_INSTRUCTION));
         await client.transactionPlanExecutor(transactionPlan);
@@ -406,7 +419,7 @@ describe('rpcTransactionPlanExecutor', () => {
         const client = createClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
             .use(rpcTransactionPlanner({ estimateResourceLimits: false }))
-            .use(rpcTransactionPlanExecutor({ estimateResourceLimits: false, skipPreflight: true }));
+            .use(rpcTransactionPlanSendingExecutor({ estimateResourceLimits: false, skipPreflight: true }));
 
         const transactionPlan = await client.transactionPlanner(singleInstructionPlan(MOCK_INSTRUCTION));
         await client.transactionPlanExecutor(transactionPlan);
@@ -435,7 +448,8 @@ describe('rpcTransactionPlanExecutor', () => {
 
         const client = createClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
-            .use(rpcTransactionPlanExecutor());
+            .use(rpcTransactionPlanner())
+            .use(rpcTransactionPlanSendingExecutor());
 
         const txMessage = setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }));
         const result = (await client.transactionPlanExecutor(
@@ -462,7 +476,8 @@ describe('rpcTransactionPlanExecutor', () => {
 
         const client = createClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
-            .use(rpcTransactionPlanExecutor());
+            .use(rpcTransactionPlanner())
+            .use(rpcTransactionPlanSendingExecutor());
 
         const txMessage = setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }));
         const result = (await client.transactionPlanExecutor(
@@ -489,7 +504,8 @@ describe('rpcTransactionPlanExecutor', () => {
 
         const client = createClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
-            .use(rpcTransactionPlanExecutor());
+            .use(rpcTransactionPlanner())
+            .use(rpcTransactionPlanSendingExecutor());
 
         const txMessage = setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }));
         const result = (await client.transactionPlanExecutor(
@@ -514,7 +530,8 @@ describe('rpcTransactionPlanExecutor', () => {
         const getComputeUnitLimitFromEstimate = vi.fn((estimatedComputeUnits: number) => estimatedComputeUnits * 2);
         const client = createClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
-            .use(rpcTransactionPlanExecutor({ getComputeUnitLimitFromEstimate }));
+            .use(rpcTransactionPlanner())
+            .use(rpcTransactionPlanSendingExecutor({ getComputeUnitLimitFromEstimate }));
 
         const txMessage = setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }));
         const result = (await client.transactionPlanExecutor(
@@ -543,7 +560,8 @@ describe('rpcTransactionPlanExecutor', () => {
 
         const client = createClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
-            .use(rpcTransactionPlanExecutor({ skipPreflight: true }));
+            .use(rpcTransactionPlanner())
+            .use(rpcTransactionPlanSendingExecutor({ skipPreflight: true }));
 
         const txMessage = setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }));
         const result = (await client.transactionPlanExecutor(
@@ -569,7 +587,8 @@ describe('rpcTransactionPlanExecutor', () => {
 
         const client = createClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
-            .use(rpcTransactionPlanExecutor());
+            .use(rpcTransactionPlanner())
+            .use(rpcTransactionPlanSendingExecutor());
 
         const txMessage = setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }));
         const result = (await client.transactionPlanExecutor(
@@ -594,7 +613,8 @@ describe('rpcTransactionPlanExecutor', () => {
         const client = createClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
             // A custom function that returns an out-of-range value must still be capped.
-            .use(rpcTransactionPlanExecutor({ getComputeUnitLimitFromEstimate: () => 2_000_000 }));
+            .use(rpcTransactionPlanner())
+            .use(rpcTransactionPlanSendingExecutor({ getComputeUnitLimitFromEstimate: () => 2_000_000 }));
 
         const txMessage = setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }));
         const result = (await client.transactionPlanExecutor(
@@ -622,7 +642,7 @@ describe('rpcTransactionPlanExecutor', () => {
         const client = createClient()
             .use(() => ({ payer, rpc, rpcSubscriptions }))
             .use(rpcTransactionPlanner())
-            .use(rpcTransactionPlanExecutor({ maxConcurrency: 2 }));
+            .use(rpcTransactionPlanSendingExecutor({ maxConcurrency: 2 }));
 
         const singlePlan = await client.transactionPlanner(singleInstructionPlan(MOCK_INSTRUCTION));
         const transactionPlan = parallelTransactionPlan([singlePlan, singlePlan, singlePlan, singlePlan]);
@@ -654,7 +674,7 @@ describe('rpcTransactionPlanExecutor', () => {
             createClient()
                 .use(() => ({ rpcSubscriptions }))
                 // @ts-expect-error Missing RPC on the client.
-                .use(rpcTransactionPlanExecutor()),
+                .use(rpcTransactionPlanSendingExecutor()),
         ).toThrow();
     });
 
@@ -664,7 +684,27 @@ describe('rpcTransactionPlanExecutor', () => {
             createClient()
                 .use(() => ({ rpc }))
                 // @ts-expect-error Missing RPC Subscriptions on the client.
-                .use(rpcTransactionPlanExecutor()),
+                .use(rpcTransactionPlanSendingExecutor()),
         ).toThrow();
+    });
+});
+
+describe('rpcTransactionPlanExecutor', () => {
+    it('sets the deprecated transactionPlanExecutor field without requiring a planner', () => {
+        const rpc = {} as Rpc<SolanaRpcApi>;
+        const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
+        const client = createClient()
+            .use(() => ({ rpc, rpcSubscriptions }))
+            .use(rpcTransactionPlanExecutor());
+        expect(client).toHaveProperty('transactionPlanExecutor');
+        expect(client).not.toHaveProperty('sendTransaction');
+        expect(client).not.toHaveProperty('sendTransactions');
+    });
+
+    it('requires an RPC instance on the client', () => {
+        // @ts-expect-error Missing RPC and RPC Subscriptions on the client.
+        expect(() => createClient().use(rpcTransactionPlanExecutor())).toThrow(
+            /An RPC instance with subscriptions is required/,
+        );
     });
 });

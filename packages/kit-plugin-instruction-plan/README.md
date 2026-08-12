@@ -15,9 +15,26 @@ This package provides plugins that add transaction planning and execution to you
 pnpm install @solana/kit-plugin-instruction-plan
 ```
 
+## Quick start
+
+```ts
+import { createClient } from '@solana/kit';
+import { transactionPlanner, transactionPlanSendingExecutor } from '@solana/kit-plugin-instruction-plan';
+
+const client = createClient()
+    .use(transactionPlanner(myTransactionPlanner))
+    .use(transactionPlanSendingExecutor(myTransactionPlanExecutor));
+
+// Plan without executing.
+const transactionPlan = await client.planTransactions(myInstructionPlan);
+
+// Plan and execute in one call.
+const result = await client.sendTransactions(myInstructionPlan);
+```
+
 ## `transactionPlanner` plugin
 
-The `transactionPlanner` plugin sets a custom transaction planner on the client.
+The `transactionPlanner` plugin adds `planTransaction` and `planTransactions` to the client, using the provided transaction planner.
 
 ### Installation
 
@@ -27,56 +44,6 @@ import { transactionPlanner } from '@solana/kit-plugin-instruction-plan';
 
 const myTransactionPlanner = createTransactionPlanner(/* ... */);
 const client = createClient().use(transactionPlanner(myTransactionPlanner));
-```
-
-### Features
-
-- `transactionPlanner`: A function that plans instructions into transaction messages.
-    ```ts
-    const transactionPlan = await client.transactionPlanner(myInstructionPlan);
-    ```
-
-## `transactionPlanExecutor` plugin
-
-The `transactionPlanExecutor` plugin sets a custom transaction plan executor on the client.
-
-### Installation
-
-```ts
-import { createClient, createTransactionPlanExecutor } from '@solana/kit';
-import { transactionPlanExecutor } from '@solana/kit-plugin-instruction-plan';
-
-const myTransactionPlanExecutor = createTransactionPlanExecutor(/* ... */);
-const client = createClient().use(transactionPlanExecutor(myTransactionPlanExecutor));
-```
-
-### Features
-
-- `transactionPlanExecutor`: A function that executes planned transactions.
-    ```ts
-    const transactionPlanResult = await client.transactionPlanExecutor(myTransactionPlan);
-    ```
-
-## `planAndSendTransactions` plugin
-
-The `planAndSendTransactions` plugin adds helper functions for planning and sending transactions. They accept transaction messages, instructions or instruction plans as input.
-
-### Installation
-
-This plugin requires both `transactionPlanner` and `transactionPlanExecutor` to be installed on the client.
-
-```ts
-import { createClient } from '@solana/kit';
-import {
-    transactionPlanner,
-    transactionPlanExecutor,
-    planAndSendTransactions,
-} from '@solana/kit-plugin-instruction-plan';
-
-const client = createClient()
-    .use(transactionPlanner(myTransactionPlanner))
-    .use(transactionPlanExecutor(myTransactionPlanExecutor))
-    .use(planAndSendTransactions());
 ```
 
 ### Features
@@ -93,6 +60,27 @@ const client = createClient()
     const transactionMessage = await client.planTransaction(myInstructionPlan);
     ```
 
+For backward compatibility this plugin also sets a `client.transactionPlanner` field, but that field is deprecated in favour of the two functions above.
+
+## `transactionPlanSendingExecutor` plugin
+
+The `transactionPlanSendingExecutor` plugin adds `sendTransaction` and `sendTransactions` to the client, using the client's planning functions and the provided transaction plan executor. Both functions accept transaction messages, instructions, instruction plans or transaction plans as input, planning the input first when it is not already a transaction plan.
+
+Planning goes through the client's `planTransaction` and `planTransactions` functions, so the `transactionPlanner` plugin must be installed first — otherwise the plugin throws when applied. Note that installing another `transactionPlanner` afterwards does not affect sending: `sendTransaction` and `sendTransactions` keep using the planning functions that were on the client when they were installed.
+
+### Installation
+
+```ts
+import { createClient } from '@solana/kit';
+import { transactionPlanner, transactionPlanSendingExecutor } from '@solana/kit-plugin-instruction-plan';
+
+const client = createClient()
+    .use(transactionPlanner(myTransactionPlanner))
+    .use(transactionPlanSendingExecutor(myTransactionPlanExecutor));
+```
+
+### Features
+
 - `sendTransactions`: Plans and executes transaction messages, instructions or instruction plans in one call.
 
     ```ts
@@ -105,9 +93,31 @@ const client = createClient()
     const transactionPlanResult = await client.sendTransaction(myInstructionPlan);
     ```
 
+For backward compatibility this plugin also sets a `client.transactionPlanExecutor` field, but that field is deprecated in favour of the two functions above.
+
+## Deprecated plugins
+
+The following plugins are still exported for backward compatibility but are deprecated.
+
+- **`transactionPlanExecutor(executor)`**: Only sets the deprecated `client.transactionPlanExecutor` field. Use `transactionPlanSendingExecutor` instead, which installs `sendTransaction` and `sendTransactions` alongside the executor.
+- **`planAndSendTransactions()`**: No longer needed. `transactionPlanner` now installs `planTransaction` and `planTransactions`, and `transactionPlanSendingExecutor` installs `sendTransaction` and `sendTransactions`.
+
+```ts
+// Before
+const client = createClient()
+    .use(transactionPlanner(myTransactionPlanner))
+    .use(transactionPlanExecutor(myTransactionPlanExecutor))
+    .use(planAndSendTransactions());
+
+// After
+const client = createClient()
+    .use(transactionPlanner(myTransactionPlanner))
+    .use(transactionPlanSendingExecutor(myTransactionPlanExecutor));
+```
+
 ## Default Planner and Executor Implementations
 
 For ready-to-use transaction planner and executor implementations, see:
 
-- [`@solana/kit-plugin-rpc`](https://www.npmjs.com/package/@solana/kit-plugin-rpc) — provides `rpcTransactionPlanner` and `rpcTransactionPlanExecutor` for RPC-based transaction planning and execution.
-- [`@solana/kit-plugin-litesvm`](https://www.npmjs.com/package/@solana/kit-plugin-litesvm) — provides `litesvmTransactionPlanner` and `litesvmTransactionPlanExecutor` for LiteSVM-based transaction planning and execution.
+- [`@solana/kit-plugin-rpc`](https://www.npmjs.com/package/@solana/kit-plugin-rpc) — provides the `rpcTransactionPlanner` and `rpcTransactionPlanSendingExecutor` plugins for RPC-based transaction planning and execution.
+- [`@solana/kit-plugin-litesvm`](https://www.npmjs.com/package/@solana/kit-plugin-litesvm) — provides the `litesvmTransactionPlanner` and `litesvmTransactionPlanSendingExecutor` plugins for LiteSVM-based transaction planning and execution.

@@ -41,7 +41,7 @@ All options are provided via a `SolanaRpcConfig` object:
 - `rpcSubscriptionsUrl`: URL of the RPC Subscriptions endpoint. Defaults to the `rpcUrl` with the protocol changed from `http` to `ws`. As a convenience, the exact strings `http://127.0.0.1:8899` and `http://localhost:8899` (the canonical local validator RPC endpoints) are rewritten to port `8900`. The match is exact-string only — any other host, scheme, or port (including `https://localhost:8899` or `http://0.0.0.0:8899`) is left untouched. Pass `rpcSubscriptionsUrl` explicitly when your RPC and WebSocket endpoints use different ports.
 - `rpcConfig`: Optional configuration forwarded to `createSolanaRpc`.
 - `rpcSubscriptionsConfig`: Optional configuration forwarded to `createSolanaRpcSubscriptions`.
-- `transactionConfig`: Options to configure how transaction messages are created. See `rpcTransactionPlanner` options below.
+- `transactionConfig`: Options to configure how transaction messages are created. See the `rpcTransactionPlanner` options below.
 - `maxConcurrency`: Maximum number of concurrent transaction executions. Defaults to 10.
 - `skipPreflight`: Whether to always skip preflight simulation. Defaults to `false`.
 
@@ -50,9 +50,9 @@ All options are provided via a `SolanaRpcConfig` object:
 - `rpc`: Call any Solana RPC method.
 - `rpcSubscriptions`: Subscribe to Solana RPC notifications.
 - `getMinimumBalance`: Compute minimum lamports for rent exemption.
-- `transactionPlanner`: Plan instructions into transaction messages.
-- `transactionPlanExecutor`: Sign and send planned transactions.
-- `sendTransaction(s)` / `planTransaction(s)`: Convenience helpers that combine planning and execution.
+- `planTransaction(s)`: Plan instructions into transaction messages without executing them.
+- `sendTransaction(s)`: Plan and execute instructions, instruction plans, or transaction messages in one call.
+- `transactionPlanner` / `transactionPlanExecutor` (deprecated): Fields kept for backward compatibility. Use `planTransaction(s)` / `sendTransaction(s)` instead.
 
 ## `solanaMainnetRpc` plugin
 
@@ -245,22 +245,24 @@ const client = createClient()
 
 ## `rpcTransactionPlanner` plugin
 
-This plugin provides a default transaction planner that creates transaction messages with a fee payer, provisory resource limits (a compute unit limit, plus a loaded accounts data size limit for version 1 transactions), and optional priority fees.
+Adds `planTransaction` and `planTransactions` to the client, using a planner that plans instructions into transaction messages with a fee payer, provisory resource limits (a compute unit limit, plus a loaded accounts data size limit for version 1 transactions), and optional priority fees. The fee payer is read from `client.payer` lazily, at plan time, so a dynamic payer (such as a connected wallet) is always respected.
 
-### Installation
+### Usage
 
-The client must have a `payer` set before applying this plugin.
+The client must have a `payer` set before installing the plugin.
 
 ```ts
 import { createClient } from '@solana/kit';
-import { solanaRpcConnection, rpcTransactionPlanner, rpcTransactionPlanExecutor } from '@solana/kit-plugin-rpc';
+import { rpcTransactionPlanSendingExecutor, rpcTransactionPlanner, solanaRpcConnection } from '@solana/kit-plugin-rpc';
 import { generatedPayer } from '@solana/kit-plugin-signer';
 
 const client = await createClient()
     .use(solanaRpcConnection({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
     .use(generatedPayer())
     .use(rpcTransactionPlanner())
-    .use(rpcTransactionPlanExecutor());
+    .use(rpcTransactionPlanSendingExecutor());
+
+const transactionPlan = await client.planTransactions(myInstructionPlan);
 ```
 
 ### Options
@@ -275,46 +277,36 @@ For legacy and version 0 transactions:
 
 Version 1 transactions are defined for forward compatibility but are not yet buildable by `@solana/kit`; passing `version: 1` currently throws. When available, version 1 will accept `priorityFeeLamports` (a flat total in lamports) instead of `microLamportsPerComputeUnit`, alongside the shared `estimateResourceLimits` option.
 
-### Features
+## `rpcTransactionPlanSendingExecutor` plugin
 
-- `transactionPlanner`: A function that plans instructions into transaction messages.
-    ```ts
-    const transactionPlan = await client.transactionPlanner(myInstructionPlan);
-    ```
+Adds `sendTransaction` and `sendTransactions` to the client, using an executor that estimates resource limits, signs, and sends transactions via RPC. Resource limit estimation covers the compute unit limit and, for version 1 transactions, the loaded accounts data size limit.
 
-## `rpcTransactionPlanExecutor` plugin
+### Usage
 
-This plugin provides a default transaction plan executor that estimates resource limits, signs, and sends transactions via RPC. Resource limit estimation covers the compute unit limit and, for version 1 transactions, the loaded accounts data size limit.
-
-### Installation
-
-This plugin requires `rpc` and `rpcSubscriptions` to be configured on the client.
+The client must have `rpc` and `rpcSubscriptions` configured, and a transaction planner installed, before installing this plugin — sending plans through the client's planning functions.
 
 ```ts
 import { createClient } from '@solana/kit';
-import { solanaRpcConnection, rpcTransactionPlanner, rpcTransactionPlanExecutor } from '@solana/kit-plugin-rpc';
+import { rpcTransactionPlanSendingExecutor, rpcTransactionPlanner, solanaRpcConnection } from '@solana/kit-plugin-rpc';
 import { generatedPayer } from '@solana/kit-plugin-signer';
 
 const client = await createClient()
     .use(solanaRpcConnection({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
     .use(generatedPayer())
     .use(rpcTransactionPlanner())
-    .use(rpcTransactionPlanExecutor());
+    .use(rpcTransactionPlanSendingExecutor());
+
+const transactionPlanResult = await client.sendTransactions(myInstructionPlan);
 ```
 
 ### Options
+
+All options are provided via a `RpcTransactionPlanExecutorConfig` object:
 
 - `estimateResourceLimits`: Whether to estimate and set resource limits by simulating before sending (default: `true`). This should match the `estimateResourceLimits` option on the planner; `solanaRpc` keeps them in sync automatically.
 - `getComputeUnitLimitFromEstimate`: A `(estimatedComputeUnits: number) => number` function that maps the estimated compute unit consumption to the compute unit limit to set, adding headroom for variation between simulation and execution. Defaults to a function that adds a buffer on top of the estimate of at least 300 compute units, or a margin that decays linearly from 10% at low estimates to 2% at 500,000 compute units and above, whichever is greater. The result is always capped at 1,400,000 (the per-transaction maximum).
 - `maxConcurrency`: Maximum number of concurrent executions (default: 10).
 - `skipPreflight`: Whether to skip the preflight simulation when sending transactions (default: `false`).
-
-### Features
-
-- `transactionPlanExecutor`: A function that executes planned transactions.
-    ```ts
-    const transactionPlanResult = await client.transactionPlanExecutor(myTransactionPlan);
-    ```
 
 ### Preflight and Resource Limit Estimation
 
@@ -373,3 +365,15 @@ The following plugins are still exported for backward compatibility but are depr
 
 - `rpcConnection(rpc)` / `rpcSubscriptionsConnection(rpcSubscriptions)`: Trivial wrappers around `extendClient`. Inline `extendClient({ rpc })` or `extendClient({ rpcSubscriptions })` instead, or use `solanaRpcConnection` when starting from a cluster URL.
 - `solanaRpcSubscriptionsConnection(url, config?)`: No longer needed because `solanaRpcConnection` installs both `rpc` and `rpcSubscriptions`.
+- `rpcTransactionPlanExecutor(config?)`: Only sets the deprecated `client.transactionPlanExecutor` field. Use `rpcTransactionPlanSendingExecutor` instead, which installs `sendTransaction` and `sendTransactions` alongside the executor.
+
+    ```ts
+    // Before
+    const client = await createClient()
+        .use(rpcTransactionPlanner())
+        .use(rpcTransactionPlanExecutor())
+        .use(planAndSendTransactions());
+
+    // After
+    const client = await createClient().use(rpcTransactionPlanner()).use(rpcTransactionPlanSendingExecutor());
+    ```

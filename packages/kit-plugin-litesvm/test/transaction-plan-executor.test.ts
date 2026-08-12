@@ -21,17 +21,26 @@ import {
 import type { FailedTransactionMetadata, LiteSVM, TransactionMetadata } from 'litesvm';
 import { describe, expect, it, vi } from 'vitest';
 
-import { litesvmConnection, litesvmTransactionPlanExecutor, litesvmTransactionPlanner } from '../src';
+import {
+    litesvmConnection,
+    litesvmTransactionPlanExecutor,
+    litesvmTransactionPlanner,
+    litesvmTransactionPlanSendingExecutor,
+} from '../src';
 
 const MOCK_INSTRUCTION = { programAddress: '11111111111111111111111111111111' as Address };
 
-describe('litesvmTransactionPlanExecutor', () => {
+describe('litesvmTransactionPlanSendingExecutor', () => {
     describe('with mocks', () => {
-        it('provides a transactionPlanExecutor on the client', () => {
+        it('adds sendTransaction and sendTransactions to the client', async () => {
+            const payer = await generateKeyPairSigner();
             const svm = {} as LiteSVM;
             const client = createClient()
-                .use(() => ({ svm }))
-                .use(litesvmTransactionPlanExecutor());
+                .use(() => ({ payer, svm }))
+                .use(litesvmTransactionPlanner())
+                .use(litesvmTransactionPlanSendingExecutor());
+            expect(client).toHaveProperty('sendTransaction');
+            expect(client).toHaveProperty('sendTransactions');
             expect(client).toHaveProperty('transactionPlanExecutor');
         });
 
@@ -44,7 +53,7 @@ describe('litesvmTransactionPlanExecutor', () => {
             const client = createClient()
                 .use(() => ({ payer, svm }))
                 .use(litesvmTransactionPlanner())
-                .use(litesvmTransactionPlanExecutor());
+                .use(litesvmTransactionPlanSendingExecutor());
 
             const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
             const transactionPlan = await client.transactionPlanner(instructionPlan);
@@ -65,7 +74,7 @@ describe('litesvmTransactionPlanExecutor', () => {
             const client = createClient()
                 .use(() => ({ payer, svm }))
                 .use(litesvmTransactionPlanner())
-                .use(litesvmTransactionPlanExecutor());
+                .use(litesvmTransactionPlanSendingExecutor());
 
             const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
             const transactionPlan = await client.transactionPlanner(instructionPlan);
@@ -81,7 +90,8 @@ describe('litesvmTransactionPlanExecutor', () => {
             const svm = { sendTransaction, setTransactionMessageLifetimeUsingLatestBlockhash } as unknown as LiteSVM;
             const client = createClient()
                 .use(() => ({ payer, svm }))
-                .use(litesvmTransactionPlanExecutor());
+                .use(litesvmTransactionPlanner())
+                .use(litesvmTransactionPlanSendingExecutor());
 
             const transactionPlan = singleTransactionPlan(
                 setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 })),
@@ -101,7 +111,8 @@ describe('litesvmTransactionPlanExecutor', () => {
             const svm = { sendTransaction, setTransactionMessageLifetimeUsingLatestBlockhash } as unknown as LiteSVM;
             const client = createClient()
                 .use(() => ({ payer, svm }))
-                .use(litesvmTransactionPlanExecutor());
+                .use(litesvmTransactionPlanner())
+                .use(litesvmTransactionPlanSendingExecutor());
 
             const transactionPlan = singleTransactionPlan(
                 setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 })),
@@ -132,7 +143,8 @@ describe('litesvmTransactionPlanExecutor', () => {
             const svm = { sendTransaction, setTransactionMessageLifetimeUsingLatestBlockhash } as unknown as LiteSVM;
             const client = createClient()
                 .use(() => ({ payer, svm }))
-                .use(litesvmTransactionPlanExecutor());
+                .use(litesvmTransactionPlanner())
+                .use(litesvmTransactionPlanSendingExecutor());
 
             const transactionPlan = singleTransactionPlan(
                 setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 })),
@@ -155,7 +167,7 @@ describe('litesvmTransactionPlanExecutor', () => {
 
         it('requires an svm instance on the client', () => {
             // @ts-expect-error Missing svm instance on the client.
-            expect(() => createClient().use(litesvmTransactionPlanExecutor())).toThrow();
+            expect(() => createClient().use(litesvmTransactionPlanSendingExecutor())).toThrow();
         });
     });
 
@@ -173,7 +185,7 @@ describe('litesvmTransactionPlanExecutor', () => {
                 .use(litesvmConnection())
                 .use(client => extendClient(client, { payer }))
                 .use(litesvmTransactionPlanner())
-                .use(litesvmTransactionPlanExecutor());
+                .use(litesvmTransactionPlanSendingExecutor());
             client.svm.airdrop(payer.address, lamports(1_000_000_000n));
 
             const transactionPlan = singleTransactionPlan(
@@ -190,7 +202,7 @@ describe('litesvmTransactionPlanExecutor', () => {
                 .use(litesvmConnection())
                 .use(client => extendClient(client, { payer }))
                 .use(litesvmTransactionPlanner())
-                .use(litesvmTransactionPlanExecutor());
+                .use(litesvmTransactionPlanSendingExecutor());
             client.svm.airdrop(payer.address, lamports(1_000_000_000n)); // 1 SOL
 
             const instruction = getTransferSolInstruction({
@@ -210,7 +222,7 @@ describe('litesvmTransactionPlanExecutor', () => {
                 .use(litesvmConnection())
                 .use(client => extendClient(client, { payer }))
                 .use(litesvmTransactionPlanner())
-                .use(litesvmTransactionPlanExecutor());
+                .use(litesvmTransactionPlanSendingExecutor());
             client.svm.airdrop(payer.address, lamports(1_000_000_000n));
 
             // Send an instruction with invalid data to the system program.
@@ -245,7 +257,7 @@ describe('litesvmTransactionPlanExecutor', () => {
                 .use(litesvmConnection())
                 .use(client => extendClient(client, { payer }))
                 .use(litesvmTransactionPlanner())
-                .use(litesvmTransactionPlanExecutor());
+                .use(litesvmTransactionPlanSendingExecutor());
             // Do NOT airdrop — payer account doesn't exist.
 
             const transactionPlan = singleTransactionPlan(
@@ -270,7 +282,7 @@ describe('litesvmTransactionPlanExecutor', () => {
                 .use(litesvmConnection())
                 .use(client => extendClient(client, { payer }))
                 .use(litesvmTransactionPlanner())
-                .use(litesvmTransactionPlanExecutor());
+                .use(litesvmTransactionPlanSendingExecutor());
             client.svm.airdrop(payer.address, lamports(1_000_000_000n));
 
             const transactionPlan = singleTransactionPlan(
@@ -292,7 +304,7 @@ describe('litesvmTransactionPlanExecutor', () => {
                 .use(litesvmConnection())
                 .use(client => extendClient(client, { payer }))
                 .use(litesvmTransactionPlanner())
-                .use(litesvmTransactionPlanExecutor());
+                .use(litesvmTransactionPlanSendingExecutor());
             // Do NOT airdrop — payer account doesn't exist.
 
             const transactionPlan = singleTransactionPlan(
@@ -306,5 +318,22 @@ describe('litesvmTransactionPlanExecutor', () => {
             expect(metadata).toBeDefined();
             expect(metadata.err()).toBeDefined();
         });
+    });
+});
+
+describe('litesvmTransactionPlanExecutor', () => {
+    it('sets the deprecated transactionPlanExecutor field without requiring a planner', () => {
+        const svm = { sendTransaction: vi.fn() } as unknown as LiteSVM;
+        const client = createClient()
+            .use(() => ({ svm }))
+            .use(litesvmTransactionPlanExecutor());
+        expect(client).toHaveProperty('transactionPlanExecutor');
+        expect(client).not.toHaveProperty('sendTransaction');
+        expect(client).not.toHaveProperty('sendTransactions');
+    });
+
+    it('requires an svm instance on the client', () => {
+        // @ts-expect-error Missing svm on the client.
+        expect(() => createClient().use(litesvmTransactionPlanExecutor())).toThrow(/A LiteSVM instance is required/);
     });
 });

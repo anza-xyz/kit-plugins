@@ -40,6 +40,24 @@ describe('rpcTransactionPlanner', () => {
         expect(transactionPlan.message.feePayer).toBe(payer);
     });
 
+    it('reads client.payer at plan time rather than at install time', async () => {
+        const first = await generateKeyPairSigner();
+        const second = await generateKeyPairSigner();
+        let current = first;
+        const client = createClient()
+            .use(() => ({
+                get payer() {
+                    return current;
+                },
+            }))
+            .use(rpcTransactionPlanner());
+
+        current = second;
+        const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
+        const transactionMessage = await client.planTransaction(instructionPlan);
+        expect(transactionMessage.feePayer.address).toBe(second.address);
+    });
+
     it('creates version 0 transaction messages by default', async () => {
         const payer = await generateKeyPairSigner();
         const client = createClient()
