@@ -54,6 +54,31 @@ describe('createRpcFromSvm', () => {
         expect(value).toBeNull();
     });
 
+    it('slices the data of an account while preserving the full account space', async () => {
+        const client = createClient().use(litesvm());
+        const accountAddress = await generateKeyPairSigner().then(signer => signer.address);
+
+        client.svm.setAccount({
+            address: accountAddress,
+            data: new Uint8Array([10, 20, 30, 40]),
+            executable: false,
+            lamports: lamports(1_000_000n),
+            programAddress: address('11111111111111111111111111111111'),
+            space: 4n,
+        });
+
+        const { value } = await client.rpc
+            .getAccountInfo(accountAddress, { dataSlice: { length: 2, offset: 1 }, encoding: 'base64' })
+            .send();
+        expect(value).toEqual({
+            data: ['FB4=', 'base64'],
+            executable: false,
+            lamports: lamports(1_000_000n),
+            owner: address('11111111111111111111111111111111'),
+            space: 4n,
+        });
+    });
+
     it('can fetch multiple accounts set on the svm', async () => {
         const client = createClient().use(litesvm());
 
@@ -98,6 +123,49 @@ describe('createRpcFromSvm', () => {
             space: 4n,
         });
         expect(value[2]).toBeNull();
+    });
+
+    it('slices the data of multiple accounts while preserving the full account space', async () => {
+        const client = createClient().use(litesvm());
+        const [addressA, addressB] = await Promise.all([
+            generateKeyPairSigner().then(signer => signer.address),
+            generateKeyPairSigner().then(signer => signer.address),
+        ]);
+
+        client.svm.setAccount({
+            address: addressA,
+            data: new Uint8Array([10, 20, 30, 40]),
+            executable: false,
+            lamports: lamports(1_000_000n),
+            programAddress: address('11111111111111111111111111111111'),
+            space: 4n,
+        });
+        client.svm.setAccount({
+            address: addressB,
+            data: new Uint8Array([50, 60, 70, 80]),
+            executable: false,
+            lamports: lamports(2_000_000n),
+            programAddress: address('11111111111111111111111111111111'),
+            space: 4n,
+        });
+
+        const { value } = await client.rpc
+            .getMultipleAccounts([addressA, addressB], { dataSlice: { length: 2, offset: 1 }, encoding: 'base64' })
+            .send();
+        expect(value[0]).toEqual({
+            data: ['FB4=', 'base64'],
+            executable: false,
+            lamports: lamports(1_000_000n),
+            owner: address('11111111111111111111111111111111'),
+            space: 4n,
+        });
+        expect(value[1]).toEqual({
+            data: ['PEY=', 'base64'],
+            executable: false,
+            lamports: lamports(2_000_000n),
+            owner: address('11111111111111111111111111111111'),
+            space: 4n,
+        });
     });
 
     it('can fetch the balance of an account set on the svm', async () => {
