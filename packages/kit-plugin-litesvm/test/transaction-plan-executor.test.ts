@@ -6,6 +6,7 @@ import {
     createTransactionMessage,
     extendClient,
     generateKeyPairSigner,
+    getSignatureFromTransaction,
     isSolanaError,
     lamports,
     passthroughFailedTransactionPlanExecution,
@@ -26,6 +27,7 @@ import {
     litesvmTransactionPlanExecutor,
     litesvmTransactionPlanner,
     litesvmTransactionPlanSendingExecutor,
+    type SendContext,
 } from '../src';
 
 const MOCK_INSTRUCTION = { programAddress: '11111111111111111111111111111111' as Address };
@@ -80,6 +82,24 @@ describe('litesvmTransactionPlanSendingExecutor', () => {
             const transactionPlan = await client.transactionPlanner(instructionPlan);
             const result = (await client.transactionPlanExecutor(transactionPlan)) as SingleTransactionPlanResult;
             expect(result.context.transactionMetadata).toBe(mockMetadata);
+        });
+
+        it('reports the signature and the transaction in the result context on success', async () => {
+            const payer = await generateKeyPairSigner();
+            const setTransactionMessageLifetimeUsingLatestBlockhash = vi.fn().mockImplementation(<T>(m: T) => m);
+            const sendTransaction = vi.fn().mockReturnValue({ signature: () => new Uint8Array(64) });
+            const svm = { sendTransaction, setTransactionMessageLifetimeUsingLatestBlockhash } as unknown as LiteSVM;
+            const client = createClient()
+                .use(() => ({ payer, svm }))
+                .use(litesvmTransactionPlanner())
+                .use(litesvmTransactionPlanSendingExecutor());
+
+            const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
+            const transactionPlan = await client.transactionPlanner(instructionPlan);
+            const result = (await client.transactionPlanExecutor(transactionPlan)) as SingleTransactionPlanResult;
+            expect(result.status).toBe('successful');
+            expect(result.context.transaction).toBeDefined();
+            expect(result.context.signature).toBe(getSignatureFromTransaction(result.context.transaction!));
         });
 
         it('includes transactionMetadata in the result context on failure', async () => {
@@ -288,9 +308,9 @@ describe('litesvmTransactionPlanSendingExecutor', () => {
             const transactionPlan = singleTransactionPlan(
                 setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 })),
             );
-            const result = (await client.transactionPlanExecutor(transactionPlan)) as SingleTransactionPlanResult<{
-                transactionMetadata: FailedTransactionMetadata | TransactionMetadata;
-            }>;
+            const result = (await client.transactionPlanExecutor(
+                transactionPlan,
+            )) as SingleTransactionPlanResult<SendContext>;
             const metadata = result.context.transactionMetadata as TransactionMetadata;
             expect(metadata).toBeDefined();
             expect(metadata.logs()).toEqual(expect.any(Array));
@@ -312,7 +332,7 @@ describe('litesvmTransactionPlanSendingExecutor', () => {
             );
             const result = (await passthroughFailedTransactionPlanExecution(
                 client.transactionPlanExecutor(transactionPlan),
-            )) as SingleTransactionPlanResult<{ transactionMetadata: FailedTransactionMetadata | TransactionMetadata }>;
+            )) as SingleTransactionPlanResult<SendContext>;
             expect(result.status).toBe('failed');
             const metadata = result.context.transactionMetadata as FailedTransactionMetadata;
             expect(metadata).toBeDefined();

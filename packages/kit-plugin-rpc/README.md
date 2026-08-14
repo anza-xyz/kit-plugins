@@ -308,6 +308,25 @@ All options are provided via a `RpcTransactionPlanExecutorConfig` object:
 - `maxConcurrency`: Maximum number of concurrent executions (default: 10).
 - `skipPreflight`: Whether to skip the preflight simulation when sending transactions (default: `false`).
 
+### Result context
+
+As it works through a transaction, the executor records the planned message (once its blockhash lifetime and resource limits are set), the fully signed transaction, and the signature it was sent under. A successful plan result carries all three on its `context`, and the exported `SendContext` type names that shape so you can annotate results yourself.
+
+```ts
+import { SuccessfulSingleTransactionPlanResult } from '@solana/kit';
+import { SendContext } from '@solana/kit-plugin-rpc';
+
+function logSentTransaction(result: SuccessfulSingleTransactionPlanResult<SendContext>) {
+    console.log(
+        `Sent ${result.context.signature} using blockhash ${result.context.message.lifetimeConstraint.blockhash}`,
+    );
+}
+```
+
+Because the context is filled in as execution progresses, a transaction that fails or is canceled part way through carries only what was recorded before it stopped. A future version of Kit will make these fields optional on failed/cancelled results. Treat them as present only on successful results.
+
+Note that `sendTransaction` and `sendTransactions` do not yet propagate this context type — Kit's `ClientWithTransactionSending` interface is not parameterised over it, so their results type the context as Kit's default. The properties above are populated at runtime regardless.
+
 ### Preflight and Resource Limit Estimation
 
 By default, the executor estimates resource limits by simulating the transaction before sending it. This covers the compute unit limit and, for version 1 transactions, the loaded accounts data size limit. When estimation is performed, preflight is skipped to avoid a redundant second simulation. When every applicable resource limit is already explicitly set (no estimation needed), preflight runs as the only simulation.
