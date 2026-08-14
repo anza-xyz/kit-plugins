@@ -61,6 +61,15 @@ export type WalletState = {
         readonly signer: WalletSigner | null;
         readonly wallet: UiWallet;
     } | null;
+    /**
+     * The persisted account currently being reconnected, or `null` when no
+     * reconnect is in progress or the wallet has not exposed that account yet.
+     *
+     * This account is informational only and does not include a signer. Use it
+     * to keep the previous wallet identity visible while `status` is
+     * `'reconnecting'`.
+     */
+    readonly reconnectingTo: UiWalletAccount | null;
     /** The current connection status. */
     readonly status: WalletStatus;
     /** All discovered wallets matching the configured chain and filter. */

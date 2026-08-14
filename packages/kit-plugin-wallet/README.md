@@ -125,6 +125,8 @@ All wallet state is accessed via `client.wallet.getState()`, which returns a ref
 
 - **`getState().status`** — The current connection status: `'pending'`, `'disconnected'`, `'connecting'`, `'connected'`, `'disconnecting'`, or `'reconnecting'`.
 
+- **`getState().reconnectingTo`** — The persisted account currently being reconnected, or `null` when it is unavailable. Use this to keep the wallet identity visible with a loading indicator during silent reconnect; no signer is exposed until the connection succeeds.
+
 - **`connect(wallet)`** — Connect to a wallet and select the first newly authorized account.
 
     ```ts
