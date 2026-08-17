@@ -10,7 +10,7 @@
     },
     "devDependencies": {
         "@changesets/changelog-github": "^1.0.0",
-        "@changesets/cli": "^2.31.1",
+        "@changesets/cli": "^3.0.0",
         "@solana-config/oxc": "^0.1.1",
         "@solana/kit": "^7.0.0",
         "@types/node": "^26",
