@@ -106,15 +106,16 @@ export function createRpcFromSvm(svm: LiteSVM): Rpc<LiteSvmRpcApi> {
     };
     const convertMaybeEncodedAccount = (
         account: MaybeEncodedAccount,
+        dataSlice?: DataSlice,
     ): (AccountInfoBase & AccountInfoWithBase64EncodedData) | null => {
-        return account.exists ? encodeAccountBase64(account) : null;
+        return account.exists ? encodeAccountBase64(account, dataSlice) : null;
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const supportedApi: Record<keyof LiteSvmRpcApi, (...args: any[]) => unknown> = {
-        getAccountInfo: (address: Address, config?: { encoding?: Encoding }) => {
+        getAccountInfo: (address: Address, config?: { dataSlice?: DataSlice; encoding?: Encoding }) => {
             assertEncodingIsBase64(config?.encoding);
-            const response = convertMaybeEncodedAccount(svm.getAccount(address));
+            const response = convertMaybeEncodedAccount(svm.getAccount(address), config?.dataSlice);
             return withContext(response, svm.getClock().slot);
         },
         getBalance: (address: Address) => {
@@ -138,9 +139,14 @@ export function createRpcFromSvm(svm: LiteSVM): Rpc<LiteSvmRpcApi> {
         getMinimumBalanceForRentExemption: (size: bigint) => {
             return lamports(svm.minimumBalanceForRentExemption(size));
         },
-        getMultipleAccounts: (addresses: readonly Address[], config?: { encoding?: Encoding }) => {
+        getMultipleAccounts: (
+            addresses: readonly Address[],
+            config?: { dataSlice?: DataSlice; encoding?: Encoding },
+        ) => {
             assertEncodingIsBase64(config?.encoding);
-            const response = addresses.map(address => convertMaybeEncodedAccount(svm.getAccount(address)));
+            const response = addresses.map(address =>
+                convertMaybeEncodedAccount(svm.getAccount(address), config?.dataSlice),
+            );
             return withContext(response, svm.getClock().slot);
         },
         getProgramAccounts: (programId: Address, config?: GetProgramAccountsConfig) => {
