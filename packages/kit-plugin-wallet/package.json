@@ -82,7 +82,7 @@
         "@wallet-standard/ui-registry": "^1.1.1"
     },
     "devDependencies": {
-        "@solana/react": "^7.0.0",
+        "@solana/react": "^7.1.0",
         "@testing-library/react": "^16.0.0",
         "@types/react": "^19.2.18",
         "@wallet-standard/errors": "^0.1.2",
@@ -91,7 +91,7 @@
     },
     "peerDependencies": {
         "@solana/kit": "^7.0.0",
-        "@solana/react": "^7.0.0",
+        "@solana/react": "^7.1.0",
         "react": "^19.2.8"
     },
     "peerDependenciesMeta": {
