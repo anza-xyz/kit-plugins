@@ -194,13 +194,13 @@ const transactionPlanResult = await client.sendTransactions(myInstructionPlan);
 
 ### Result context
 
-As it works through a transaction, the executor records the planned message (once its blockhash lifetime is set), the fully signed transaction, the signature it was sent under, and the LiteSVM metadata the send produced. A successful plan result carries all four on its `context`, and the exported `SendContext` type names that shape so you can annotate results yourself.
+As it works through a transaction, the executor records the planned message (once its blockhash lifetime is set), the fully signed transaction, the signature it was sent under, and the LiteSVM metadata the send produced. A successful plan result carries all four on its `context`, and the exported `LiteSvmSendContext` type names that shape so you can annotate results yourself.
 
 ```ts
 import { SuccessfulSingleTransactionPlanResult } from '@solana/kit';
-import { isFailedTransaction, SendContext } from '@solana/kit-plugin-litesvm';
+import { isFailedTransaction, LiteSvmSendContext } from '@solana/kit-plugin-litesvm';
 
-function logComputeUnits(result: SuccessfulSingleTransactionPlanResult<SendContext>) {
+function logComputeUnits(result: SuccessfulSingleTransactionPlanResult<LiteSvmSendContext>) {
     const { signature, transactionMetadata } = result.context;
     if (!isFailedTransaction(transactionMetadata)) {
         console.log(`${signature} consumed ${transactionMetadata.computeUnitsConsumed()} compute units`);

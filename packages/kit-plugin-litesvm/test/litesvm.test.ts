@@ -1,7 +1,7 @@
 import { createClient, TransactionPlanExecutor, TransactionSigner } from '@solana/kit';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
-import type { SendContext } from '../src/index';
+import type { LiteSvmSendContext } from '../src/index';
 import { litesvm as nodeLitesvm } from '../src/index';
 import { litesvm as browserLitesvm } from '../src/index.browser';
 const litesvm = __NODEJS__ ? nodeLitesvm : browserLitesvm;
@@ -36,6 +36,6 @@ describe('litesvm', () => {
         const client = createClient()
             .use(() => ({ payer }))
             .use(nodeLitesvm());
-        expectTypeOf(client.transactionPlanExecutor).toEqualTypeOf<TransactionPlanExecutor<SendContext>>();
+        expectTypeOf(client.transactionPlanExecutor).toEqualTypeOf<TransactionPlanExecutor<LiteSvmSendContext>>();
     });
 });

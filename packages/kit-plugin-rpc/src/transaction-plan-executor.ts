@@ -211,16 +211,16 @@ export type RpcTransactionPlanExecutorConfig = {
  * Annotating a result produced by the executor.
  * ```ts
  * import { SuccessfulSingleTransactionPlanResult } from '@solana/kit';
- * import { SendContext } from '@solana/kit-plugin-rpc';
+ * import { RpcSendContext } from '@solana/kit-plugin-rpc';
  *
- * function logSentTransaction(result: SuccessfulSingleTransactionPlanResult<SendContext>) {
+ * function logSentTransaction(result: SuccessfulSingleTransactionPlanResult<RpcSendContext>) {
  *     console.log(`Sent ${result.context.signature}, size: ${result.context.transaction.messageBytes.length} bytes`);
  * }
  * ```
  *
  * @see {@link rpcTransactionPlanSendingExecutor}
  */
-export type SendContext = {
+export type RpcSendContext = {
     message: TransactionMessage & TransactionMessageWithFeePayer & TransactionMessageWithBlockhashLifetime;
     signature: Signature;
     transaction: SendableTransaction & Transaction & TransactionWithLifetime;
@@ -237,7 +237,7 @@ function createExecutor(
     > &
         ClientWithRpcSubscriptions<SignatureNotificationsApi & SlotNotificationsApi>,
     config: RpcTransactionPlanExecutorConfig,
-): TransactionPlanExecutor<SendContext> {
+): TransactionPlanExecutor<RpcSendContext> {
     if (!client.rpc || !client.rpcSubscriptions) {
         throw new Error(
             'An RPC instance with subscriptions is required on the client to create the RPC transaction plan executor. ' +
@@ -255,7 +255,7 @@ function createExecutor(
         config.getComputeUnitLimitFromEstimate ?? getDefaultComputeUnitLimitFromEstimate;
     const skipPreflight = config.skipPreflight ?? false;
 
-    return createTransactionPlanExecutor<SendContext>({
+    return createTransactionPlanExecutor<RpcSendContext>({
         executeTransactionMessage: limitFunction(async (context, transactionMessage, executorConfig) => {
             const { value: latestBlockhash } = await client.rpc.getLatestBlockhash().send(executorConfig);
 
@@ -295,9 +295,9 @@ function createExecutor(
                 skipPreflight: skipPreflight || didSimulateToEstimate,
                 ...executorConfig,
             });
-            return context as SendContext;
+            return context as RpcSendContext;
         }, config.maxConcurrency ?? 10),
-    } satisfies TransactionPlanExecutorConfig<SendContext>);
+    } satisfies TransactionPlanExecutorConfig<RpcSendContext>);
 }
 
 /**

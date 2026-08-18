@@ -310,13 +310,13 @@ All options are provided via a `RpcTransactionPlanExecutorConfig` object:
 
 ### Result context
 
-As it works through a transaction, the executor records the planned message (once its blockhash lifetime and resource limits are set), the fully signed transaction, and the signature it was sent under. A successful plan result carries all three on its `context`, and the exported `SendContext` type names that shape so you can annotate results yourself.
+As it works through a transaction, the executor records the planned message (once its blockhash lifetime and resource limits are set), the fully signed transaction, and the signature it was sent under. A successful plan result carries all three on its `context`, and the exported `RpcSendContext` type names that shape so you can annotate results yourself.
 
 ```ts
 import { SuccessfulSingleTransactionPlanResult } from '@solana/kit';
-import { SendContext } from '@solana/kit-plugin-rpc';
+import { RpcSendContext } from '@solana/kit-plugin-rpc';
 
-function logSentTransaction(result: SuccessfulSingleTransactionPlanResult<SendContext>) {
+function logSentTransaction(result: SuccessfulSingleTransactionPlanResult<RpcSendContext>) {
     console.log(
         `Sent ${result.context.signature} using blockhash ${result.context.message.lifetimeConstraint.blockhash}`,
     );

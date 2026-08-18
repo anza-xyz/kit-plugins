@@ -27,7 +27,7 @@ import {
     litesvmTransactionPlanExecutor,
     litesvmTransactionPlanner,
     litesvmTransactionPlanSendingExecutor,
-    type SendContext,
+    type LiteSvmSendContext,
 } from '../src';
 
 const MOCK_INSTRUCTION = { programAddress: '11111111111111111111111111111111' as Address };
@@ -310,7 +310,7 @@ describe('litesvmTransactionPlanSendingExecutor', () => {
             );
             const result = (await client.transactionPlanExecutor(
                 transactionPlan,
-            )) as SingleTransactionPlanResult<SendContext>;
+            )) as SingleTransactionPlanResult<LiteSvmSendContext>;
             const metadata = result.context.transactionMetadata as TransactionMetadata;
             expect(metadata).toBeDefined();
             expect(metadata.logs()).toEqual(expect.any(Array));
@@ -332,7 +332,7 @@ describe('litesvmTransactionPlanSendingExecutor', () => {
             );
             const result = (await passthroughFailedTransactionPlanExecution(
                 client.transactionPlanExecutor(transactionPlan),
-            )) as SingleTransactionPlanResult<SendContext>;
+            )) as SingleTransactionPlanResult<LiteSvmSendContext>;
             expect(result.status).toBe('failed');
             const metadata = result.context.transactionMetadata as FailedTransactionMetadata;
             expect(metadata).toBeDefined();

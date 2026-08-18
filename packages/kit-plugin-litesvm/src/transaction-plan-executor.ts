@@ -122,9 +122,9 @@ export function litesvmTransactionPlanExecutor() {
  * Annotating a result produced by the executor.
  * ```ts
  * import { SuccessfulSingleTransactionPlanResult } from '@solana/kit';
- * import { isFailedTransaction, SendContext } from '@solana/kit-plugin-litesvm';
+ * import { isFailedTransaction, LiteSvmSendContext } from '@solana/kit-plugin-litesvm';
  *
- * function logComputeUnits(result: SuccessfulSingleTransactionPlanResult<SendContext>) {
+ * function logComputeUnits(result: SuccessfulSingleTransactionPlanResult<LiteSvmSendContext>) {
  *     const { signature, transactionMetadata } = result.context;
  *     if (!isFailedTransaction(transactionMetadata)) {
  *         console.log(`${signature} consumed ${transactionMetadata.computeUnitsConsumed()} compute units`);
@@ -134,7 +134,7 @@ export function litesvmTransactionPlanExecutor() {
  *
  * @see {@link litesvmTransactionPlanSendingExecutor}
  */
-export type SendContext = {
+export type LiteSvmSendContext = {
     message: TransactionMessage & TransactionMessageWithBlockhashLifetime & TransactionMessageWithFeePayer;
     signature: Signature;
     transaction: SendableTransaction & Transaction & TransactionWithLifetime;
@@ -146,7 +146,7 @@ export type SendContext = {
  * {@link litesvmTransactionPlanSendingExecutor}, which signs planned
  * transaction messages and sends them to the client's LiteSVM instance.
  */
-function createExecutor(client: { svm: LiteSVM }): TransactionPlanExecutor<SendContext> {
+function createExecutor(client: { svm: LiteSVM }): TransactionPlanExecutor<LiteSvmSendContext> {
     if (!client.svm) {
         throw new Error(
             'A LiteSVM instance is required on the client to create the LiteSVM transaction plan executor. ' +
@@ -154,7 +154,7 @@ function createExecutor(client: { svm: LiteSVM }): TransactionPlanExecutor<SendC
         );
     }
 
-    return createTransactionPlanExecutor<SendContext>({
+    return createTransactionPlanExecutor<LiteSvmSendContext>({
         executeTransactionMessage: async (context, transactionMessage, config) => {
             const signedTransaction = await pipe(
                 transactionMessage,
@@ -171,7 +171,7 @@ function createExecutor(client: { svm: LiteSVM }): TransactionPlanExecutor<SendC
                 throw getSolanaErrorFromLiteSvmFailure(result);
             }
 
-            return context as SendContext;
+            return context as LiteSvmSendContext;
         },
-    } satisfies TransactionPlanExecutorConfig<SendContext>);
+    } satisfies TransactionPlanExecutorConfig<LiteSvmSendContext>);
 }
