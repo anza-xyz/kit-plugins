@@ -9,6 +9,7 @@ import {
     useConnectedWallet,
     useDisconnect,
     useIsWalletReady,
+    useReconnectingAccount,
     useSelectAccount,
     useSignIn,
     useSignMessage,
@@ -60,6 +61,15 @@ const client = null as unknown as ClientWithWallet;
     connected satisfies WalletState['connected'];
     // The connection is nullable when disconnected.
     connected satisfies { account: UiWalletAccount } | null;
+}
+
+// [DESCRIBE] useReconnectingAccount
+{
+    const reconnectingTo = useReconnectingAccount(client);
+    // The account is nullable when no reconnect is in progress.
+    reconnectingTo satisfies UiWalletAccount | null;
+    // The return type stays assignable to the state slice it reads.
+    reconnectingTo satisfies WalletState['reconnectingTo'];
 }
 
 // [DESCRIBE] useWallets

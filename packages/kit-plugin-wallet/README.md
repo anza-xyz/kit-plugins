@@ -171,12 +171,13 @@ The `@solana/kit-plugin-wallet/react` subpath exposes hooks for reading wallet s
 
 The **state** hooks subscribe via `useSyncExternalStore`, each to a single slice of `WalletState`, so a component only re-renders when the slice it reads changes:
 
-| Hook                 | Returns                                                                          |
-| -------------------- | -------------------------------------------------------------------------------- |
-| `useWalletStatus`    | The current `WalletStatus`.                                                      |
-| `useConnectedWallet` | The active connection (`{ account, signer, wallet }`) or null.                   |
-| `useWallets`         | The discovered wallets for the client's chain.                                   |
-| `useIsWalletReady`   | `false` while the initial warm-up is in progress (`'pending'`/`'reconnecting'`). |
+| Hook                     | Returns                                                                          |
+| ------------------------ | -------------------------------------------------------------------------------- |
+| `useWalletStatus`        | The current `WalletStatus`.                                                      |
+| `useConnectedWallet`     | The active connection (`{ account, signer, wallet }`) or null.                   |
+| `useReconnectingAccount` | The persisted account being auto-reconnected, or null.                           |
+| `useWallets`             | The discovered wallets for the client's chain.                                   |
+| `useIsWalletReady`       | `false` while the initial warm-up is in progress (`'pending'`/`'reconnecting'`). |
 
 The **action** hooks wrap the async wallet actions with `useAction` from `@solana/react`, returning its result (`dispatch`, `dispatchAsync`, `data`, `error`, `status`, `isRunning`, `reset`, …). The hook manages the `AbortSignal` internally, so an in-flight call is aborted when a newer one is dispatched:
 
