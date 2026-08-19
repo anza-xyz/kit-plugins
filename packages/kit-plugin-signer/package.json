@@ -1,6 +1,6 @@
 {
     "name": "@solana/kit-plugin-signer",
-    "version": "0.13.0",
+    "version": "0.17.0",
     "description": "Signer helpers for Kit clients",
     "keywords": [
         "identity",
