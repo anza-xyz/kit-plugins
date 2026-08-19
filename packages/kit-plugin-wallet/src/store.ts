@@ -169,6 +169,8 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
 
     function updateState(updates: Partial<WalletStoreState>): void {
         const prev = state;
+        // Maintain the invariant: `reconnectingTo` is only populated when status === 'reconnecting'.
+        // If a future call site passes an explicit `reconnectingTo` with a non-reconnecting status, this clears it.
         const nextUpdates =
             updates.status !== undefined && updates.status !== 'reconnecting'
                 ? { ...updates, reconnectingTo: null }

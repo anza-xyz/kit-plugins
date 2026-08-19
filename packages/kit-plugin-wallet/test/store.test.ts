@@ -2324,6 +2324,31 @@ describe.skipIf(!__BROWSER__)('store auto-connect (browser)', () => {
         expect(store.getState().reconnectingTo).toBeNull();
     });
 
+    it('exposes null reconnectingTo while silent reconnecting if saved account is missing', async () => {
+        const account = createMockAccount();
+        // Wallet doesn't include the saved account
+        const mockWallet = createMockUiWallet({
+            accounts: [],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        const reconnect = Promise.withResolvers<void>();
+        connectMock.mockReturnValueOnce(reconnect.promise);
+        const storage = createMockStorage({ 'kit-wallet': `TestWallet:${account.address}` });
+        const store = createWalletStore({ chain: 'solana:mainnet', storage });
+
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(store.getState().status).toBe('reconnecting');
+        expect(store.getState().reconnectingTo).toBeNull();
+
+        reconnect.resolve();
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(store.getState().status).toBe('disconnected');
+    });
+
     it('falls back to disconnected when storage read rejects', async () => {
         const storage: WalletStorage = {
             getItem: () => Promise.reject(new Error('storage unavailable')),
@@ -2421,6 +2446,9 @@ describe.skipIf(!__BROWSER__)('store late wallet registration (browser)', () => 
         expect(store.getState().status).toBe('reconnecting');
         expect(store.getState().reconnectingTo).toBeNull();
 
+        const reconnect = Promise.withResolvers<void>();
+        connectMock.mockReturnValueOnce(reconnect.promise);
+
         // Wallet registers late.
         const lateWallet = createMockUiWallet({
             accounts: [account],
@@ -2428,6 +2456,12 @@ describe.skipIf(!__BROWSER__)('store late wallet registration (browser)', () => 
         });
         lateRegisterWallet(lateWallet);
 
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(store.getState().status).toBe('reconnecting');
+        expect(store.getState().reconnectingTo).toBe(account);
+
+        reconnect.resolve();
         await vi.advanceTimersByTimeAsync(0);
 
         expect(store.getState().status).toBe('connected');
