@@ -2,7 +2,13 @@ import { act, cleanup, renderHook } from '@testing-library/react';
 import type { UiWallet } from '@wallet-standard/ui';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { useConnectedWallet, useIsWalletReady, useWallets, useWalletStatus } from '../src/react';
+import {
+    useConnectedWallet,
+    useIsWalletReady,
+    useReconnectingAccount,
+    useWallets,
+    useWalletStatus,
+} from '../src/react';
 import type { ClientWithWallet, WalletState } from '../src/types';
 
 // Unmount rendered trees between tests. This package doesn't enable vitest
@@ -58,6 +64,22 @@ describe('useConnectedWallet', () => {
         const connected = { account: {}, signer: null, wallet: {} } as WalletState['connected'];
         act(() => store.setState({ ...INITIAL, connected, status: 'connected' }));
         expect(result.current).toBe(connected);
+    });
+});
+
+describe('useReconnectingAccount', () => {
+    it('returns the reconnecting account and updates when it changes', () => {
+        const store = createFakeStore(INITIAL);
+        const { result } = renderHook(() => useReconnectingAccount(clientFor(store)));
+
+        expect(result.current).toBeNull();
+
+        const reconnectingTo = {} as WalletState['reconnectingTo'];
+        act(() => store.setState({ ...INITIAL, reconnectingTo, status: 'reconnecting' }));
+        expect(result.current).toBe(reconnectingTo);
+
+        act(() => store.setState({ ...INITIAL, reconnectingTo: null, status: 'connected' }));
+        expect(result.current).toBeNull();
     });
 });
 

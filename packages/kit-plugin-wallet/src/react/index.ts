@@ -60,6 +60,33 @@ export function useConnectedWallet(client: ClientWithWallet): WalletState['conne
 }
 
 /**
+ * Subscribes to the account being auto-reconnected from a React component.
+ *
+ * Wraps `client.wallet.subscribe` / `getState` with `useSyncExternalStore`, re-rendering only when
+ * the reconnecting account changes.
+ *
+ * @param client - A client with a wallet plugin installed (e.g. `walletSigner()`).
+ * @returns The persisted {@link UiWalletAccount} currently being reconnected, or `null` when no
+ *   reconnect is in progress or the wallet has not exposed that account yet. The account is
+ *   informational only (no signer) — use it to keep the previous wallet identity visible while the
+ *   status is `'reconnecting'`.
+ *
+ * @example
+ * ```tsx
+ * const reconnectingTo = useReconnectingAccount(client);
+ * if (reconnectingTo) return <p>Reconnecting to {reconnectingTo.address}…</p>;
+ * ```
+ *
+ * @see {@link useWalletStatus}
+ * @see {@link useConnectedWallet}
+ */
+export function useReconnectingAccount(client: ClientWithWallet): UiWalletAccount | null {
+    const { wallet } = client;
+    const getReconnectingTo = () => wallet.getState().reconnectingTo;
+    return useSyncExternalStore(wallet.subscribe, getReconnectingTo, getReconnectingTo);
+}
+
+/**
  * Subscribes to the list of discovered wallets from a React component.
  *
  * Wraps `client.wallet.subscribe` / `getState` with `useSyncExternalStore`, re-rendering only when
