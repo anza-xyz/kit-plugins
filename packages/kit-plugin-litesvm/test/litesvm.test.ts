@@ -1,7 +1,7 @@
 import { createClient, TransactionPlanExecutor, TransactionSigner } from '@solana/kit';
-import type { FailedTransactionMetadata, TransactionMetadata } from 'litesvm';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
+import type { LiteSvmSendContext } from '../src/index';
 import { litesvm as nodeLitesvm } from '../src/index';
 import { litesvm as browserLitesvm } from '../src/index.browser';
 const litesvm = __NODEJS__ ? nodeLitesvm : browserLitesvm;
@@ -32,12 +32,10 @@ describe('litesvm', () => {
         expect(client.sendTransactions).toBeTypeOf('function');
     });
 
-    it('preserves the LiteSVM transaction metadata context on the executor', () => {
+    it('preserves the LiteSVM result context on the executor', () => {
         const client = createClient()
             .use(() => ({ payer }))
             .use(nodeLitesvm());
-        expectTypeOf(client.transactionPlanExecutor).toEqualTypeOf<
-            TransactionPlanExecutor<{ transactionMetadata: FailedTransactionMetadata | TransactionMetadata }>
-        >();
+        expectTypeOf(client.transactionPlanExecutor).toEqualTypeOf<TransactionPlanExecutor<LiteSvmSendContext>>();
     });
 });

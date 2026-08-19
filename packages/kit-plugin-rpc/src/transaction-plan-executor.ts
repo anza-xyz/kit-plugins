@@ -9,19 +9,27 @@ import {
     GetEpochInfoApi,
     GetLatestBlockhashApi,
     GetSignatureStatusesApi,
+    getSignatureFromTransaction,
     isSolanaError,
     pipe,
     ResourceLimitsEstimate,
+    SendableTransaction,
     sendAndConfirmTransactionFactory,
     SendTransactionApi,
     setTransactionMessageLifetimeUsingBlockhash,
+    Signature,
     SignatureNotificationsApi,
     signTransactionMessageWithSigners,
     SimulateTransactionApi,
     SlotNotificationsApi,
     SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_RESOURCE_LIMITS,
+    Transaction,
+    TransactionMessage,
+    TransactionMessageWithBlockhashLifetime,
+    TransactionMessageWithFeePayer,
     TransactionPlanExecutor,
     TransactionPlanExecutorConfig,
+    TransactionWithLifetime,
 } from '@solana/kit';
 import { transactionPlanExecutor, transactionPlanSendingExecutor } from '@solana/kit-plugin-instruction-plan';
 
@@ -186,6 +194,39 @@ export type RpcTransactionPlanExecutorConfig = {
 };
 
 /**
+ * The context carried by transaction plan results from
+ * {@link rpcTransactionPlanSendingExecutor}.
+ *
+ * The executor records the planned message once its blockhash lifetime and
+ * resource limits are set, then the fully signed transaction, then the
+ * signature it was sent under, so a successful result carries all three.
+ *
+ * @remarks
+ * These properties are only guaranteed on successful results. The context is
+ * filled in as execution progresses, so a transaction that fails or is canceled
+ * part way through carries only what was recorded before it stopped. Kit
+ * will soon type these as `Partial`, but does not do so yet.
+ *
+ * @example
+ * Annotating a result produced by the executor.
+ * ```ts
+ * import { SuccessfulSingleTransactionPlanResult } from '@solana/kit';
+ * import { RpcSendContext } from '@solana/kit-plugin-rpc';
+ *
+ * function logSentTransaction(result: SuccessfulSingleTransactionPlanResult<RpcSendContext>) {
+ *     console.log(`Sent ${result.context.signature}, size: ${result.context.transaction.messageBytes.length} bytes`);
+ * }
+ * ```
+ *
+ * @see {@link rpcTransactionPlanSendingExecutor}
+ */
+export type RpcSendContext = {
+    message: TransactionMessage & TransactionMessageWithFeePayer & TransactionMessageWithBlockhashLifetime;
+    signature: Signature;
+    transaction: SendableTransaction & Transaction & TransactionWithLifetime;
+};
+
+/**
  * Creates the transaction plan executor installed by
  * {@link rpcTransactionPlanSendingExecutor}, which signs and sends planned
  * transaction messages using the client's RPC and RPC Subscriptions.
@@ -196,7 +237,7 @@ function createExecutor(
     > &
         ClientWithRpcSubscriptions<SignatureNotificationsApi & SlotNotificationsApi>,
     config: RpcTransactionPlanExecutorConfig,
-): TransactionPlanExecutor {
+): TransactionPlanExecutor<RpcSendContext> {
     if (!client.rpc || !client.rpcSubscriptions) {
         throw new Error(
             'An RPC instance with subscriptions is required on the client to create the RPC transaction plan executor. ' +
@@ -214,7 +255,7 @@ function createExecutor(
         config.getComputeUnitLimitFromEstimate ?? getDefaultComputeUnitLimitFromEstimate;
     const skipPreflight = config.skipPreflight ?? false;
 
-    return createTransactionPlanExecutor({
+    return createTransactionPlanExecutor<RpcSendContext>({
         executeTransactionMessage: limitFunction(async (context, transactionMessage, executorConfig) => {
             const { value: latestBlockhash } = await client.rpc.getLatestBlockhash().send(executorConfig);
 
@@ -247,14 +288,16 @@ function createExecutor(
                 async tx => (context.transaction = await tx),
             );
             assertIsTransactionWithBlockhashLifetime(signedTransaction);
+            const signature = getSignatureFromTransaction(signedTransaction);
+            context.signature = signature;
             await sendAndConfirmTransaction(signedTransaction, {
                 commitment: 'confirmed',
                 skipPreflight: skipPreflight || didSimulateToEstimate,
                 ...executorConfig,
             });
-            return signedTransaction;
+            return context as RpcSendContext;
         }, config.maxConcurrency ?? 10),
-    } satisfies TransactionPlanExecutorConfig);
+    } satisfies TransactionPlanExecutorConfig<RpcSendContext>);
 }
 
 /**

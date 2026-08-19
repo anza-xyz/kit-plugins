@@ -1,9 +1,18 @@
 import {
     ClientWithTransactionPlanning,
     createTransactionPlanExecutor,
+    getSignatureFromTransaction,
     pipe,
+    SendableTransaction,
+    Signature,
     signTransactionMessageWithSigners,
+    Transaction,
+    TransactionMessage,
+    TransactionMessageWithBlockhashLifetime,
+    TransactionMessageWithFeePayer,
     TransactionPlanExecutor,
+    TransactionPlanExecutorConfig,
+    TransactionWithLifetime,
 } from '@solana/kit';
 import { transactionPlanExecutor, transactionPlanSendingExecutor } from '@solana/kit-plugin-instruction-plan';
 import type { FailedTransactionMetadata, LiteSVM, TransactionMetadata } from 'litesvm';
@@ -90,13 +99,54 @@ export function litesvmTransactionPlanExecutor() {
 }
 
 /**
+ * The context carried by transaction plan results from
+ * {@link litesvmTransactionPlanSendingExecutor}.
+ *
+ * The executor records the planned message once its blockhash lifetime is set,
+ * then the fully signed transaction and the signature it was sent under, then
+ * the LiteSVM metadata the send produced, so a successful result carries all
+ * four.
+ *
+ * @remarks
+ * These properties are only guaranteed on successful results. The context is
+ * filled in as execution progresses, so a transaction that fails or is canceled
+ * part way through carries only what was recorded before it stopped. Kit
+ * will soon type these as `Partial`, but does not do so yet.
+ *
+ * A successful result always carries a {@link TransactionMetadata}, since the
+ * executor throws when LiteSVM reports a failure. The type stays a union because
+ * a failed result carries the {@link FailedTransactionMetadata} instead, so
+ * narrow it with {@link isFailedTransaction} before reading either.
+ *
+ * @example
+ * Annotating a result produced by the executor.
+ * ```ts
+ * import { SuccessfulSingleTransactionPlanResult } from '@solana/kit';
+ * import { isFailedTransaction, LiteSvmSendContext } from '@solana/kit-plugin-litesvm';
+ *
+ * function logComputeUnits(result: SuccessfulSingleTransactionPlanResult<LiteSvmSendContext>) {
+ *     const { signature, transactionMetadata } = result.context;
+ *     if (!isFailedTransaction(transactionMetadata)) {
+ *         console.log(`${signature} consumed ${transactionMetadata.computeUnitsConsumed()} compute units`);
+ *     }
+ * }
+ * ```
+ *
+ * @see {@link litesvmTransactionPlanSendingExecutor}
+ */
+export type LiteSvmSendContext = {
+    message: TransactionMessage & TransactionMessageWithBlockhashLifetime & TransactionMessageWithFeePayer;
+    signature: Signature;
+    transaction: SendableTransaction & Transaction & TransactionWithLifetime;
+    transactionMetadata: FailedTransactionMetadata | TransactionMetadata;
+};
+
+/**
  * Creates the transaction plan executor installed by
  * {@link litesvmTransactionPlanSendingExecutor}, which signs planned
  * transaction messages and sends them to the client's LiteSVM instance.
  */
-function createExecutor(client: {
-    svm: LiteSVM;
-}): TransactionPlanExecutor<{ transactionMetadata: FailedTransactionMetadata | TransactionMetadata }> {
+function createExecutor(client: { svm: LiteSVM }): TransactionPlanExecutor<LiteSvmSendContext> {
     if (!client.svm) {
         throw new Error(
             'A LiteSVM instance is required on the client to create the LiteSVM transaction plan executor. ' +
@@ -104,9 +154,7 @@ function createExecutor(client: {
         );
     }
 
-    return createTransactionPlanExecutor<{
-        transactionMetadata: FailedTransactionMetadata | TransactionMetadata;
-    }>({
+    return createTransactionPlanExecutor<LiteSvmSendContext>({
         executeTransactionMessage: async (context, transactionMessage, config) => {
             const signedTransaction = await pipe(
                 transactionMessage,
@@ -116,12 +164,14 @@ function createExecutor(client: {
             );
 
             context.transaction = signedTransaction;
+            context.signature = getSignatureFromTransaction(signedTransaction);
             const result = client.svm.sendTransaction(signedTransaction);
             context.transactionMetadata = result;
             if (isFailedTransaction(result)) {
                 throw getSolanaErrorFromLiteSvmFailure(result);
             }
-            return signedTransaction;
+
+            return context as LiteSvmSendContext;
         },
-    });
+    } satisfies TransactionPlanExecutorConfig<LiteSvmSendContext>);
 }

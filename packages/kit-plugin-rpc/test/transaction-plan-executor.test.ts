@@ -3,6 +3,7 @@ import {
     createClient,
     createTransactionMessage,
     generateKeyPairSigner,
+    getSignatureFromTransaction,
     getTransactionMessageComputeUnitLimit,
     parallelTransactionPlan,
     pipe,
@@ -76,6 +77,30 @@ describe('rpcTransactionPlanSendingExecutor', () => {
         expect(getLatestBlockhash).toHaveBeenCalledOnce();
         expect(sendAndConfirmTransactionFactory).toHaveBeenCalledExactlyOnceWith({ rpc, rpcSubscriptions });
         expect(sendAndConfirmTransaction).toHaveBeenCalledOnce();
+    });
+
+    it('reports the signature and the transaction in the result context on success', async () => {
+        const payer = await generateKeyPairSigner();
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        const simulateTransaction = vi.fn().mockResolvedValue({ value: { unitsConsumed: 42 } });
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: simulateTransaction }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
+        (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(vi.fn().mockResolvedValue(undefined));
+
+        const client = createClient()
+            .use(() => ({ payer, rpc, rpcSubscriptions }))
+            .use(rpcTransactionPlanner())
+            .use(rpcTransactionPlanSendingExecutor());
+
+        const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
+        const transactionPlan = await client.transactionPlanner(instructionPlan);
+        const result = (await client.transactionPlanExecutor(transactionPlan)) as SingleTransactionPlanResult;
+        expect(result.status).toBe('successful');
+        expect(result.context.transaction).toBeDefined();
+        expect(result.context.signature).toBe(getSignatureFromTransaction(result.context.transaction!));
     });
 
     it('does not perform two simulation preflights when executing transactions', async () => {

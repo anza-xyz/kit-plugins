@@ -192,6 +192,26 @@ const client = await createClient()
 const transactionPlanResult = await client.sendTransactions(myInstructionPlan);
 ```
 
+### Result context
+
+As it works through a transaction, the executor records the planned message (once its blockhash lifetime is set), the fully signed transaction, the signature it was sent under, and the LiteSVM metadata the send produced. A successful plan result carries all four on its `context`, and the exported `LiteSvmSendContext` type names that shape so you can annotate results yourself.
+
+```ts
+import { SuccessfulSingleTransactionPlanResult } from '@solana/kit';
+import { isFailedTransaction, LiteSvmSendContext } from '@solana/kit-plugin-litesvm';
+
+function logComputeUnits(result: SuccessfulSingleTransactionPlanResult<LiteSvmSendContext>) {
+    const { signature, transactionMetadata } = result.context;
+    if (!isFailedTransaction(transactionMetadata)) {
+        console.log(`${signature} consumed ${transactionMetadata.computeUnitsConsumed()} compute units`);
+    }
+}
+```
+
+Because the context is filled in as execution progresses, a transaction that fails or is canceled part way through carries only what was recorded before it stopped. A future version of Kit will make these fields optional on failed/cancelled results. Treat them as present only on successful results.
+
+Note that `sendTransaction` and `sendTransactions` do not yet propagate this context type — Kit's `ClientWithTransactionSending` interface is not parameterised over it, so their results type the context as Kit's default. The properties above are populated at runtime regardless.
+
 ## Deprecated plugins
 
 The following plugins are still exported for backward compatibility but are deprecated.
