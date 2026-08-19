@@ -57,6 +57,7 @@ export type WalletStore = WalletNamespace & {
 type WalletStoreState = {
     account: UiWalletAccount | null;
     connectedWallet: UiWallet | null;
+    reconnectingTo: UiWalletAccount | null;
     signer: WalletSigner | null;
     status: WalletStatus;
     wallets: readonly UiWallet[];
@@ -71,6 +72,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
     if (!__BROWSER__ || __REACTNATIVE__) {
         const ssrSnapshot: WalletState = Object.freeze({
             connected: null,
+            reconnectingTo: null,
             status: 'pending' as const,
             wallets: Object.freeze([]) as readonly UiWallet[],
         });
@@ -97,6 +99,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
     let state: WalletStoreState = {
         account: null,
         connectedWallet: null,
+        reconnectingTo: null,
         signer: null,
         status: 'pending',
         wallets: [],
@@ -149,6 +152,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
                           wallet: s.connectedWallet,
                       })
                     : null,
+            reconnectingTo: s.status === 'reconnecting' ? s.reconnectingTo : null,
             status: s.status,
             wallets: s.wallets,
         });
@@ -165,7 +169,13 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
 
     function updateState(updates: Partial<WalletStoreState>): void {
         const prev = state;
-        state = { ...state, ...updates };
+        // Maintain the invariant: `reconnectingTo` is only populated when status === 'reconnecting'.
+        // If a future call site passes an explicit `reconnectingTo` with a non-reconnecting status, this clears it.
+        const nextUpdates =
+            updates.status !== undefined && updates.status !== 'reconnecting'
+                ? { ...updates, reconnectingTo: null }
+                : updates;
+        state = { ...state, ...nextUpdates };
 
         // Resolve `whenReady` the moment the status leaves the transient
         // warm-up set. `readyDeferred` is only ever created while transient (in
@@ -187,6 +197,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         if (
             state.connectedWallet !== prev.connectedWallet ||
             state.account !== prev.account ||
+            state.reconnectingTo !== prev.reconnectingTo ||
             state.status !== prev.status ||
             state.signer !== prev.signer ||
             state.wallets !== prev.wallets
@@ -829,7 +840,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
                 clearPersistedAccount();
             } else {
                 // Wallet not registered yet — wait for it to appear.
-                updateState({ status: 'reconnecting' });
+                updateState({ reconnectingTo: null, status: 'reconnecting' });
 
                 // Change state to disconnected after 3s
                 // Note that the listener stays alive until reconnect is cancelled, so this is
@@ -894,7 +905,8 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
 
     async function attemptSilentReconnect(savedAddress: string, uiWallet: UiWallet): Promise<void> {
         const generation = ++connectGeneration;
-        updateState({ status: 'reconnecting' });
+        const reconnectingTo = uiWallet.accounts.find(account => account.address === savedAddress) ?? null;
+        updateState({ reconnectingTo, status: 'reconnecting' });
 
         try {
             const connectFeature = getWalletFeature(

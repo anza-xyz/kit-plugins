@@ -34,7 +34,7 @@ function clientFor(wallet: object): ClientWithWallet {
     return { wallet } as never;
 }
 
-const INITIAL: WalletState = { connected: null, status: 'disconnected', wallets: [] };
+const INITIAL: WalletState = { connected: null, reconnectingTo: null, status: 'disconnected', wallets: [] };
 
 describe('useWalletStatus', () => {
     it('returns the current status and updates when it changes', () => {

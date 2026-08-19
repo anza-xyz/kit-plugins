@@ -32,6 +32,7 @@ describe.skipIf(__BROWSER__)('store (SSR / non-browser)', () => {
         expect(store.getState().status).toBe('pending');
         expect(store.getState().wallets).toEqual([]);
         expect(store.getState().connected).toBeNull();
+        expect(store.getState().reconnectingTo).toBeNull();
     });
 
     it('throws for connect on server', async () => {
@@ -89,6 +90,7 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
     it('starts in disconnected status when no storage/autoConnect', () => {
         const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
         expect(store.getState().status).toBe('disconnected');
+        expect(store.getState().reconnectingTo).toBeNull();
     });
 
     it('discovers registered wallets', () => {
@@ -2296,6 +2298,57 @@ describe.skipIf(!__BROWSER__)('store auto-connect (browser)', () => {
         expect(setItem).not.toHaveBeenCalled();
     });
 
+    it('exposes the saved account while a silent reconnect is in flight', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        const reconnect = Promise.withResolvers<void>();
+        connectMock.mockReturnValueOnce(reconnect.promise);
+        const storage = createMockStorage({ 'kit-wallet': `TestWallet:${account.address}` });
+        const store = createWalletStore({ chain: 'solana:mainnet', storage });
+
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(store.getState().status).toBe('reconnecting');
+        expect(store.getState().reconnectingTo).toBe(account);
+        expect(store.getState().connected).toBeNull();
+
+        reconnect.resolve();
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(store.getState().status).toBe('connected');
+        expect(store.getState().reconnectingTo).toBeNull();
+    });
+
+    it('exposes null reconnectingTo while silent reconnecting if saved account is missing', async () => {
+        const account = createMockAccount();
+        // Wallet doesn't include the saved account
+        const mockWallet = createMockUiWallet({
+            accounts: [],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        const reconnect = Promise.withResolvers<void>();
+        connectMock.mockReturnValueOnce(reconnect.promise);
+        const storage = createMockStorage({ 'kit-wallet': `TestWallet:${account.address}` });
+        const store = createWalletStore({ chain: 'solana:mainnet', storage });
+
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(store.getState().status).toBe('reconnecting');
+        expect(store.getState().reconnectingTo).toBeNull();
+
+        reconnect.resolve();
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(store.getState().status).toBe('disconnected');
+    });
+
     it('falls back to disconnected when storage read rejects', async () => {
         const storage: WalletStorage = {
             getItem: () => Promise.reject(new Error('storage unavailable')),
@@ -2391,6 +2444,10 @@ describe.skipIf(!__BROWSER__)('store late wallet registration (browser)', () => 
 
         // Wallet not registered yet — should be reconnecting.
         expect(store.getState().status).toBe('reconnecting');
+        expect(store.getState().reconnectingTo).toBeNull();
+
+        const reconnect = Promise.withResolvers<void>();
+        connectMock.mockReturnValueOnce(reconnect.promise);
 
         // Wallet registers late.
         const lateWallet = createMockUiWallet({
@@ -2399,6 +2456,12 @@ describe.skipIf(!__BROWSER__)('store late wallet registration (browser)', () => 
         });
         lateRegisterWallet(lateWallet);
 
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(store.getState().status).toBe('reconnecting');
+        expect(store.getState().reconnectingTo).toBe(account);
+
+        reconnect.resolve();
         await vi.advanceTimersByTimeAsync(0);
 
         expect(store.getState().status).toBe('connected');
@@ -2411,6 +2474,7 @@ describe.skipIf(!__BROWSER__)('store late wallet registration (browser)', () => 
 
         await vi.advanceTimersByTimeAsync(0);
         expect(store.getState().status).toBe('reconnecting');
+        expect(store.getState().reconnectingTo).toBeNull();
 
         await vi.advanceTimersByTimeAsync(3000);
         expect(store.getState().status).toBe('disconnected');
@@ -2436,6 +2500,7 @@ describe.skipIf(!__BROWSER__)('store late wallet registration (browser)', () => 
         await vi.advanceTimersByTimeAsync(0);
 
         expect(store.getState().status).toBe('connected');
+        expect(store.getState().reconnectingTo).toBeNull();
         expect(store.getState().connected!.account.address).toBe(account.address);
     });
 
@@ -2999,6 +3064,7 @@ describe.skipIf(!__BROWSER__)('store whenReady (browser)', () => {
 
         await vi.advanceTimersByTimeAsync(0);
         expect(store.getState().status).toBe('reconnecting');
+        expect(store.getState().reconnectingTo).toBe(account);
         // Same transient episode — still the same promise.
         expect(store.whenReady()).toBe(p);
         // If `p` were already resolved the race would pick 'ready'; it is still pending.
@@ -3008,6 +3074,7 @@ describe.skipIf(!__BROWSER__)('store whenReady (browser)', () => {
         reconnect.resolve();
         await vi.advanceTimersByTimeAsync(0);
         expect(store.getState().status).toBe('connected');
+        expect(store.getState().reconnectingTo).toBeNull();
         await expect(p).resolves.toBeUndefined();
 
         // After settling, a fresh call returns an already-resolved promise, not the old one.
