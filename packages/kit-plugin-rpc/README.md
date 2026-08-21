@@ -269,13 +269,17 @@ const transactionPlan = await client.planTransactions(myInstructionPlan);
 
 All options are provided via a `TransactionPlannerConfig` object. Its shape is discriminated by the transaction `version`.
 
-For legacy and version 0 transactions:
+- For legacy and version 0 transactions:
 
-- `version`: The transaction message version to use. Accepts `0` or `'legacy'`. Defaults to `0`.
-- `microLamportsPerComputeUnit`: The priority fee in micro-lamports per compute unit, added as a `setComputeUnitPrice` instruction. Defaults to no priority fees.
-- `estimateResourceLimits`: Whether to estimate and set resource limits by simulating before sending. Set to `false` to skip estimation and reserve no provisory limits, which is useful for transactions close to the message size limit. Defaults to `true`.
+    - `version`: The transaction message version to use. Accepts `0` or `'legacy'`. Defaults to `0`.
+    - `microLamportsPerComputeUnit`: The priority fee in micro-lamports per compute unit, added as a `setComputeUnitPrice` instruction. Defaults to no priority fees.
+    - `estimateResourceLimits`: Whether to estimate and set resource limits by simulating before sending. Set to `false` to skip estimation and reserve no provisory limits, which is useful for transactions close to the message size limit. Defaults to `true`.
 
-Version 1 transactions are defined for forward compatibility but are not yet buildable by `@solana/kit`; passing `version: 1` currently throws. When available, version 1 will accept `priorityFeeLamports` (a flat total in lamports) instead of `microLamportsPerComputeUnit`, alongside the shared `estimateResourceLimits` option.
+- For version 1 transactions:
+
+    - `version`: Set to `1` to create version 1 transaction messages.
+    - `priorityFeeLamports`: The total priority fee in lamports, written to the version 1 resource header. Defaults to no priority fees.
+    - `estimateResourceLimits`: Whether to estimate and set resource limits by simulating before sending. For version 1 transactions, estimation covers both the compute unit limit and the loaded accounts data size limit. Defaults to `true`.
 
 ## `rpcTransactionPlanSendingExecutor` plugin
 
