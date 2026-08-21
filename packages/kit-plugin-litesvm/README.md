@@ -208,9 +208,9 @@ function logComputeUnits(result: SuccessfulSingleTransactionPlanResult<LiteSvmSe
 }
 ```
 
-Because the context is filled in as execution progresses, a transaction that fails or is canceled part way through carries only what was recorded before it stopped. A future version of Kit will make these fields optional on failed/cancelled results. Treat them as present only on successful results.
+Because the context is filled in as execution progresses, a transaction that fails or is canceled part way through carries only what was recorded before it stopped. Failed and canceled results therefore type the context as partial — only successful results guarantee every field.
 
-Note that `sendTransaction` and `sendTransactions` do not yet propagate this context type — Kit's `ClientWithTransactionSending` interface is not parameterised over it, so their results type the context as Kit's default. The properties above are populated at runtime regardless.
+The `sendTransaction` and `sendTransactions` functions installed by this plugin propagate this context type, so their results carry a typed `LiteSvmSendContext` without any annotation needed.
 
 ## Deprecated plugins
 

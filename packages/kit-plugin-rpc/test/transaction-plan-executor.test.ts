@@ -282,11 +282,7 @@ describe('rpcTransactionPlanSendingExecutor', () => {
             .use(rpcTransactionPlanner())
             .use(rpcTransactionPlanSendingExecutor());
 
-        const txMessage = setTransactionMessageFeePayerSigner(
-            payer,
-            // @ts-expect-error Version 1 transaction messages work at runtime but are not yet in the public type.
-            createTransactionMessage({ version: 1 }),
-        );
+        const txMessage = setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 1 }));
         await client.transactionPlanExecutor(singleTransactionPlan(txMessage));
 
         // Estimation runs a single simulation, so preflight is skipped when sending.
@@ -316,11 +312,7 @@ describe('rpcTransactionPlanSendingExecutor', () => {
             .use(rpcTransactionPlanner())
             .use(rpcTransactionPlanSendingExecutor({ skipPreflight: true }));
 
-        const txMessage = setTransactionMessageFeePayerSigner(
-            payer,
-            // @ts-expect-error Version 1 transaction messages work at runtime but are not yet in the public type.
-            createTransactionMessage({ version: 1 }),
-        );
+        const txMessage = setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 1 }));
         const promise = client.transactionPlanExecutor(singleTransactionPlan(txMessage));
 
         await expect(promise).rejects.toThrow();
@@ -348,11 +340,7 @@ describe('rpcTransactionPlanSendingExecutor', () => {
             .use(rpcTransactionPlanner())
             .use(rpcTransactionPlanSendingExecutor({ skipPreflight: true }));
 
-        const txMessage = setTransactionMessageFeePayerSigner(
-            payer,
-            // @ts-expect-error Version 1 transaction messages work at runtime but are not yet in the public type.
-            createTransactionMessage({ version: 1 }),
-        );
+        const txMessage = setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 1 }));
         await client.transactionPlanExecutor(singleTransactionPlan(txMessage));
 
         // The recovered limits let the transaction reach the validator with preflight skipped.
@@ -381,7 +369,6 @@ describe('rpcTransactionPlanSendingExecutor', () => {
 
         // Both applicable resource limits are explicit, so no estimation is needed.
         const txMessage = pipe(
-            // @ts-expect-error Version 1 transaction messages work at runtime but are not yet in the public type.
             createTransactionMessage({ version: 1 }),
             tx => setTransactionMessageFeePayerSigner(payer, tx),
             tx => setTransactionMessageComputeUnitLimit(500, tx),
