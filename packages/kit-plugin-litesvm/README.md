@@ -164,7 +164,10 @@ For legacy and version 0 transactions:
 
 Unlike the RPC planner, the LiteSVM planner does not estimate resource limits, since LiteSVM executes transactions locally without a simulation-based estimation step.
 
-Version 1 transactions are defined for forward compatibility but are not yet buildable by `@solana/kit`; passing `version: 1` currently throws. When available, version 1 will accept `priorityFeeLamports` (a flat total in lamports) instead of `microLamportsPerComputeUnit`.
+For version 1 transactions:
+
+- `version`: Set to `1` to create version 1 transaction messages.
+- `priorityFeeLamports`: The total priority fee in lamports, written to the version 1 resource header. Defaults to no priority fees.
 
 ## `litesvmTransactionPlanSendingExecutor` plugin
 

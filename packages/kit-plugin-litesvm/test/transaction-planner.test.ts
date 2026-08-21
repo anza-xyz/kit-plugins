@@ -3,6 +3,7 @@ import {
     createClient,
     generateKeyPairSigner,
     getTransactionMessageComputeUnitPrice,
+    getTransactionMessagePriorityFeeLamports,
     Lamports,
     MicroLamports,
     singleInstructionPlan,
@@ -103,13 +104,40 @@ describe('litesvmTransactionPlanner', () => {
         expect(getTransactionMessageComputeUnitPrice(message)).toBe(100n);
     });
 
-    it('throws when configured with version 1 transactions', () => {
-        const payer = {} as TransactionSigner;
-        expect(() =>
-            createClient()
-                .use(() => ({ payer }))
-                .use(litesvmTransactionPlanner({ version: 1 })),
-        ).toThrow(/Version 1 transactions are not yet supported/);
+    it('creates version 1 transaction messages when configured', async () => {
+        const payer = await generateKeyPairSigner();
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(litesvmTransactionPlanner({ version: 1 }));
+
+        const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
+        const transactionPlan = (await client.transactionPlanner(instructionPlan)) as SingleTransactionPlan;
+        expect(transactionPlan.message.version).toBe(1);
+        expect(transactionPlan.message.feePayer).toBe(payer);
+    });
+
+    it('does not set a priority fee on version 1 transaction messages by default', async () => {
+        const payer = await generateKeyPairSigner();
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(litesvmTransactionPlanner({ version: 1 }));
+
+        const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
+        const transactionPlan = (await client.transactionPlanner(instructionPlan)) as SingleTransactionPlan;
+        const message = transactionPlan.message as TransactionMessage & { version: 1 };
+        expect(getTransactionMessagePriorityFeeLamports(message)).toBeUndefined();
+    });
+
+    it('sets a priority fee on version 1 transaction messages when configured', async () => {
+        const payer = await generateKeyPairSigner();
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(litesvmTransactionPlanner({ priorityFeeLamports: 100n as Lamports, version: 1 }));
+
+        const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
+        const transactionPlan = (await client.transactionPlanner(instructionPlan)) as SingleTransactionPlan;
+        const message = transactionPlan.message as TransactionMessage & { version: 1 };
+        expect(getTransactionMessagePriorityFeeLamports(message)).toBe(100n);
     });
 
     it('requires a payer on the client', () => {
