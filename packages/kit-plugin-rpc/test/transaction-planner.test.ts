@@ -4,6 +4,8 @@ import {
     generateKeyPairSigner,
     getTransactionMessageComputeUnitLimit,
     getTransactionMessageComputeUnitPrice,
+    getTransactionMessageLoadedAccountsDataSizeLimit,
+    getTransactionMessagePriorityFeeLamports,
     Lamports,
     MicroLamports,
     singleInstructionPlan,
@@ -127,13 +129,65 @@ describe('rpcTransactionPlanner', () => {
         expect(getTransactionMessageComputeUnitLimit(transactionPlan.message)).toBeUndefined();
     });
 
-    it('throws when configured with version 1 transactions', () => {
-        const payer = {} as TransactionSigner;
-        expect(() =>
-            createClient()
-                .use(() => ({ payer }))
-                .use(rpcTransactionPlanner({ version: 1 })),
-        ).toThrow(/Version 1 transactions are not yet supported/);
+    it('creates version 1 transaction messages when configured', async () => {
+        const payer = await generateKeyPairSigner();
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(rpcTransactionPlanner({ version: 1 }));
+
+        const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
+        const transactionPlan = (await client.transactionPlanner(instructionPlan)) as SingleTransactionPlan;
+        expect(transactionPlan.message.version).toBe(1);
+        expect(transactionPlan.message.feePayer).toBe(payer);
+    });
+
+    it('does not set a priority fee on version 1 transaction messages by default', async () => {
+        const payer = await generateKeyPairSigner();
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(rpcTransactionPlanner({ version: 1 }));
+
+        const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
+        const transactionPlan = (await client.transactionPlanner(instructionPlan)) as SingleTransactionPlan;
+        const message = transactionPlan.message as TransactionMessage & { version: 1 };
+        expect(getTransactionMessagePriorityFeeLamports(message)).toBeUndefined();
+    });
+
+    it('sets a priority fee on version 1 transaction messages when configured', async () => {
+        const payer = await generateKeyPairSigner();
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(rpcTransactionPlanner({ priorityFeeLamports: 100n as Lamports, version: 1 }));
+
+        const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
+        const transactionPlan = (await client.transactionPlanner(instructionPlan)) as SingleTransactionPlan;
+        const message = transactionPlan.message as TransactionMessage & { version: 1 };
+        expect(getTransactionMessagePriorityFeeLamports(message)).toBe(100n);
+    });
+
+    it('fills provisory resource limits for version 1 transactions by default', async () => {
+        const payer = await generateKeyPairSigner();
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(rpcTransactionPlanner({ version: 1 }));
+
+        const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
+        const transactionPlan = (await client.transactionPlanner(instructionPlan)) as SingleTransactionPlan;
+        // Provisory limits of 0 are reserved for the executor to estimate.
+        expect(getTransactionMessageComputeUnitLimit(transactionPlan.message)).toBe(0);
+        expect(getTransactionMessageLoadedAccountsDataSizeLimit(transactionPlan.message)).toBe(0);
+    });
+
+    it('does not fill provisory resource limits for version 1 transactions when estimation is disabled', async () => {
+        const payer = await generateKeyPairSigner();
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(rpcTransactionPlanner({ estimateResourceLimits: false, version: 1 }));
+
+        const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
+        const transactionPlan = (await client.transactionPlanner(instructionPlan)) as SingleTransactionPlan;
+        expect(getTransactionMessageComputeUnitLimit(transactionPlan.message)).toBeUndefined();
+        expect(getTransactionMessageLoadedAccountsDataSizeLimit(transactionPlan.message)).toBeUndefined();
     });
 
     it('requires a payer on the client', () => {

@@ -7,6 +7,7 @@ import {
     pipe,
     setTransactionMessageComputeUnitPrice,
     setTransactionMessageFeePayerSigner,
+    setTransactionMessagePriorityFeeLamports,
     TransactionPlanner,
 } from '@solana/kit';
 import { transactionPlanner } from '@solana/kit-plugin-instruction-plan';
@@ -27,7 +28,6 @@ import { transactionPlanner } from '@solana/kit-plugin-instruction-plan';
  *
  * @param config - Optional configuration for the planner.
  * @returns A plugin that adds `client.planTransaction` and `client.planTransactions`.
- * @throws If `config.version` is `1`, which `@solana/kit` cannot yet build.
  *
  * @example
  * ```ts
@@ -56,13 +56,19 @@ export function litesvmTransactionPlanner(config: TransactionPlannerConfig = {})
  */
 function createPlanner(client: ClientWithPayer, config: TransactionPlannerConfig): TransactionPlanner {
     if (config.version === 1) {
-        // The v1 transaction path is defined at the type level for forward
-        // compatibility, but `createTransactionMessage` cannot yet build v1
-        // messages, so we fail loudly rather than silently misbehave.
-        throw new Error(
-            'Version 1 transactions are not yet supported by `litesvmTransactionPlanner`. ' +
-                'Use version 0 or legacy transactions for now.',
-        );
+        const priorityFeeLamports = config.priorityFeeLamports;
+        return createTransactionPlanner({
+            createTransactionMessage: () => {
+                return pipe(
+                    createTransactionMessage({ version: 1 }),
+                    tx => setTransactionMessageFeePayerSigner(client.payer, tx),
+                    tx =>
+                        priorityFeeLamports === undefined
+                            ? tx
+                            : setTransactionMessagePriorityFeeLamports(priorityFeeLamports, tx),
+                );
+            },
+        });
     }
 
     const version = config.version ?? 0;
@@ -111,11 +117,6 @@ export type TransactionPlannerConfigLegacy = {
  * For version 1, priority fees live in a structured resource header rather than
  * a compute budget instruction, and are expressed as a total amount in lamports
  * rather than a per-compute-unit price.
- *
- * @remarks
- * Version 1 transactions are not yet buildable by `@solana/kit`, so this branch
- * is currently inert: passing `version: 1` throws at runtime. The shape is
- * defined now so that enabling version 1 later is not a breaking change.
  */
 export type TransactionPlannerConfigV1 = {
     /**
