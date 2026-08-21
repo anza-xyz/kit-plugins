@@ -19,6 +19,7 @@ import {
     TransactionPlanner,
     TransactionPlanResult,
     TransactionPlanResultContext,
+    TransactionPlanResultContextWithSignature,
 } from '@solana/kit';
 
 /**
@@ -108,7 +109,7 @@ export function transactionPlanner(transactionPlanner: TransactionPlanner) {
  * @see {@link transactionPlanner}
  */
 export function transactionPlanSendingExecutor<
-    TContext extends TransactionPlanResultContext = TransactionPlanResultContext,
+    TContext extends TransactionPlanResultContext = TransactionPlanResultContextWithSignature,
 >(transactionPlanExecutor: TransactionPlanExecutor<TContext>) {
     return <T extends ClientWithTransactionPlanning>(client: T) => {
         if (!client.planTransaction || !client.planTransactions) {
@@ -117,7 +118,7 @@ export function transactionPlanSendingExecutor<
                     'Please add a transaction planner plugin to your client before using this plugin.',
             );
         }
-        const additions: ClientWithTransactionSending & {
+        const additions: ClientWithTransactionSending<TContext> & {
             /** @deprecated Use `sendTransaction` or `sendTransactions` instead. */
             transactionPlanExecutor: TransactionPlanExecutor<TContext>;
         } = {
@@ -165,9 +166,9 @@ export function transactionPlanSendingExecutor<
  *     .use(transactionPlanSendingExecutor(myTransactionPlanExecutor));
  * ```
  */
-export function transactionPlanExecutor<TContext extends TransactionPlanResultContext = TransactionPlanResultContext>(
-    transactionPlanExecutor: TransactionPlanExecutor<TContext>,
-) {
+export function transactionPlanExecutor<
+    TContext extends TransactionPlanResultContext = TransactionPlanResultContextWithSignature,
+>(transactionPlanExecutor: TransactionPlanExecutor<TContext>) {
     return <T extends object>(client: T) => extendClient(client, { transactionPlanExecutor });
 }
 
@@ -258,11 +259,11 @@ function getTransactionPlanningFunctions(planner: TransactionPlanner): ClientWit
     return { planTransaction, planTransactions };
 }
 
-function getTransactionSendingFunctions(
+function getTransactionSendingFunctions<TContext extends TransactionPlanResultContext>(
     client: ClientWithTransactionPlanning,
-    executor: TransactionPlanExecutor,
-): ClientWithTransactionSending {
-    const sendTransactions: ClientWithTransactionSending['sendTransactions'] = async (input, config = {}) => {
+    executor: TransactionPlanExecutor<TContext>,
+): ClientWithTransactionSending<TContext> {
+    const sendTransactions: ClientWithTransactionSending<TContext>['sendTransactions'] = async (input, config = {}) => {
         const plan = parseInstructionOrTransactionPlanInput(input);
         config?.abortSignal?.throwIfAborted();
         const transactionPlan = isTransactionPlan(plan) ? plan : await client.planTransactions(plan, config);
@@ -280,7 +281,7 @@ function getTransactionSendingFunctions(
         }
     };
 
-    const sendTransaction: ClientWithTransactionSending['sendTransaction'] = async (input, config = {}) => {
+    const sendTransaction: ClientWithTransactionSending<TContext>['sendTransaction'] = async (input, config = {}) => {
         const plan = parseInstructionOrTransactionPlanInput(input);
         config?.abortSignal?.throwIfAborted();
         const transactionPlan = isTransactionPlan(plan)

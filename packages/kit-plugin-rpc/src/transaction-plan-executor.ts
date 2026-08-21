@@ -204,8 +204,7 @@ export type RpcTransactionPlanExecutorConfig = {
  * @remarks
  * These properties are only guaranteed on successful results. The context is
  * filled in as execution progresses, so a transaction that fails or is canceled
- * part way through carries only what was recorded before it stopped. Kit
- * will soon type these as `Partial`, but does not do so yet.
+ * part way through carries only what was recorded before it stopped.
  *
  * @example
  * Annotating a result produced by the executor.
