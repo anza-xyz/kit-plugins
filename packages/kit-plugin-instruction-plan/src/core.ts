@@ -5,17 +5,24 @@ import {
     CanceledSingleTransactionPlanResult,
     ClientWithTransactionPlanning,
     ClientWithTransactionSending,
+    ClientWithTransactionSigning,
     createFailedToSendTransactionError,
     createFailedToSendTransactionsError,
+    createFailedToSignTransactionError,
+    createFailedToSignTransactionsError,
     extendClient,
     FailedSingleTransactionPlanResult,
+    InstructionPlanInput,
     isSolanaError,
     isTransactionPlan,
     parseInstructionOrTransactionPlanInput,
     parseInstructionPlanInput,
     singleTransactionPlan,
     SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN,
+    SuccessfulSingleTransactionPlanResult,
+    SingleTransactionPlan,
     TransactionPlanExecutor,
+    TransactionPlanInput,
     TransactionPlanner,
     TransactionPlanResult,
     TransactionPlanResultContext,
@@ -107,6 +114,7 @@ export function transactionPlanner(transactionPlanner: TransactionPlanner) {
  * ```
  *
  * @see {@link transactionPlanner}
+ * @see {@link transactionPlanSigningExecutor}
  */
 export function transactionPlanSendingExecutor<
     TContext extends TransactionPlanResultContext = TransactionPlanResultContextWithSignature,
@@ -125,6 +133,64 @@ export function transactionPlanSendingExecutor<
             ...getTransactionSendingFunctions(client, transactionPlanExecutor),
             transactionPlanExecutor,
         };
+        return extendClient(client, additions);
+    };
+}
+
+/**
+ * A plugin that adds `signTransaction` and `signTransactions` functions to the
+ * client, using the client's planning functions and the provided transaction
+ * plan executor.
+ *
+ * Both functions accept transaction messages, instructions, instruction plans
+ * or transaction plans as input, planning the input first when it is not
+ * already a transaction plan. Planning goes through the client's
+ * `planTransaction` and `planTransactions` functions, so the
+ * {@link transactionPlanner} plugin must be installed first.
+ *
+ * Note that `signTransaction` asserts that the transaction plan result is both
+ * successful and contains a single transaction. This differs from
+ * `signTransactions`, which returns the full transaction plan result as
+ * produced by the executor.
+ *
+ * @typeParam TContext - The extra context type provided by the transaction plan
+ * executor on its transaction plan results. It is inferred from the executor.
+ *
+ * @param transactionPlanExecutor - The transaction plan executor used to sign
+ * planned transactions.
+ * @returns A plugin that adds `client.signTransaction` and `client.signTransactions`.
+ * @throws If the client has no `planTransaction` or `planTransactions` set.
+ *
+ * @example
+ * ```ts
+ * import { createClient } from '@solana/kit';
+ * import { transactionPlanner, transactionPlanSigningExecutor } from '@solana/kit-plugin-instruction-plan';
+ *
+ * const client = createClient()
+ *     .use(transactionPlanner(myTransactionPlanner))
+ *     .use(transactionPlanSigningExecutor(myTransactionPlanSigningExecutor));
+ *
+ * const singleResult = await client.signTransaction(myInstructionPlan);
+ * const result = await client.signTransactions(myInstructionPlan);
+ * ```
+ *
+ * @see {@link transactionPlanner}
+ * @see {@link transactionPlanSendingExecutor}
+ */
+export function transactionPlanSigningExecutor<TContext extends TransactionPlanResultContext>(
+    transactionPlanExecutor: TransactionPlanExecutor<TContext>,
+) {
+    return <T extends ClientWithTransactionPlanning>(client: T) => {
+        if (!client.planTransaction || !client.planTransactions) {
+            throw new Error(
+                'Transaction planning functions are required on the client to sign transactions. ' +
+                    'Please add a transaction planner plugin to your client before using this plugin.',
+            );
+        }
+        const additions: ClientWithTransactionSigning<TContext> = getTransactionSigningFunctions(
+            client,
+            transactionPlanExecutor,
+        );
         return extendClient(client, additions);
     };
 }
@@ -263,7 +329,49 @@ function getTransactionSendingFunctions<TContext extends TransactionPlanResultCo
     client: ClientWithTransactionPlanning,
     executor: TransactionPlanExecutor<TContext>,
 ): ClientWithTransactionSending<TContext> {
-    const sendTransactions: ClientWithTransactionSending<TContext>['sendTransactions'] = async (input, config = {}) => {
+    const { executeTransaction, executeTransactions } = getTransactionExecutionFunctions(client, executor, {
+        createTransactionError: createFailedToSendTransactionError,
+        createTransactionsError: createFailedToSendTransactionsError,
+    });
+    return { sendTransaction: executeTransaction, sendTransactions: executeTransactions };
+}
+
+function getTransactionSigningFunctions<TContext extends TransactionPlanResultContext>(
+    client: ClientWithTransactionPlanning,
+    executor: TransactionPlanExecutor<TContext>,
+): ClientWithTransactionSigning<TContext> {
+    const { executeTransaction, executeTransactions } = getTransactionExecutionFunctions(client, executor, {
+        createTransactionError: createFailedToSignTransactionError,
+        createTransactionsError: createFailedToSignTransactionsError,
+    });
+    return { signTransaction: executeTransaction, signTransactions: executeTransactions };
+}
+
+type ExecuteTransactionFunction<TContext extends TransactionPlanResultContext> = (
+    input: InstructionPlanInput | SingleTransactionPlan | SingleTransactionPlan['message'],
+    config?: { abortSignal?: AbortSignal },
+) => Promise<SuccessfulSingleTransactionPlanResult<TContext>>;
+
+type ExecuteTransactionsFunction<TContext extends TransactionPlanResultContext> = (
+    input: InstructionPlanInput | TransactionPlanInput,
+    config?: { abortSignal?: AbortSignal },
+) => Promise<TransactionPlanResult<TContext>>;
+
+function getTransactionExecutionFunctions<TContext extends TransactionPlanResultContext>(
+    client: ClientWithTransactionPlanning,
+    executor: TransactionPlanExecutor<TContext>,
+    errorFactories: {
+        createTransactionError: (
+            result: CanceledSingleTransactionPlanResult<TContext> | FailedSingleTransactionPlanResult<TContext>,
+            abortReason?: unknown,
+        ) => Error;
+        createTransactionsError: (result: TransactionPlanResult<TContext>, abortReason?: unknown) => Error;
+    },
+): {
+    executeTransaction: ExecuteTransactionFunction<TContext>;
+    executeTransactions: ExecuteTransactionsFunction<TContext>;
+} {
+    const executeTransactions: ExecuteTransactionsFunction<TContext> = async (input, config = {}) => {
         const plan = parseInstructionOrTransactionPlanInput(input);
         config?.abortSignal?.throwIfAborted();
         const transactionPlan = isTransactionPlan(plan) ? plan : await client.planTransactions(plan, config);
@@ -274,14 +382,14 @@ function getTransactionSendingFunctions<TContext extends TransactionPlanResultCo
             if (!isSolanaError(error, SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN)) {
                 throw error;
             }
-            throw createFailedToSendTransactionsError(
-                error.context.transactionPlanResult as TransactionPlanResult,
+            throw errorFactories.createTransactionsError(
+                error.context.transactionPlanResult as TransactionPlanResult<TContext>,
                 error.context.abortReason,
             );
         }
     };
 
-    const sendTransaction: ClientWithTransactionSending<TContext>['sendTransaction'] = async (input, config = {}) => {
+    const executeTransaction: ExecuteTransactionFunction<TContext> = async (input, config = {}) => {
         const plan = parseInstructionOrTransactionPlanInput(input);
         config?.abortSignal?.throwIfAborted();
         const transactionPlan = isTransactionPlan(plan)
@@ -297,14 +405,14 @@ function getTransactionSendingFunctions<TContext extends TransactionPlanResultCo
                 throw error;
             }
             assertIsSingleTransactionPlanResult(error.context.transactionPlanResult as TransactionPlanResult);
-            throw createFailedToSendTransactionError(
+            throw errorFactories.createTransactionError(
                 error.context.transactionPlanResult as
-                    | CanceledSingleTransactionPlanResult
-                    | FailedSingleTransactionPlanResult,
+                    | CanceledSingleTransactionPlanResult<TContext>
+                    | FailedSingleTransactionPlanResult<TContext>,
                 error.context.abortReason,
             );
         }
     };
 
-    return { sendTransaction, sendTransactions };
+    return { executeTransaction, executeTransactions };
 }
