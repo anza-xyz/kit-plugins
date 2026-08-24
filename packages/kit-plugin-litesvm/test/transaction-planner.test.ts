@@ -2,7 +2,9 @@ import {
     Address,
     createClient,
     generateKeyPairSigner,
+    getTransactionMessageComputeUnitLimit,
     getTransactionMessageComputeUnitPrice,
+    getTransactionMessageLoadedAccountsDataSizeLimit,
     getTransactionMessagePriorityFeeLamports,
     Lamports,
     MicroLamports,
@@ -140,6 +142,40 @@ describe('litesvmTransactionPlanner', () => {
         expect(getTransactionMessagePriorityFeeLamports(message)).toBe(100n);
     });
 
+    it('sets maximum resource limits on version 1 transaction messages by default', async () => {
+        const payer = await generateKeyPairSigner();
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(litesvmTransactionPlanner({ version: 1 }));
+
+        // Unset resource limits in a version 1 transaction config are treated
+        // as zero by the runtime, so the planner defaults to maximum limits.
+        const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
+        const transactionPlan = (await client.transactionPlanner(instructionPlan)) as SingleTransactionPlan;
+        const message = transactionPlan.message as TransactionMessage & { version: 1 };
+        expect(getTransactionMessageComputeUnitLimit(message)).toBe(1_400_000);
+        expect(getTransactionMessageLoadedAccountsDataSizeLimit(message)).toBe(64 * 1024 * 1024);
+    });
+
+    it('sets custom resource limits on version 1 transaction messages when configured', async () => {
+        const payer = await generateKeyPairSigner();
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(
+                litesvmTransactionPlanner({
+                    computeUnitLimit: 200_000,
+                    loadedAccountsDataSizeLimit: 1024 * 1024,
+                    version: 1,
+                }),
+            );
+
+        const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
+        const transactionPlan = (await client.transactionPlanner(instructionPlan)) as SingleTransactionPlan;
+        const message = transactionPlan.message as TransactionMessage & { version: 1 };
+        expect(getTransactionMessageComputeUnitLimit(message)).toBe(200_000);
+        expect(getTransactionMessageLoadedAccountsDataSizeLimit(message)).toBe(1024 * 1024);
+    });
+
     it('requires a payer on the client', () => {
         // @ts-expect-error TypeScript fails but we don't throw an error at runtime.
         expect(() => createClient().use(litesvmTransactionPlanner())).not.toThrow();
@@ -155,5 +191,12 @@ describe('litesvmTransactionPlanner', () => {
         assertType<TransactionPlannerConfig>({ priorityFeeLamports: 1n as Lamports, version: 1 });
         // @ts-expect-error `microLamportsPerComputeUnit` is only valid for legacy and version 0.
         assertType<TransactionPlannerConfig>({ microLamportsPerComputeUnit: 1n as MicroLamports, version: 1 });
+
+        // Version 1 accepts resource limits but legacy and version 0 do not.
+        assertType<TransactionPlannerConfig>({ computeUnitLimit: 1, loadedAccountsDataSizeLimit: 1, version: 1 });
+        // @ts-expect-error `computeUnitLimit` is only valid for version 1.
+        assertType<TransactionPlannerConfig>({ computeUnitLimit: 1, version: 0 });
+        // @ts-expect-error `loadedAccountsDataSizeLimit` is only valid for version 1.
+        assertType<TransactionPlannerConfig>({ loadedAccountsDataSizeLimit: 1, version: 0 });
     });
 });

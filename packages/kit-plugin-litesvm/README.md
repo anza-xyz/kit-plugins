@@ -166,8 +166,10 @@ All options are provided via a `TransactionPlannerConfig` object. Its shape is d
 
     - `version`: Set to `1` to create version 1 transaction messages.
     - `priorityFeeLamports`: The total priority fee in lamports, written to the version 1 resource header. Defaults to no priority fees.
+    - `computeUnitLimit`: The compute unit limit, written to the version 1 resource header. Defaults to the maximum limit of 1,400,000 compute units.
+    - `loadedAccountsDataSizeLimit`: The loaded accounts data size limit in bytes, written to the version 1 resource header. Defaults to the maximum limit of 64 MiB.
 
-Unlike the RPC planner, the LiteSVM planner does not estimate resource limits, since LiteSVM executes transactions locally without a simulation-based estimation step.
+Unlike the RPC planner, the LiteSVM planner does not estimate resource limits, since LiteSVM executes transactions locally without a simulation-based estimation step. Since unset resource limits in a version 1 transaction config are treated as zero by the runtime, the planner writes maximum limits to the resource header by default.
 
 ## `litesvmTransactionPlanSendingExecutor` plugin
 
