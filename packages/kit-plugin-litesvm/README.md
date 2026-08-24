@@ -157,14 +157,17 @@ const transactionPlan = await client.planTransactions(myInstructionPlan);
 
 All options are provided via a `TransactionPlannerConfig` object. Its shape is discriminated by the transaction `version`.
 
-For legacy and version 0 transactions:
+- For legacy and version 0 transactions:
 
-- `version`: The transaction message version to use. Accepts `0` or `'legacy'`. Defaults to `0`.
-- `microLamportsPerComputeUnit`: The priority fee in micro-lamports per compute unit, added as a `setComputeUnitPrice` instruction. Defaults to no priority fees.
+    - `version`: The transaction message version to use. Accepts `0` or `'legacy'`. Defaults to `0`.
+    - `microLamportsPerComputeUnit`: The priority fee in micro-lamports per compute unit, added as a `setComputeUnitPrice` instruction. Defaults to no priority fees.
+
+- For version 1 transactions:
+
+    - `version`: Set to `1` to create version 1 transaction messages.
+    - `priorityFeeLamports`: The total priority fee in lamports, written to the version 1 resource header. Defaults to no priority fees.
 
 Unlike the RPC planner, the LiteSVM planner does not estimate resource limits, since LiteSVM executes transactions locally without a simulation-based estimation step.
-
-Version 1 transactions are defined for forward compatibility but are not yet buildable by `@solana/kit`; passing `version: 1` currently throws. When available, version 1 will accept `priorityFeeLamports` (a flat total in lamports) instead of `microLamportsPerComputeUnit`.
 
 ## `litesvmTransactionPlanSendingExecutor` plugin
 
