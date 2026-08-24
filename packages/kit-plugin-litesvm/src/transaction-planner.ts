@@ -5,12 +5,20 @@ import {
     Lamports,
     MicroLamports,
     pipe,
+    setTransactionMessageComputeUnitLimit,
     setTransactionMessageComputeUnitPrice,
     setTransactionMessageFeePayerSigner,
+    setTransactionMessageLoadedAccountsDataSizeLimit,
     setTransactionMessagePriorityFeeLamports,
     TransactionPlanner,
 } from '@solana/kit';
 import { transactionPlanner } from '@solana/kit-plugin-instruction-plan';
+
+/** The maximum compute unit limit a transaction can request from the runtime. */
+const MAX_COMPUTE_UNIT_LIMIT = 1_400_000;
+
+/** The maximum loaded accounts data size a transaction can request from the runtime, i.e. 64 MiB. */
+const MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES = 64 * 1024 * 1024;
 
 /**
  * A plugin that provides a default transaction planner using LiteSVM.
@@ -21,7 +29,9 @@ import { transactionPlanner } from '@solana/kit-plugin-instruction-plan';
  *
  * Unlike the RPC planner, the LiteSVM planner does not estimate resource limits,
  * since LiteSVM executes transactions locally without a simulation-based
- * estimation step.
+ * estimation step. For version 1 transactions — whose unset resource limits are
+ * treated as zero by the runtime — the planner writes maximum limits to the
+ * resource header by default, which can be overridden via the config.
  *
  * The fee payer is read from `client.payer` lazily, at plan time, so that a
  * dynamic payer (such as a connected wallet) is always respected.
@@ -60,14 +70,25 @@ function createPlanner(client: ClientWithPayer, config: TransactionPlannerConfig
 
 /**
  * Creates a planner that builds version 1 transaction messages, writing the
- * priority fee to the resource header.
+ * resource limits and priority fee to the resource header.
+ *
+ * Unset resource limits in a version 1 transaction config are treated as zero
+ * by the runtime, and LiteSVM performs no simulation-based estimation step, so
+ * the planner writes maximum limits by default to keep local testing
+ * frictionless. Both limits can be overridden via the config.
  */
 function createV1Planner(client: ClientWithPayer, config: TransactionPlannerConfigV1): TransactionPlanner {
-    const { priorityFeeLamports } = config;
+    const {
+        computeUnitLimit = MAX_COMPUTE_UNIT_LIMIT,
+        loadedAccountsDataSizeLimit = MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES,
+        priorityFeeLamports,
+    } = config;
     return createTransactionPlanner({
         createTransactionMessage: () =>
             pipe(
                 createTransactionMessage({ version: 1 }),
+                tx => setTransactionMessageComputeUnitLimit(computeUnitLimit, tx),
+                tx => setTransactionMessageLoadedAccountsDataSizeLimit(loadedAccountsDataSizeLimit, tx),
                 tx => setTransactionMessageFeePayerSigner(client.payer, tx),
                 tx =>
                     priorityFeeLamports === undefined
@@ -127,6 +148,23 @@ export type TransactionPlannerConfigLegacy = {
  * rather than a per-compute-unit price.
  */
 export type TransactionPlannerConfigV1 = {
+    /**
+     * The compute unit limit to set on the transaction, written to the
+     * version 1 resource header.
+     *
+     * Unset limits are treated as zero by the runtime and LiteSVM performs no
+     * estimation step, so this defaults to the maximum limit of 1,400,000
+     * compute units.
+     */
+    computeUnitLimit?: number;
+    /**
+     * The loaded accounts data size limit to set on the transaction, in bytes,
+     * written to the version 1 resource header.
+     *
+     * Unset limits are treated as zero by the runtime and LiteSVM performs no
+     * estimation step, so this defaults to the maximum limit of 64 MiB.
+     */
+    loadedAccountsDataSizeLimit?: number;
     /**
      * The total priority fee to set on the transaction, in lamports, written to
      * the version 1 resource header.

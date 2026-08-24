@@ -13,6 +13,7 @@ import {
     setTransactionMessageFeePayerSigner,
     singleInstructionPlan,
     singleTransactionPlan,
+    SingleTransactionPlan,
     SingleTransactionPlanResult,
     SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_INSTRUCTION_DATA,
     SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN,
@@ -234,6 +235,29 @@ describe('litesvmTransactionPlanSendingExecutor', () => {
             const transactionPlan = await client.transactionPlanner(instructionPlan);
             const result = (await client.transactionPlanExecutor(transactionPlan)) as SingleTransactionPlanResult;
             expect(result.kind).toBe('single');
+        });
+
+        it('plans and executes a version 1 transaction', async () => {
+            const payer = await generateKeyPairSigner();
+            const destination = await generateKeyPairSigner();
+            const client = createClient()
+                .use(litesvmConnection())
+                .use(client => extendClient(client, { payer }))
+                .use(litesvmTransactionPlanner({ version: 1 }))
+                .use(litesvmTransactionPlanSendingExecutor());
+            client.svm.airdrop(payer.address, lamports(1_000_000_000n)); // 1 SOL
+
+            const instruction = getTransferSolInstruction({
+                amount: lamports(100_000_000n), // 0.1 SOL
+                destination: destination.address,
+                source: payer,
+            });
+            const instructionPlan = singleInstructionPlan(instruction);
+            const transactionPlan = (await client.transactionPlanner(instructionPlan)) as SingleTransactionPlan;
+            expect(transactionPlan.message.version).toBe(1);
+            const result = (await client.transactionPlanExecutor(transactionPlan)) as SingleTransactionPlanResult;
+            expect(result.status).toBe('successful');
+            expect(client.svm.getBalance(destination.address)).toBe(lamports(100_000_000n));
         });
 
         it('throws a SolanaError when a real transaction fails with an instruction error', async () => {
