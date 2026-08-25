@@ -66,8 +66,8 @@ importers:
         specifier: ^0.14.0
         version: 0.14.0(@solana/kit@8.0.0(typescript@7.0.2))
       '@solana-program/token':
-        specifier: ^0.14.0
-        version: 0.14.0(@solana/kit@8.0.0(typescript@7.0.2))
+        specifier: ^0.16.0
+        version: 0.16.0(@solana/kit@8.0.0(typescript@7.0.2))
       '@solana/kit':
         specifier: ^8.0.0
         version: 8.0.0(typescript@7.0.2)
@@ -1141,19 +1141,8 @@ packages:
       oxlint:
         optional: true
 
-  '@solana-program/system@0.12.2':
-    resolution: {integrity: sha512-MaBeOxlvTruQhA7UYkOb3hVTEHPPagOtd+PvTm6a8rGgvEAP0kD4BbC37NceOaR4ABNqdaCmD5OMVRKgrE6KAg==}
-    peerDependencies:
-      '@solana/kit': ^8.0.0
-
   '@solana-program/system@0.14.0':
     resolution: {integrity: sha512-Pjs2RINZHYmk/pqWNBCuQmfNjZT9woPJ/w7QkzzCSwcqcokbARtxsnIdgj4lJVxvr1DuxG8JGIbKnq6z1QRY6Q==}
-    peerDependencies:
-      '@solana/kit': ^8.0.0
-
-  '@solana-program/token@0.14.0':
-    resolution: {integrity: sha512-zpLMr6JZndlsQCQvrm0gezfwdr1lmzOGqN6v2WIYXjtDmbF+xg6zh/MAp2UFHRpv3uDmylEdjtQo05pa2OeaYg==}
-    engines: {node: '>=24.0.0'}
     peerDependencies:
       '@solana/kit': ^8.0.0
 
@@ -3114,17 +3103,8 @@ snapshots:
       oxfmt: 0.64.0
       oxlint: 1.79.0(oxlint-tsgolint@7.0.2001)
 
-  '@solana-program/system@0.12.2(@solana/kit@8.0.0(typescript@7.0.2))':
-    dependencies:
-      '@solana/kit': 8.0.0(typescript@7.0.2)
-
   '@solana-program/system@0.14.0(@solana/kit@8.0.0(typescript@7.0.2))':
     dependencies:
-      '@solana/kit': 8.0.0(typescript@7.0.2)
-
-  '@solana-program/token@0.14.0(@solana/kit@8.0.0(typescript@7.0.2))':
-    dependencies:
-      '@solana-program/system': 0.12.2(@solana/kit@8.0.0(typescript@7.0.2))
       '@solana/kit': 8.0.0(typescript@7.0.2)
 
   '@solana-program/token@0.16.0(@solana/kit@8.0.0(typescript@7.0.2))':
