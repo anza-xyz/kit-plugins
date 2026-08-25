@@ -56,7 +56,7 @@
         "litesvm": "^1.4.1"
     },
     "devDependencies": {
-        "@solana-program/system": "^0.13.0"
+        "@solana-program/system": "^0.14.0"
     },
     "peerDependencies": {
         "@solana/kit": "^8.0.0"
