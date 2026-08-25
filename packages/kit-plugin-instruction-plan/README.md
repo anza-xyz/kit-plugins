@@ -7,7 +7,7 @@
 [npm-image]: https://img.shields.io/npm/v/@solana/kit-plugin-instruction-plan.svg?style=flat&label=%40solana%2Fkit-plugin-instruction-plan
 [npm-url]: https://www.npmjs.com/package/@solana/kit-plugin-instruction-plan
 
-This package provides plugins that add transaction planning and execution to your Kit clients.
+This package provides plugins that add transaction planning, signing and execution to your Kit clients.
 
 ## Installation
 
@@ -94,6 +94,37 @@ const client = createClient()
     ```
 
 For backward compatibility this plugin also sets a `client.transactionPlanExecutor` field, but that field is deprecated in favour of the two functions above.
+
+## `transactionPlanSigningExecutor` plugin
+
+The `transactionPlanSigningExecutor` plugin adds `signTransaction` and `signTransactions` to the client, using the client's planning functions and a transaction plan executor that signs transactions without sending them. Both functions accept transaction messages, instructions, instruction plans or transaction plans as input, planning the input first when it is not already a transaction plan.
+
+Planning goes through the client's `planTransaction` and `planTransactions` functions, so the `transactionPlanner` plugin must be installed first. The result context is inferred from the executor, allowing signing implementations to expose their signed transactions or other signing-specific data.
+
+### Installation
+
+```ts
+import { createClient } from '@solana/kit';
+import { transactionPlanner, transactionPlanSigningExecutor } from '@solana/kit-plugin-instruction-plan';
+
+const client = createClient()
+    .use(transactionPlanner(myTransactionPlanner))
+    .use(transactionPlanSigningExecutor(myTransactionPlanSigningExecutor));
+```
+
+### Features
+
+- `signTransactions`: Plans and signs transaction messages, instructions or instruction plans without sending them.
+
+    ```ts
+    const transactionPlanResult = await client.signTransactions(myInstructionPlan);
+    ```
+
+- `signTransaction`: Same as `signTransactions` but asserts that the result is successful and contains a single transaction. Should the provided input result in multiple transactions, an error will be thrown.
+
+    ```ts
+    const transactionPlanResult = await client.signTransaction(myInstructionPlan);
+    ```
 
 ## Deprecated plugins
 

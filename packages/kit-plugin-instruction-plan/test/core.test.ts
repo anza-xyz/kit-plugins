@@ -16,6 +16,8 @@ import {
     singleTransactionPlan,
     SOLANA_ERROR__FAILED_TO_SEND_TRANSACTION,
     SOLANA_ERROR__FAILED_TO_SEND_TRANSACTIONS,
+    SOLANA_ERROR__FAILED_TO_SIGN_TRANSACTION,
+    SOLANA_ERROR__FAILED_TO_SIGN_TRANSACTIONS,
     SOLANA_ERROR__INSTRUCTION_PLANS__UNEXPECTED_TRANSACTION_PLAN,
     SOLANA_ERROR__INSTRUCTION_PLANS__UNEXPECTED_TRANSACTION_PLAN_RESULT,
     SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE,
@@ -29,14 +31,16 @@ import {
     TransactionPlanExecutor,
     TransactionPlanner,
     TransactionPlanResult,
+    TransactionPlanResultContext,
 } from '@solana/kit';
-import { assert, describe, expect, it, vi } from 'vitest';
+import { assert, describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 import {
     planAndSendTransactions,
     transactionPlanExecutor,
     transactionPlanner,
     transactionPlanSendingExecutor,
+    transactionPlanSigningExecutor,
 } from '../src';
 
 describe('transactionPlanner', () => {
@@ -131,6 +135,159 @@ describe('transactionPlanSendingExecutor', () => {
         expect(() => createClient().use(transactionPlanSendingExecutor(vi.fn()))).toThrow(
             /Transaction planning functions are required/,
         );
+    });
+});
+
+describe('transactionPlanSigningExecutor', () => {
+    function createSigningTestClient<TContext extends TransactionPlanResultContext>(
+        planner: TransactionPlanner,
+        executor: TransactionPlanExecutor<TContext>,
+    ) {
+        return createClient().use(transactionPlanner(planner)).use(transactionPlanSigningExecutor(executor));
+    }
+
+    it('adds signTransaction and signTransactions to the client', () => {
+        const client = createSigningTestClient(vi.fn(), vi.fn());
+        expect(client).toHaveProperty('signTransaction');
+        expect(client).toHaveProperty('signTransactions');
+    });
+
+    it('requires transaction planning functions on the client', () => {
+        // @ts-expect-error Missing planning functions on the client.
+        expect(() => createClient().use(transactionPlanSigningExecutor(vi.fn()))).toThrow(
+            /Transaction planning functions are required/,
+        );
+    });
+
+    it('plans and signs a single instruction while preserving the executor context type', async () => {
+        const instruction = {} as Instruction;
+        const message = {} as TransactionMessage & TransactionMessageWithFeePayer;
+        const result = successfulSingleTransactionPlanResult(message, { signedTransaction: 'signed' });
+        const planner = vi.fn().mockResolvedValue(singleTransactionPlan(message));
+        const executor: TransactionPlanExecutor<{ signedTransaction: string }> = vi.fn().mockResolvedValue(result);
+        const client = createSigningTestClient(planner, executor);
+
+        const signedResult = await client.signTransaction(instruction);
+        expectTypeOf(signedResult.context.signedTransaction).toEqualTypeOf<string>();
+
+        expect(signedResult).toBe(result);
+        expect(planner).toHaveBeenCalledExactlyOnceWith(singleInstructionPlan(instruction), {
+            abortSignal: undefined,
+        });
+        expect(executor).toHaveBeenCalledExactlyOnceWith(singleTransactionPlan(message), {
+            abortSignal: undefined,
+        });
+    });
+
+    it('rejects when signTransaction receives a multi-transaction result', async () => {
+        const instruction = {} as Instruction;
+        const message = {} as TransactionMessage & TransactionMessageWithFeePayer;
+        const transactionPlan = singleTransactionPlan(message);
+        const transactionPlanResult = sequentialTransactionPlanResult([
+            successfulSingleTransactionPlanResult(message, { signedTransaction: 'signed' }),
+        ]);
+        const planner = vi.fn().mockResolvedValue(transactionPlan);
+        const executor = vi.fn().mockResolvedValue(transactionPlanResult);
+        const client = createSigningTestClient(planner, executor);
+
+        await expect(client.signTransaction(instruction)).rejects.toThrow(
+            new SolanaError(SOLANA_ERROR__INSTRUCTION_PLANS__UNEXPECTED_TRANSACTION_PLAN_RESULT, {
+                actualKind: 'sequential',
+                expectedKind: 'successful single',
+                transactionPlanResult,
+            }),
+        );
+    });
+
+    it('plans and signs multiple instructions', async () => {
+        const instructionPlan = sequentialInstructionPlan([{} as Instruction, {} as Instruction]);
+        const transactionPlan = sequentialTransactionPlan([
+            {} as TransactionMessage & TransactionMessageWithFeePayer,
+            {} as TransactionMessage & TransactionMessageWithFeePayer,
+        ]);
+        const result = sequentialTransactionPlanResult([]);
+        const planner = vi.fn().mockResolvedValue(transactionPlan);
+        const executor = vi.fn().mockResolvedValue(result);
+        const client = createSigningTestClient(planner, executor);
+
+        await expect(client.signTransactions(instructionPlan)).resolves.toBe(result);
+        expect(planner).toHaveBeenCalledExactlyOnceWith(instructionPlan, { abortSignal: undefined });
+        expect(executor).toHaveBeenCalledExactlyOnceWith(transactionPlan, { abortSignal: undefined });
+    });
+
+    it('signs transaction plans without calling the planner', async () => {
+        const transactionPlan = sequentialTransactionPlan([
+            {} as TransactionMessage & TransactionMessageWithFeePayer,
+            {} as TransactionMessage & TransactionMessageWithFeePayer,
+        ]);
+        const result = sequentialTransactionPlanResult([]);
+        const planner = vi.fn();
+        const executor = vi.fn().mockResolvedValue(result);
+        const client = createSigningTestClient(planner, executor);
+
+        await client.signTransactions(transactionPlan);
+
+        expect(planner).not.toHaveBeenCalled();
+        expect(executor).toHaveBeenCalledExactlyOnceWith(transactionPlan, { abortSignal: undefined });
+    });
+
+    it('passes the abort signal to the planner and executor', async () => {
+        const message = {} as TransactionMessage & TransactionMessageWithFeePayer;
+        const result = successfulSingleTransactionPlanResult(message, {});
+        const planner = vi.fn().mockResolvedValue(singleTransactionPlan(message));
+        const executor = vi.fn().mockResolvedValue(result);
+        const client = createSigningTestClient(planner, executor);
+        const abortSignal = new AbortController().signal;
+
+        await client.signTransaction({} as Instruction, { abortSignal });
+
+        expect(planner).toHaveBeenCalledExactlyOnceWith(expect.any(Object), { abortSignal });
+        expect(executor).toHaveBeenCalledExactlyOnceWith(singleTransactionPlan(message), { abortSignal });
+    });
+
+    it('does not call the planner or executor if the abort signal is already triggered', async () => {
+        const planner = vi.fn();
+        const executor = vi.fn();
+        const client = createSigningTestClient(planner, executor);
+        const abortController = new AbortController();
+        abortController.abort();
+
+        await client.signTransactions({} as Instruction, { abortSignal: abortController.signal }).catch(() => {});
+
+        expect(planner).not.toHaveBeenCalled();
+        expect(executor).not.toHaveBeenCalled();
+    });
+
+    it('re-wraps a failed-to-execute error into a failed-to-sign-transaction error', async () => {
+        const message = setTransactionMessageFeePayer('1111' as Address, createTransactionMessage({ version: 0 }));
+        const failedResult = failedSingleTransactionPlanResult(message, new Error('signing failed'));
+        const executor = vi.fn().mockRejectedValue(createFailedToExecuteTransactionPlanError(failedResult));
+        const client = createSigningTestClient(vi.fn(), executor);
+
+        const thrownError = await client.signTransaction(message).catch((error: unknown) => error);
+
+        assert(isSolanaError(thrownError, SOLANA_ERROR__FAILED_TO_SIGN_TRANSACTION));
+    });
+
+    it('re-wraps a failed-to-execute error into a failed-to-sign-transactions error', async () => {
+        const message = {} as TransactionMessage & TransactionMessageWithFeePayer;
+        const transactionPlan = singleTransactionPlan(message);
+        const failedResult = failedSingleTransactionPlanResult(message, new Error('signing failed'));
+        const executor = vi.fn().mockRejectedValue(createFailedToExecuteTransactionPlanError(failedResult));
+        const client = createSigningTestClient(vi.fn(), executor);
+
+        const thrownError = await client.signTransactions(transactionPlan).catch((error: unknown) => error);
+
+        assert(isSolanaError(thrownError, SOLANA_ERROR__FAILED_TO_SIGN_TRANSACTIONS));
+    });
+
+    it('re-throws non-Solana errors unchanged', async () => {
+        const message = setTransactionMessageFeePayer('1111' as Address, createTransactionMessage({ version: 0 }));
+        const genericError = new Error('something went wrong');
+        const executor = vi.fn().mockRejectedValue(genericError);
+        const client = createSigningTestClient(vi.fn(), executor);
+
+        await expect(client.signTransaction(message)).rejects.toBe(genericError);
     });
 });
 
