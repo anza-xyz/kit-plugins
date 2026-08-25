@@ -54,7 +54,7 @@ const instructionPlan = sequentialInstructionPlan([
      * This helper returns an instruction plan including all the instructions necessary to create a mint.
      * It is itself a `SequentialInstructionPlan`.
      */
-    getCreateMintInstructionPlan({
+    await getCreateMintInstructionPlan(client, {
         decimals: 6,
         mintAuthority: payer.address,
         newMint: tokenMint,
