@@ -19,7 +19,7 @@ import {
 import { rpcAirdrop } from './airdrop';
 import { rpcGetMinimumBalance } from './get-minimum-balance';
 import { rpcSubscriptionsConnection } from './rpc';
-import { rpcTransactionPlanSendingExecutor } from './transaction-plan-executor';
+import { rpcTransactionPlanSendingExecutor, rpcTransactionPlanSigningExecutor } from './transaction-plan-executor';
 import { rpcTransactionPlanner, TransactionPlannerConfig } from './transaction-planner';
 
 /**
@@ -74,8 +74,11 @@ export type SolanaRpcConfig<TClusterUrl extends ClusterUrl = ClusterUrl> = Solan
      */
     getComputeUnitLimitFromEstimate?: (estimatedComputeUnits: number) => number;
     /**
-     * The maximum number of concurrent transaction executions allowed.
-     * Defaults to 10.
+     * The maximum number of transactions handled concurrently by each
+     * installed executor. This limits transaction execution in the sending
+     * executor and transaction preparation and signing in the signing
+     * executor. The executors maintain independent concurrency budgets.
+     * Defaults to 10 for each executor.
      */
     maxConcurrency?: number;
     /**
@@ -106,15 +109,16 @@ export type SolanaRpcConfig<TClusterUrl extends ClusterUrl = ClusterUrl> = Solan
 
 /**
  * Enhances a client with a full Solana RPC setup including RPC connection,
- * RPC Subscriptions, minimum balance computation, transaction planning, and
- * transaction execution.
+ * RPC Subscriptions, minimum balance computation, transaction planning,
+ * transaction signing, and transaction execution.
  *
  * The client must have a `payer` set before applying this plugin.
  *
  * @param config - Configuration for the Solana RPC connection.
  * @return A plugin that adds `client.rpc`, `client.rpcSubscriptions`,
  * `client.getMinimumBalance`, `client.planTransaction`, `client.planTransactions`,
- * `client.sendTransaction` and `client.sendTransactions`.
+ * `client.signTransaction`, `client.signTransactions`, `client.sendTransaction`
+ * and `client.sendTransactions`.
  *
  * @example
  * ```ts
@@ -139,6 +143,11 @@ export function solanaRpc<TClusterUrl extends ClusterUrl>(config: SolanaRpcConfi
             solanaRpcConnection<TClusterUrl>(config),
             rpcGetMinimumBalance(),
             rpcTransactionPlanner(config.transactionConfig),
+            rpcTransactionPlanSigningExecutor({
+                estimateResourceLimits: config.transactionConfig?.estimateResourceLimits,
+                getComputeUnitLimitFromEstimate: config.getComputeUnitLimitFromEstimate,
+                maxConcurrency: config.maxConcurrency,
+            }),
             rpcTransactionPlanSendingExecutor({
                 estimateResourceLimits: config.transactionConfig?.estimateResourceLimits,
                 getComputeUnitLimitFromEstimate: config.getComputeUnitLimitFromEstimate,
