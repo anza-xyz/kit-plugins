@@ -17,7 +17,7 @@ pnpm install @solana/kit-plugin-litesvm
 
 ## `litesvm` plugin
 
-The `litesvm` plugin sets up a full LiteSVM client in a single call. It installs an SVM connection, airdrop support, minimum balance computation, transaction planning, and transaction execution on the client.
+The `litesvm` plugin sets up a full LiteSVM client in a single call. It installs an SVM connection, airdrop support, minimum balance computation, transaction planning, transaction signing, and transaction execution on the client.
 
 The client must have a `payer` set before applying this plugin.
 
@@ -47,6 +47,7 @@ All options are provided via a `LiteSvmConfig` object:
 - `airdrop`: Request SOL from the LiteSVM faucet.
 - `getMinimumBalance`: Compute minimum lamports for rent exemption.
 - `planTransaction(s)`: Plan instructions into transaction messages without executing them.
+- `signTransaction(s)`: Plan and partially sign instructions, instruction plans, or transaction messages without sending them.
 - `sendTransaction(s)`: Plan and execute instructions, instruction plans, or transaction messages in one call.
 - `transactionPlanner` / `transactionPlanExecutor` (deprecated): Fields kept for backward compatibility. Use `planTransaction(s)` / `sendTransaction(s)` instead.
 
@@ -216,6 +217,69 @@ function logComputeUnits(result: SuccessfulSingleTransactionPlanResult<LiteSvmSe
 Because the context is filled in as execution progresses, a transaction that fails or is canceled part way through carries only what was recorded before it stopped. Failed and canceled results therefore type the context as partial — only successful results guarantee every field.
 
 The `sendTransaction` and `sendTransactions` functions installed by this plugin propagate this context type, so their results carry a typed `LiteSvmSendContext` without any annotation needed.
+
+## `litesvmTransactionPlanSigningExecutor` plugin
+
+Adds `signTransaction` and `signTransactions` to the client, using an executor that sets a fresh LiteSVM blockhash lifetime and partially signs every transaction without sending it. Fully signed transactions are simulated without committing state changes, and their LiteSVM `TransactionMetadata` is included in the result context.
+
+### Usage
+
+The client must have an `svm` instance configured and a transaction planner installed before installing this plugin.
+
+```ts
+import { createClient } from '@solana/kit';
+import {
+    litesvmConnection,
+    litesvmTransactionPlanner,
+    litesvmTransactionPlanSigningExecutor,
+} from '@solana/kit-plugin-litesvm';
+import { generatedPayer } from '@solana/kit-plugin-signer';
+
+const client = await createClient()
+    .use(litesvmConnection())
+    .use(generatedPayer())
+    .use(litesvmTransactionPlanner())
+    .use(litesvmTransactionPlanSigningExecutor());
+
+const transactionPlanResult = await client.signTransactions(myInstructionPlan);
+```
+
+### Result context
+
+Each successful leaf includes the prepared message, partially signed transaction, and its Base64-encoded wire representation. The signature is present when the fee payer signed. If all required signatures are present, the executor also simulates the transaction and includes its `TransactionMetadata` or `FailedTransactionMetadata`. A failed simulation is informational and does not make signing fail. A genuinely partial transaction cannot be simulated while LiteSVM signature verification is enabled, so `transactionMetadata` is omitted.
+
+```ts
+import { SuccessfulSingleTransactionPlanResult } from '@solana/kit';
+import { isFailedTransaction, LiteSvmSignContext } from '@solana/kit-plugin-litesvm';
+
+function inspectSignedTransaction(result: SuccessfulSingleTransactionPlanResult<LiteSvmSignContext>) {
+    console.log(result.context.transactionBase64);
+    const metadata = result.context.transactionMetadata;
+    if (metadata && !isFailedTransaction(metadata)) {
+        console.log(metadata.logs());
+    }
+}
+```
+
+The executor replaces any lifetime already set on an input transaction message with LiteSVM's latest blockhash lifetime. A transaction-modifying signer may replace the transaction lifetime during signing, but a durable nonce set directly on the input message is not preserved.
+
+### Sequential dependencies
+
+Signing does not execute transaction plan dependencies. All leaves begin preparation independently, while the returned result still preserves the original plan shape. A fully signed transaction is simulated against the current LiteSVM state, so its simulation can fail if it depends on state changes from an earlier transaction in the plan. The signing result remains successful in that case and carries the `FailedTransactionMetadata` for inspection.
+
+```ts
+import { flattenTransactionPlanResult } from '@solana/kit';
+import { isFailedTransaction } from '@solana/kit-plugin-litesvm';
+
+const signedTransactions = await client.signTransactions(transactionPlan);
+// No transaction in the plan has been committed to the LiteSVM state.
+
+for (const result of flattenTransactionPlanResult(signedTransactions)) {
+    if (result.context.transactionMetadata && isFailedTransaction(result.context.transactionMetadata)) {
+        console.log(result.context.transactionMetadata.err());
+    }
+}
+```
 
 ## Deprecated plugins
 
