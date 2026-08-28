@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  '@solana/kit': ^8.1.0
+  '@solana/kit': ^8.2.0
 
 importers:
 
@@ -21,7 +21,7 @@ importers:
         specifier: ^0.1.1
         version: 0.1.1(oxfmt@0.65.0)(oxlint@1.80.0(oxlint-tsgolint@7.0.2001))
       '@solana/kit':
-        specifier: ^8.1.0
+        specifier: ^8.2.0
         version: 8.2.0(typescript@7.0.2)
       '@types/node':
         specifier: ^26
@@ -69,7 +69,7 @@ importers:
         specifier: ^0.16.0
         version: 0.16.0(@solana/kit@8.2.0(typescript@7.0.2))
       '@solana/kit':
-        specifier: ^8.1.0
+        specifier: ^8.2.0
         version: 8.2.0(typescript@7.0.2)
       '@solana/kit-plugin-rpc':
         specifier: workspace:*
@@ -84,7 +84,7 @@ importers:
         specifier: ^0.14.0
         version: 0.14.0(@solana/kit@8.2.0(typescript@7.0.2))
       '@solana/kit':
-        specifier: ^8.1.0
+        specifier: ^8.2.0
         version: 8.2.0(typescript@7.0.2)
       '@solana/kit-plugin-rpc':
         specifier: workspace:*
@@ -96,13 +96,13 @@ importers:
   packages/kit-plugin-instruction-plan:
     dependencies:
       '@solana/kit':
-        specifier: ^8.1.0
+        specifier: ^8.2.0
         version: 8.2.0(typescript@7.0.2)
 
   packages/kit-plugin-litesvm:
     dependencies:
       '@solana/kit':
-        specifier: ^8.1.0
+        specifier: ^8.2.0
         version: 8.2.0(typescript@7.0.2)
       '@solana/kit-plugin-instruction-plan':
         specifier: workspace:*
@@ -118,7 +118,7 @@ importers:
   packages/kit-plugin-rpc:
     dependencies:
       '@solana/kit':
-        specifier: ^8.1.0
+        specifier: ^8.2.0
         version: 8.2.0(typescript@7.0.2)
       '@solana/kit-plugin-instruction-plan':
         specifier: workspace:*
@@ -127,13 +127,13 @@ importers:
   packages/kit-plugin-signer:
     dependencies:
       '@solana/kit':
-        specifier: ^8.1.0
+        specifier: ^8.2.0
         version: 8.2.0(typescript@7.0.2)
 
   packages/kit-plugin-wallet:
     dependencies:
       '@solana/kit':
-        specifier: ^8.1.0
+        specifier: ^8.2.0
         version: 8.2.0(typescript@7.0.2)
       '@solana/wallet-account-signer':
         specifier: ^8.1.0
@@ -1140,13 +1140,13 @@ packages:
   '@solana-program/system@0.14.0':
     resolution: {integrity: sha512-Pjs2RINZHYmk/pqWNBCuQmfNjZT9woPJ/w7QkzzCSwcqcokbARtxsnIdgj4lJVxvr1DuxG8JGIbKnq6z1QRY6Q==}
     peerDependencies:
-      '@solana/kit': ^8.1.0
+      '@solana/kit': ^8.2.0
 
   '@solana-program/token@0.16.0':
     resolution: {integrity: sha512-VuFIu5vXsw1zwqls4/sGB88234oucmpuig553A33UnrbYnPZ8yXmqLYULBD92/k1pCGnMK+NMLWvsKzlZQ/1Kw==}
     engines: {node: '>=24.0.0'}
     peerDependencies:
-      '@solana/kit': ^8.1.0
+      '@solana/kit': ^8.2.0
 
   '@solana/accounts@8.2.0':
     resolution: {integrity: sha512-An3BICrQJQ7jR5EIgXzYnaKyCE7+ZusW9xX8m6Vj7U2cKo8t6Y3PTQ+aMjEajwzsQfxEL8QnpClFC9hdoIu7MA==}
@@ -1502,7 +1502,7 @@ packages:
     resolution: {integrity: sha512-CeaFWDkdGpIAsCvriUpIjndu5S7MwdpWaRXM7xkXveycn/zXX7LJv7/o5Bl5KB1AcQ5EnvWMA4fQYo6BFcn1ew==}
     engines: {node: '>=20.18.0'}
     peerDependencies:
-      '@solana/kit': ^8.1.0
+      '@solana/kit': ^8.2.0
       '@tanstack/react-query': ^5.0.0
       react: '>=18'
       swr: ^2.5.1
