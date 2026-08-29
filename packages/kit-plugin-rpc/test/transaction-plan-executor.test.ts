@@ -24,6 +24,7 @@ import {
     singleInstructionPlan,
     singleTransactionPlan,
     SingleTransactionPlanResult,
+    SOLANA_ERROR__FAILED_TO_SEND_TRANSACTIONS,
     SOLANA_ERROR__FAILED_TO_SIGN_TRANSACTIONS,
     SOLANA_ERROR__INVARIANT_VIOLATION__INVALID_TRANSACTION_PLAN_KIND,
     SolanaRpcApi,
@@ -702,6 +703,49 @@ describe('rpcTransactionPlanSendingExecutor', () => {
         resolvers[2]();
         resolvers[3]();
         await promise;
+    });
+
+    it('does not prepare or send queued transactions after the abort signal fires', async () => {
+        const payer = await generateKeyPairSigner();
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        const simulateTransaction = vi.fn().mockResolvedValue({ value: { unitsConsumed: 42n } });
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: simulateTransaction }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
+        const sendReleasers: Array<() => void> = [];
+        const sendAndConfirmTransaction = vi.fn().mockImplementation(() => {
+            return new Promise<void>((_resolve, reject) => {
+                sendReleasers.push(() => reject(new Error('released')));
+            });
+        });
+        (sendAndConfirmTransactionFactory as Mock).mockReturnValueOnce(sendAndConfirmTransaction);
+
+        const client = createClient()
+            .use(() => ({ payer, rpc, rpcSubscriptions }))
+            .use(rpcTransactionPlanner())
+            .use(rpcTransactionPlanSendingExecutor({ maxConcurrency: 1 }));
+        const singlePlan = await client.transactionPlanner(singleInstructionPlan(MOCK_INSTRUCTION));
+        const transactionPlan = parallelTransactionPlan([singlePlan, singlePlan]);
+        const abortController = new AbortController();
+
+        const pendingError = client
+            .sendTransactions(transactionPlan, { abortSignal: abortController.signal })
+            .catch((error: unknown) => error);
+        await vi.waitFor(() => expect(sendAndConfirmTransaction).toHaveBeenCalledOnce());
+        abortController.abort();
+        // Fail the in-flight transaction so the overall call settles.
+        sendReleasers[0]();
+        const error = await pendingError;
+        assert(isSolanaError(error, SOLANA_ERROR__FAILED_TO_SEND_TRANSACTIONS));
+
+        // The concurrency slot held by the first transaction is now free, so the
+        // queued second one gets its turn; verify it bails out without doing any work.
+        await new Promise(resolve => setTimeout(resolve, 0));
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(getLatestBlockhash).toHaveBeenCalledOnce();
+        expect(sendAndConfirmTransaction).toHaveBeenCalledOnce();
     });
 
     it('requires an RPC API on the client', () => {
