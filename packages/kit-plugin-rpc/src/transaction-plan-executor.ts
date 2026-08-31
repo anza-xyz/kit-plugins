@@ -367,6 +367,10 @@ function createSendingExecutor(
 
     return createTransactionPlanExecutor<RpcSendContext>({
         executeTransactionMessage: limitFunction(async (context, transactionMessage, executorConfig) => {
+            // The executor has already reported this leaf as failed if the signal
+            // aborted while this call was waiting for a concurrency slot, so bail
+            // out before making orphaned RPC requests on its behalf.
+            executorConfig?.abortSignal?.throwIfAborted();
             const { value: latestBlockhash } = await client.rpc.getLatestBlockhash().send(executorConfig);
 
             // `estimateAndSetResourceLimits` only invokes our estimator when a
