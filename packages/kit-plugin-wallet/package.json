@@ -83,7 +83,7 @@
     },
     "devDependencies": {
         "@solana/react": "^8.0.0",
-        "@testing-library/react": "^16.0.0",
+        "@testing-library/react": "^16.3.3",
         "@types/react": "^19.2.18",
         "@wallet-standard/errors": "^0.1.2",
         "react": "^19.2.8",
