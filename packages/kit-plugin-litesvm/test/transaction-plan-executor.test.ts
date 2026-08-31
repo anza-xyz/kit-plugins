@@ -1,37 +1,64 @@
 import { getTransferSolInstruction } from '@solana-program/system';
 import {
     Address,
+    address,
     appendTransactionMessageInstruction,
     createClient,
     createTransactionMessage,
     extendClient,
+    flattenTransactionPlanResult,
     generateKeyPairSigner,
+    getBase64EncodedWireTransaction,
     getSignatureFromTransaction,
     isSolanaError,
     lamports,
+    Nonce,
+    parallelTransactionPlan,
     passthroughFailedTransactionPlanExecution,
+    sequentialTransactionPlan,
+    setTransactionMessageFeePayer,
     setTransactionMessageFeePayerSigner,
+    setTransactionMessageLifetimeUsingBlockhash,
     singleInstructionPlan,
     singleTransactionPlan,
     SingleTransactionPlan,
     SingleTransactionPlanResult,
     SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_INSTRUCTION_DATA,
+    SOLANA_ERROR__FAILED_TO_SIGN_TRANSACTIONS,
     SOLANA_ERROR__INSTRUCTION_PLANS__FAILED_TO_EXECUTE_TRANSACTION_PLAN,
     SOLANA_ERROR__TRANSACTION_ERROR__ACCOUNT_NOT_FOUND,
     SolanaError,
+    Transaction,
+    TransactionModifyingSigner,
+    TransactionPlanResult,
+    TransactionSigner,
+    TransactionWithinSizeLimit,
+    TransactionWithLifetime,
+    type Blockhash,
 } from '@solana/kit';
 import type { FailedTransactionMetadata, LiteSVM, TransactionMetadata } from 'litesvm';
-import { describe, expect, it, vi } from 'vitest';
+import { assert, describe, expect, it, vi } from 'vitest';
 
 import {
+    isFailedTransaction,
     litesvmConnection,
     litesvmTransactionPlanExecutor,
     litesvmTransactionPlanner,
     litesvmTransactionPlanSendingExecutor,
+    litesvmTransactionPlanSigningExecutor,
+    type LiteSvmSignContext,
     type LiteSvmSendContext,
 } from '../src';
 
 const MOCK_INSTRUCTION = { programAddress: '11111111111111111111111111111111' as Address };
+const MOCK_BLOCKHASH = {
+    blockhash: '11111111111111111111111111111111' as Blockhash,
+    lastValidBlockHeight: 0n,
+};
+
+function createMockSetLifetime() {
+    return vi.fn().mockImplementation(message => setTransactionMessageLifetimeUsingBlockhash(MOCK_BLOCKHASH, message));
+}
 
 describe('litesvmTransactionPlanSendingExecutor', () => {
     describe('with mocks', () => {
@@ -362,6 +389,272 @@ describe('litesvmTransactionPlanSendingExecutor', () => {
             expect(metadata).toBeDefined();
             expect(metadata.err()).toBeDefined();
         });
+    });
+});
+
+describe('litesvmTransactionPlanSigningExecutor', () => {
+    it('adds signing functions without adding sending functions', async () => {
+        const payer = await generateKeyPairSigner();
+        const svm = {} as LiteSVM;
+        const client = createClient()
+            .use(() => ({ payer, svm }))
+            .use(litesvmTransactionPlanner())
+            .use(litesvmTransactionPlanSigningExecutor());
+
+        expect(client.signTransaction).toBeTypeOf('function');
+        expect(client.signTransactions).toBeTypeOf('function');
+        expect(client).not.toHaveProperty('sendTransaction');
+        expect(client).not.toHaveProperty('transactionPlanExecutor');
+    });
+
+    it('partially signs and simulates a fully signed transaction without sending it', async () => {
+        const payer = await generateKeyPairSigner();
+        const setTransactionMessageLifetimeUsingLatestBlockhash = createMockSetLifetime();
+        const transactionMetadata = { logs: () => ['simulated'] } as TransactionMetadata;
+        const simulateTransaction = vi.fn().mockReturnValue({ meta: () => transactionMetadata });
+        const sendTransaction = vi.fn();
+        const svm = {
+            sendTransaction,
+            setTransactionMessageLifetimeUsingLatestBlockhash,
+            simulateTransaction,
+        } as unknown as LiteSVM;
+        const client = createClient()
+            .use(() => ({ payer, svm }))
+            .use(litesvmTransactionPlanner())
+            .use(litesvmTransactionPlanSigningExecutor());
+
+        const result = await client.signTransaction(singleInstructionPlan(MOCK_INSTRUCTION));
+
+        expect(result.context.message.lifetimeConstraint).toEqual(MOCK_BLOCKHASH);
+        expect(result.context.transaction).toBeDefined();
+        expect(result.context.transactionBase64).toBe(getBase64EncodedWireTransaction(result.context.transaction));
+        expect(result.context.signature).toBe(getSignatureFromTransaction(result.context.transaction));
+        expect(result.context.transactionMetadata).toBe(transactionMetadata);
+        expect(setTransactionMessageLifetimeUsingLatestBlockhash).toHaveBeenCalledOnce();
+        expect(simulateTransaction).toHaveBeenCalledExactlyOnceWith(result.context.transaction);
+        expect(sendTransaction).not.toHaveBeenCalled();
+    });
+
+    it('returns a partial transaction without simulation metadata when signatures are missing', async () => {
+        const payer = await generateKeyPairSigner();
+        const unsignedFeePayer = address('11111111111111111111111111111111');
+        const simulateTransaction = vi.fn();
+        const svm = {
+            setTransactionMessageLifetimeUsingLatestBlockhash: createMockSetLifetime(),
+            simulateTransaction,
+        } as unknown as LiteSVM;
+        const client = createClient()
+            .use(() => ({ payer, svm }))
+            .use(litesvmTransactionPlanner())
+            .use(litesvmTransactionPlanSigningExecutor());
+        const message = setTransactionMessageFeePayer(unsignedFeePayer, createTransactionMessage({ version: 0 }));
+
+        const result = await client.signTransaction(message);
+
+        expect(result.context.transaction.signatures[unsignedFeePayer]).toBeNull();
+        expect(result.context.transactionBase64).toBe(getBase64EncodedWireTransaction(result.context.transaction));
+        expect(result.context.signature).toBeUndefined();
+        expect(result.context.transactionMetadata).toBeUndefined();
+        expect(result.context).not.toHaveProperty('transactionMetadata');
+        expect(simulateTransaction).not.toHaveBeenCalled();
+    });
+
+    it('retains failed simulation metadata in a successful result context', async () => {
+        const payer = await generateKeyPairSigner();
+        const transactionMetadata = { err: () => 2 } as FailedTransactionMetadata;
+        const svm = {
+            setTransactionMessageLifetimeUsingLatestBlockhash: createMockSetLifetime(),
+            simulateTransaction: vi.fn().mockReturnValue(transactionMetadata),
+        } as unknown as LiteSVM;
+        const client = createClient()
+            .use(() => ({ payer, svm }))
+            .use(litesvmTransactionPlanner())
+            .use(litesvmTransactionPlanSigningExecutor());
+        const message = setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }));
+
+        const result = await client.signTransaction(message);
+
+        expect(result.context.transactionMetadata).toBe(transactionMetadata);
+    });
+
+    it('does not fail sequential plans when their simulations fail', async () => {
+        const payer = await generateKeyPairSigner();
+        const transactionMetadata = { err: () => 2 } as FailedTransactionMetadata;
+        const svm = {
+            setTransactionMessageLifetimeUsingLatestBlockhash: createMockSetLifetime(),
+            simulateTransaction: vi.fn().mockReturnValue(transactionMetadata),
+        } as unknown as LiteSVM;
+        const client = createClient()
+            .use(() => ({ payer, svm }))
+            .use(litesvmTransactionPlanner())
+            .use(litesvmTransactionPlanSigningExecutor());
+        const message = setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }));
+
+        const result = await client.signTransactions(sequentialTransactionPlan([message, message]));
+        const leaves = flattenTransactionPlanResult(result);
+
+        expect(leaves.map(leaf => leaf.status)).toEqual(['successful', 'successful']);
+        expect(leaves.map(leaf => leaf.context.transactionMetadata)).toEqual([
+            transactionMetadata,
+            transactionMetadata,
+        ]);
+    });
+
+    it('preserves a lifetime changed by a transaction-modifying signer', async () => {
+        const nonceAccountAddress = address('11111111111111111111111111111111');
+        const lifetimeConstraint = {
+            nonce: '11111111111111111111111111111111' as Nonce,
+            nonceAccountAddress,
+        };
+        const modifyingPayer = {
+            address: nonceAccountAddress,
+            modifyAndSignTransactions: vi.fn(
+                (transactions: readonly (Transaction | (Transaction & TransactionWithLifetime))[]) =>
+                    Promise.resolve(
+                        transactions.map(
+                            transaction =>
+                                ({
+                                    ...transaction,
+                                    lifetimeConstraint,
+                                }) as Transaction & TransactionWithinSizeLimit & TransactionWithLifetime,
+                        ),
+                    ),
+            ),
+        } satisfies TransactionModifyingSigner;
+        const svm = {
+            setTransactionMessageLifetimeUsingLatestBlockhash: createMockSetLifetime(),
+            simulateTransaction: vi.fn(),
+        } as unknown as LiteSVM;
+        const client = createClient()
+            .use(() => ({ payer: modifyingPayer, svm }))
+            .use(litesvmTransactionPlanner())
+            .use(litesvmTransactionPlanSigningExecutor());
+        const message = setTransactionMessageFeePayerSigner(modifyingPayer, createTransactionMessage({ version: 0 }));
+
+        const result = await client.signTransaction(message);
+
+        expect(result.context.message.lifetimeConstraint).toEqual(MOCK_BLOCKHASH);
+        expect(result.context.transaction.lifetimeConstraint).toEqual(lifetimeConstraint);
+        expect(modifyingPayer.modifyAndSignTransactions).toHaveBeenCalledOnce();
+    });
+
+    it('attempts every sequential leaf and reports successful siblings when one signer fails', async () => {
+        const payer = await generateKeyPairSigner();
+        const signingError = new Error('signing failed');
+        const failingPayer = {
+            address: address('11111111111111111111111111111111'),
+            signTransactions: vi.fn().mockRejectedValue(signingError),
+        } satisfies TransactionSigner;
+        const svm = {
+            setTransactionMessageLifetimeUsingLatestBlockhash: createMockSetLifetime(),
+            simulateTransaction: vi.fn().mockReturnValue({ meta: () => ({}) }),
+        } as unknown as LiteSVM;
+        const client = createClient()
+            .use(() => ({ payer, svm }))
+            .use(litesvmTransactionPlanner())
+            .use(litesvmTransactionPlanSigningExecutor());
+        const failingMessage = setTransactionMessageFeePayerSigner(
+            failingPayer,
+            createTransactionMessage({ version: 0 }),
+        );
+        const successfulMessage = setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }));
+        const transactionPlan = sequentialTransactionPlan([failingMessage, successfulMessage]);
+
+        const error = await client.signTransactions(transactionPlan).catch((error: unknown) => error);
+
+        assert(isSolanaError(error, SOLANA_ERROR__FAILED_TO_SIGN_TRANSACTIONS));
+        const result = (error.context as { transactionPlanResult: TransactionPlanResult<LiteSvmSignContext> })
+            .transactionPlanResult;
+        expect(flattenTransactionPlanResult(result).map(leaf => leaf.status)).toEqual(['failed', 'successful']);
+        expect(failingPayer.signTransactions).toHaveBeenCalledOnce();
+    });
+
+    it('preserves the context recorded before a signer failure on the failed result', async () => {
+        const signingError = new Error('signing failed');
+        const failingPayer = {
+            address: address('11111111111111111111111111111111'),
+            signTransactions: vi.fn().mockRejectedValue(signingError),
+        } satisfies TransactionSigner;
+        const svm = {
+            setTransactionMessageLifetimeUsingLatestBlockhash: createMockSetLifetime(),
+            simulateTransaction: vi.fn(),
+        } as unknown as LiteSVM;
+        const client = createClient()
+            .use(() => ({ payer: failingPayer, svm }))
+            .use(litesvmTransactionPlanner())
+            .use(litesvmTransactionPlanSigningExecutor());
+        const message = setTransactionMessageFeePayerSigner(failingPayer, createTransactionMessage({ version: 0 }));
+
+        const error = await client.signTransactions(message).catch((error: unknown) => error);
+
+        assert(isSolanaError(error, SOLANA_ERROR__FAILED_TO_SIGN_TRANSACTIONS));
+        const result = (error.context as { transactionPlanResult: TransactionPlanResult<LiteSvmSignContext> })
+            .transactionPlanResult;
+        const [failedLeaf] = flattenTransactionPlanResult(result);
+        assert(failedLeaf.status === 'failed');
+        expect(failedLeaf.error).toBe(signingError);
+        expect(failedLeaf.context.message?.lifetimeConstraint).toEqual(MOCK_BLOCKHASH);
+        expect(failedLeaf.context.transaction).toBeUndefined();
+        expect(failedLeaf.context.transactionBase64).toBeUndefined();
+        expect(failedLeaf.context.signature).toBeUndefined();
+    });
+
+    it('preserves nested transaction plan shape while signing every leaf', async () => {
+        const payer = await generateKeyPairSigner();
+        const svm = {
+            setTransactionMessageLifetimeUsingLatestBlockhash: createMockSetLifetime(),
+            simulateTransaction: vi.fn().mockReturnValue({ meta: () => ({}) }),
+        } as unknown as LiteSVM;
+        const client = createClient()
+            .use(() => ({ payer, svm }))
+            .use(litesvmTransactionPlanner())
+            .use(litesvmTransactionPlanSigningExecutor());
+        const message = setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }));
+        const transactionPlan = parallelTransactionPlan([
+            sequentialTransactionPlan([message, message]),
+            sequentialTransactionPlan([message, message]),
+        ]);
+
+        const result = await client.signTransactions(transactionPlan);
+
+        expect(result.kind).toBe('parallel');
+        expect(flattenTransactionPlanResult(result)).toHaveLength(4);
+        expect(flattenTransactionPlanResult(result).every(leaf => leaf.status === 'successful')).toBe(true);
+    });
+
+    if (__NODEJS__) {
+        it('simulates a real fully signed transaction without committing state', async () => {
+            const payer = await generateKeyPairSigner();
+            const destination = await generateKeyPairSigner();
+            const client = createClient()
+                .use(litesvmConnection())
+                .use(client => extendClient(client, { payer }))
+                .use(litesvmTransactionPlanner())
+                .use(litesvmTransactionPlanSigningExecutor());
+            client.svm.airdrop(payer.address, lamports(1_000_000_000n));
+            const instruction = getTransferSolInstruction({
+                amount: lamports(100_000_000n),
+                destination: destination.address,
+                source: payer,
+            });
+
+            const result = await client.signTransaction(instruction);
+
+            expect(result.context.transactionMetadata).toBeDefined();
+            expect(isFailedTransaction(result.context.transactionMetadata!)).toBe(false);
+            expect(client.svm.getBalance(destination.address)).toBeNull();
+        });
+    }
+
+    it('requires an svm instance on the client', async () => {
+        const payer = await generateKeyPairSigner();
+        expect(() =>
+            createClient()
+                .use(() => ({ payer }))
+                .use(litesvmTransactionPlanner())
+                // @ts-expect-error Missing svm on the client.
+                .use(litesvmTransactionPlanSigningExecutor()),
+        ).toThrow(/A LiteSVM instance is required/);
     });
 });
 

@@ -150,5 +150,5 @@ const client = createClient()
 
 For ready-to-use transaction planner and executor implementations, see:
 
-- [`@solana/kit-plugin-rpc`](https://www.npmjs.com/package/@solana/kit-plugin-rpc) — provides the `rpcTransactionPlanner` and `rpcTransactionPlanSendingExecutor` plugins for RPC-based transaction planning and execution.
-- [`@solana/kit-plugin-litesvm`](https://www.npmjs.com/package/@solana/kit-plugin-litesvm) — provides the `litesvmTransactionPlanner` and `litesvmTransactionPlanSendingExecutor` plugins for LiteSVM-based transaction planning and execution.
+- [`@solana/kit-plugin-rpc`](https://www.npmjs.com/package/@solana/kit-plugin-rpc) — provides RPC-backed transaction planning, signing, and sending plugins.
+- [`@solana/kit-plugin-litesvm`](https://www.npmjs.com/package/@solana/kit-plugin-litesvm) — provides LiteSVM-backed transaction planning, signing, and sending plugins.
