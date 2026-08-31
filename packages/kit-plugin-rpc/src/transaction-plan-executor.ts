@@ -4,6 +4,7 @@ import {
     ClientWithRpcSubscriptions,
     ClientWithTransactionPlanning,
     createTransactionPlanExecutor,
+    createTransactionPlanExecutorWithConcurrentLeaves,
     estimateAndSetResourceLimitsFactory,
     estimateResourceLimitsFactory,
     GetEpochInfoApi,
@@ -11,6 +12,7 @@ import {
     GetSignatureStatusesApi,
     getSignatureFromTransaction,
     isSolanaError,
+    partiallySignTransactionMessageWithSigners,
     pipe,
     ResourceLimitsEstimate,
     SendableTransaction,
@@ -29,9 +31,16 @@ import {
     TransactionMessageWithFeePayer,
     TransactionPlanExecutor,
     TransactionPlanExecutorConfig,
+    TransactionWithinSizeLimit,
     TransactionWithLifetime,
+    Base64EncodedWireTransaction,
+    getBase64EncodedWireTransaction,
 } from '@solana/kit';
-import { transactionPlanExecutor, transactionPlanSendingExecutor } from '@solana/kit-plugin-instruction-plan';
+import {
+    transactionPlanExecutor,
+    transactionPlanSendingExecutor,
+    transactionPlanSigningExecutor,
+} from '@solana/kit-plugin-instruction-plan';
 
 /**
  * A plugin that adds `sendTransaction` and `sendTransactions` to the client
@@ -79,7 +88,48 @@ export function rpcTransactionPlanSendingExecutor(config: RpcTransactionPlanExec
             ClientWithTransactionPlanning,
     >(
         client: T,
-    ) => transactionPlanSendingExecutor(createExecutor(client, config))(client);
+    ) => transactionPlanSendingExecutor(createSendingExecutor(client, config))(client);
+}
+
+/**
+ * A plugin that adds `signTransaction` and `signTransactions` to the client
+ * using a transaction plan executor backed by RPC.
+ *
+ * The executor fetches a blockhash, estimates resource limits when needed, and
+ * partially signs every transaction in the plan. Transaction plan execution
+ * constraints are ignored during signing, while transaction preparation and
+ * signing respect `maxConcurrency`.
+ *
+ * Since signing goes through the client's planning functions,
+ * {@link rpcTransactionPlanner} or another `transactionPlanner` plugin must be
+ * installed first.
+ *
+ * @param config - Optional configuration for the signing executor.
+ * @returns A plugin that adds `client.signTransaction` and `client.signTransactions`.
+ * @throws If the client has no RPC or no transaction planning functions set.
+ *
+ * @example
+ * ```ts
+ * import { createClient } from '@solana/kit';
+ * import { rpcTransactionPlanSigningExecutor, rpcTransactionPlanner, solanaRpcConnection } from '@solana/kit-plugin-rpc';
+ * import { generatedPayer } from '@solana/kit-plugin-signer';
+ *
+ * const client = await createClient()
+ *     .use(solanaRpcConnection({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
+ *     .use(generatedPayer())
+ *     .use(rpcTransactionPlanner())
+ *     .use(rpcTransactionPlanSigningExecutor());
+ *
+ * const result = await client.signTransactions(myInstructionPlan);
+ * ```
+ *
+ * @see {@link rpcTransactionPlanner}
+ * @see {@link rpcTransactionPlanSendingExecutor}
+ */
+export function rpcTransactionPlanSigningExecutor(config: RpcTransactionPlanSigningExecutorConfig = {}) {
+    return <T extends ClientWithRpc<GetLatestBlockhashApi & SimulateTransactionApi> & ClientWithTransactionPlanning>(
+        client: T,
+    ) => transactionPlanSigningExecutor(createSigningExecutor(client, config))(client);
 }
 
 /**
@@ -122,7 +172,7 @@ export function rpcTransactionPlanExecutor(config: RpcTransactionPlanExecutorCon
             ClientWithRpcSubscriptions<SignatureNotificationsApi & SlotNotificationsApi>,
     >(
         client: T,
-    ) => transactionPlanExecutor(createExecutor(client, config))(client);
+    ) => transactionPlanExecutor(createSendingExecutor(client, config))(client);
 }
 
 /**
@@ -194,6 +244,33 @@ export type RpcTransactionPlanExecutorConfig = {
 };
 
 /**
+ * Configuration for {@link rpcTransactionPlanSigningExecutor}.
+ *
+ * Signing uses the same resource limit estimation options as
+ * {@link rpcTransactionPlanSendingExecutor}, but it has no preflight behavior
+ * because transactions are not sent.
+ *
+ * @see {@link rpcTransactionPlanSigningExecutor}
+ */
+export type RpcTransactionPlanSigningExecutorConfig = {
+    /**
+     * Whether to estimate and set resource limits by simulating each transaction
+     * before signing. Defaults to `true`.
+     */
+    estimateResourceLimits?: boolean;
+    /**
+     * Maps estimated compute unit consumption to the limit set on the
+     * transaction. The result is capped at 1,400,000 compute units.
+     */
+    getComputeUnitLimitFromEstimate?: (estimatedComputeUnits: number) => number;
+    /**
+     * The maximum number of transactions prepared and signed concurrently
+     * across all calls to this signing executor. Defaults to 10.
+     */
+    maxConcurrency?: number;
+};
+
+/**
  * The context carried by transaction plan results from
  * {@link rpcTransactionPlanSendingExecutor}.
  *
@@ -226,11 +303,45 @@ export type RpcSendContext = {
 };
 
 /**
+ * The context carried by transaction plan results from
+ * {@link rpcTransactionPlanSigningExecutor}.
+ *
+ * The executor records the transaction message after setting its blockhash and
+ * resource limits, plus the transaction after applying every available signer
+ * and its Base64-encoded wire representation. The signature is present when
+ * the fee payer signed, even if other required signatures are still missing.
+ *
+ * @remarks
+ * These properties are only guaranteed on successful results. Failed and
+ * canceled results carry the values recorded before signing stopped.
+ *
+ * @example
+ * ```ts
+ * import { SuccessfulSingleTransactionPlanResult } from '@solana/kit';
+ * import { RpcSignContext } from '@solana/kit-plugin-rpc';
+ *
+ * function inspectSignedTransaction(result: SuccessfulSingleTransactionPlanResult<RpcSignContext>) {
+ *     console.log(result.context.transactionBase64);
+ * }
+ * ```
+ *
+ * @see {@link rpcTransactionPlanSigningExecutor}
+ */
+export type RpcSignContext = {
+    message: TransactionMessage & TransactionMessageWithFeePayer & TransactionMessageWithBlockhashLifetime;
+    signature?: Signature;
+    transaction: Transaction & TransactionWithinSizeLimit & TransactionWithLifetime;
+    transactionBase64: Base64EncodedWireTransaction;
+};
+
+type LatestBlockhashResponse = ReturnType<GetLatestBlockhashApi['getLatestBlockhash']>;
+
+/**
  * Creates the transaction plan executor installed by
  * {@link rpcTransactionPlanSendingExecutor}, which signs and sends planned
  * transaction messages using the client's RPC and RPC Subscriptions.
  */
-function createExecutor(
+function createSendingExecutor(
     client: ClientWithRpc<
         GetEpochInfoApi & GetLatestBlockhashApi & GetSignatureStatusesApi & SendTransactionApi & SimulateTransactionApi
     > &
@@ -299,6 +410,82 @@ function createExecutor(
     } satisfies TransactionPlanExecutorConfig<RpcSendContext>);
 }
 
+/** Creates the transaction plan executor installed by {@link rpcTransactionPlanSigningExecutor}. */
+function createSigningExecutor(
+    client: ClientWithRpc<GetLatestBlockhashApi & SimulateTransactionApi>,
+    config: RpcTransactionPlanSigningExecutorConfig,
+): TransactionPlanExecutor<RpcSignContext> {
+    if (!client.rpc) {
+        throw new Error(
+            'An RPC instance is required on the client to create the RPC transaction plan signing executor. ' +
+                'Please add the RPC plugin to your client before using this plugin.',
+        );
+    }
+
+    const shouldEstimateResourceLimits = config.estimateResourceLimits ?? true;
+    const getComputeUnitLimitFromEstimate =
+        config.getComputeUnitLimitFromEstimate ?? getDefaultComputeUnitLimitFromEstimate;
+    const estimateResourceLimits = estimateResourceLimitsFactory({ rpc: client.rpc });
+    const estimateAndSetResourceLimits = estimateAndSetResourceLimitsFactory(
+        bufferAndRecoverResourceLimits(
+            estimateResourceLimits,
+            getComputeUnitLimitFromEstimate,
+            /* skipPreflight */ false,
+        ),
+    );
+
+    const executeTransactionMessage = limitFunction(
+        async (
+            context: Partial<RpcSignContext>,
+            transactionMessage: TransactionMessage & TransactionMessageWithFeePayer,
+            executorConfig: NonNullable<Parameters<TransactionPlanExecutor<RpcSignContext>>[1]>,
+            getLatestBlockhashPromise: () => Promise<LatestBlockhashResponse>,
+        ) => {
+            // The executor has already reported this leaf as failed if the signal
+            // aborted while this call was waiting for a concurrency slot, so bail
+            // out before making orphaned RPC requests on its behalf.
+            executorConfig.abortSignal?.throwIfAborted();
+            // Fetch lazily so plans without leaves do not make an orphaned RPC request.
+            const { value: latestBlockhash } = await getLatestBlockhashPromise();
+            let message = setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, transactionMessage);
+            context.message = message;
+            if (shouldEstimateResourceLimits) {
+                message = await estimateAndSetResourceLimits(message, executorConfig);
+                context.message = message;
+            }
+
+            const transaction = await partiallySignTransactionMessageWithSigners(message, executorConfig);
+            context.transaction = transaction;
+            const transactionBase64 = getBase64EncodedWireTransaction(transaction);
+            context.transactionBase64 = transactionBase64;
+            const signature = Object.values(transaction.signatures)[0]
+                ? getSignatureFromTransaction(transaction)
+                : undefined;
+            if (signature) {
+                context.signature = signature;
+            }
+            return {
+                ...(signature ? { signature } : {}),
+                message,
+                transaction,
+                transactionBase64,
+            };
+        },
+        config.maxConcurrency ?? 10,
+    );
+
+    return async (transactionPlan, executorConfig = {}) => {
+        let latestBlockhashPromise: Promise<LatestBlockhashResponse> | undefined;
+        const getLatestBlockhashPromise = () =>
+            (latestBlockhashPromise ??= client.rpc.getLatestBlockhash().send(executorConfig));
+        const executor = createTransactionPlanExecutorWithConcurrentLeaves<RpcSignContext>({
+            executeTransactionMessage: (context, transactionMessage) =>
+                executeTransactionMessage(context, transactionMessage, executorConfig, getLatestBlockhashPromise),
+        });
+        return await executor(transactionPlan, executorConfig);
+    };
+}
+
 /**
  * The minimum compute unit buffer added on top of the estimate by
  * {@link getDefaultComputeUnitLimitFromEstimate}.
@@ -348,8 +535,8 @@ function getDefaultComputeUnitLimitFromEstimate(estimatedComputeUnits: number): 
  * The returned estimator is intended to be passed to
  * {@link estimateAndSetResourceLimitsFactory}, which only calls it when a
  * resource limit actually needs estimating. The `onSimulate` callback is
- * therefore invoked exactly once an estimation simulation has been performed
- * and we are proceeding to send (i.e. not on a non-recoverable failure).
+ * optional. When provided, it is invoked exactly once after a simulation has
+ * produced limits (i.e. not on a non-recoverable failure).
  *
  * The `getComputeUnitLimitFromEstimate` function is applied to the compute unit
  * limit only, to account for variations between simulation and execution. It is
@@ -365,14 +552,14 @@ function getDefaultComputeUnitLimitFromEstimate(estimatedComputeUnits: number): 
  *   {@link estimateResourceLimitsFactory}.
  * @param getComputeUnitLimitFromEstimate - Maps the estimated compute units to the limit to set.
  * @param skipPreflight - Whether to recover from failed simulations using consumed resources.
- * @param onSimulate - Called once a simulation has been performed and an estimate produced.
+ * @param onSimulate - Optionally called once a simulation has been performed and an estimate produced.
  * @returns An estimator that applies a compute unit buffer and recovery behaviour.
  */
 function bufferAndRecoverResourceLimits(
     estimateResourceLimits: ReturnType<typeof estimateResourceLimitsFactory>,
     getComputeUnitLimitFromEstimate: (estimatedComputeUnits: number) => number,
     skipPreflight: boolean,
-    onSimulate: () => void,
+    onSimulate?: () => void,
 ): ReturnType<typeof estimateResourceLimitsFactory> {
     return async (transactionMessage, config) => {
         let estimate: ResourceLimitsEstimate<typeof transactionMessage>;
@@ -401,9 +588,9 @@ function bufferAndRecoverResourceLimits(
 
         // Reaching this point means a simulation was performed (either it
         // succeeded, or it failed and we recovered from it) and we are
-        // proceeding to send, so signal it. A non-recoverable failure throws
+        // continuing, so signal it. A non-recoverable failure throws
         // above and never gets here.
-        onSimulate();
+        onSimulate?.();
 
         // Apply the compute unit buffer to the estimated compute unit limit,
         // rounding up to an integer and capping at the per-transaction maximum.

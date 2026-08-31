@@ -17,7 +17,7 @@ pnpm install @solana/kit-plugin-rpc
 
 ## `solanaRpc` plugin
 
-The `solanaRpc` plugin sets up a full Solana RPC client in a single call. It installs an RPC connection, RPC Subscriptions, minimum balance computation, transaction planning, and transaction execution on the client.
+The `solanaRpc` plugin sets up a full Solana RPC client in a single call. It installs an RPC connection, RPC Subscriptions, minimum balance computation, transaction planning, transaction signing, and transaction execution on the client.
 
 The client must have a `payer` set before applying this plugin.
 
@@ -42,7 +42,7 @@ All options are provided via a `SolanaRpcConfig` object:
 - `rpcConfig`: Optional configuration forwarded to `createSolanaRpc`.
 - `rpcSubscriptionsConfig`: Optional configuration forwarded to `createSolanaRpcSubscriptions`.
 - `transactionConfig`: Options to configure how transaction messages are created. See the `rpcTransactionPlanner` options below.
-- `maxConcurrency`: Maximum number of concurrent transaction executions. Defaults to 10.
+- `maxConcurrency`: Maximum number of concurrent transaction executions in the sending executor and transaction preparations in the signing executor. The executors have independent limits. Defaults to 10.
 - `skipPreflight`: Whether to always skip preflight simulation. Defaults to `false`.
 
 ### Features
@@ -52,6 +52,7 @@ All options are provided via a `SolanaRpcConfig` object:
 - `getMinimumBalance`: Compute minimum lamports for rent exemption.
 - `planTransaction(s)`: Plan instructions into transaction messages without executing them.
 - `sendTransaction(s)`: Plan and execute instructions, instruction plans, or transaction messages in one call.
+- `signTransaction(s)`: Plan and partially sign instructions, instruction plans, or transaction messages in one call.
 - `transactionPlanner` / `transactionPlanExecutor` (deprecated): Fields kept for backward compatibility. Use `planTransaction(s)` / `sendTransaction(s)` instead.
 
 ## `solanaMainnetRpc` plugin
@@ -273,13 +274,13 @@ All options are provided via a `TransactionPlannerConfig` object. Its shape is d
 
     - `version`: The transaction message version to use. Accepts `0` or `'legacy'`. Defaults to `0`.
     - `microLamportsPerComputeUnit`: The priority fee in micro-lamports per compute unit, added as a `setComputeUnitPrice` instruction. Defaults to no priority fees.
-    - `estimateResourceLimits`: Whether to estimate and set resource limits by simulating before sending. Set to `false` to skip estimation and reserve no provisory limits, which is useful for transactions close to the message size limit. Defaults to `true`.
+    - `estimateResourceLimits`: Whether to estimate and set resource limits by simulating before signing or sending. Set to `false` to skip estimation and reserve no provisory limits, which is useful for transactions close to the message size limit. Defaults to `true`.
 
 - For version 1 transactions:
 
     - `version`: Set to `1` to create version 1 transaction messages.
     - `priorityFeeLamports`: The total priority fee in lamports, written to the version 1 resource header. Defaults to no priority fees.
-    - `estimateResourceLimits`: Whether to estimate and set resource limits by simulating before sending. For version 1 transactions, estimation covers both the compute unit limit and the loaded accounts data size limit. Defaults to `true`.
+    - `estimateResourceLimits`: Whether to estimate and set resource limits by simulating before signing or sending. For version 1 transactions, estimation covers both the compute unit limit and the loaded accounts data size limit. Defaults to `true`.
 
 ## `rpcTransactionPlanSendingExecutor` plugin
 
@@ -381,6 +382,73 @@ const client = createClient()
         }),
     );
 ```
+
+## `rpcTransactionPlanSigningExecutor` plugin
+
+Adds `signTransaction` and `signTransactions` to the client, using an executor that sets a blockhash, estimates resource limits, and applies every available transaction signer without requiring the transaction to be fully signed.
+
+### Usage
+
+The client must have `rpc` configured and a transaction planner installed before installing this plugin.
+
+```ts
+import { createClient } from '@solana/kit';
+import { rpcTransactionPlanSigningExecutor, rpcTransactionPlanner, solanaRpcConnection } from '@solana/kit-plugin-rpc';
+import { generatedPayer } from '@solana/kit-plugin-signer';
+
+const client = await createClient()
+    .use(solanaRpcConnection({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
+    .use(generatedPayer())
+    .use(rpcTransactionPlanner())
+    .use(rpcTransactionPlanSigningExecutor());
+
+const transactionPlanResult = await client.signTransactions(myInstructionPlan);
+```
+
+`solanaRpc` installs this plugin automatically alongside the sending executor.
+
+Before signing, the executor replaces any lifetime already set on an input transaction message with a fresh blockhash lifetime. A transaction-modifying signer may replace the transaction lifetime during signing, but a durable nonce set directly on the input message is not preserved.
+
+### Options
+
+All options are provided via a `RpcTransactionPlanSigningExecutorConfig` object:
+
+- `estimateResourceLimits`: Whether to estimate and set resource limits by simulating before signing (default: `true`). This should match the `estimateResourceLimits` option on the planner; `solanaRpc` keeps them in sync automatically.
+- `getComputeUnitLimitFromEstimate`: A `(estimatedComputeUnits: number) => number` function that maps estimated compute unit consumption to the limit to set. It uses the same default buffer and 1.4M-unit cap as the sending executor.
+- `maxConcurrency`: Maximum number of transactions prepared and signed concurrently across all calls to this installed signing executor (default: 10). This bounds resource limit simulations and signer requests together, and is independent from the sending executor.
+
+### Result context
+
+A successful transaction result carries the prepared message, the partially or fully signed transaction, and its Base64-encoded wire representation in its `context`. The exported `RpcSignContext` type describes this shape. Its `signature` is optional because it is only available when the fee payer signed.
+
+```ts
+const result = await client.signTransaction(myInstructionPlan);
+
+result.context.message;
+result.context.transaction;
+result.context.transactionBase64;
+if (result.context.signature) {
+    console.log(`Transaction signature: ${result.context.signature}`);
+}
+```
+
+The executor queues every transaction plan leaf without waiting for sequential execution constraints, then prepares and signs up to `maxConcurrency` transactions at a time. The returned result still preserves the original plan's nesting, order, and divisibility. If one transaction fails to sign, the executor still attempts every other transaction and includes all outcomes in the signing error's transaction plan result.
+
+### Sequential dependencies
+
+The signing executor prepares and simulates transaction plan leaves independently, up to `maxConcurrency` at a time. It does not execute earlier transactions, so resource limit estimation can fail when a transaction depends on account or state changes produced by an earlier transaction in a sequential plan.
+
+Use `sendTransactions` when those dependencies must execute in order. When only signing is needed and simulation is unsuitable, set `estimateResourceLimits: false` on both the planner and signing executor and provide explicit resource limits where needed.
+
+```ts
+const client = await createClient()
+    .use(solanaRpcConnection({ rpcUrl: 'https://api.mainnet-beta.solana.com' }))
+    .use(generatedPayer())
+    .use(rpcTransactionPlanner({ estimateResourceLimits: false }))
+    .use(rpcTransactionPlanSigningExecutor({ estimateResourceLimits: false }));
+```
+
+With `solanaRpc`, set `transactionConfig.estimateResourceLimits` to `false` to configure both.
 
 ## Deprecated plugins
 

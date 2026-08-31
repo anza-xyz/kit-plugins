@@ -153,6 +153,8 @@ describe('solanaRpc', () => {
         expect(client).toHaveProperty('transactionPlanExecutor');
         expect(client.planTransaction).toBeTypeOf('function');
         expect(client.planTransactions).toBeTypeOf('function');
+        expect(client.signTransaction).toBeTypeOf('function');
+        expect(client.signTransactions).toBeTypeOf('function');
         expect(client.sendTransaction).toBeTypeOf('function');
         expect(client.sendTransactions).toBeTypeOf('function');
     });

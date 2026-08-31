@@ -1,27 +1,51 @@
 import {
     Address,
+    address,
     createClient,
     createTransactionMessage,
+    flattenTransactionPlanResult,
     generateKeyPairSigner,
+    getBase64EncodedWireTransaction,
     getSignatureFromTransaction,
     getTransactionMessageComputeUnitLimit,
+    isSolanaError,
+    Nonce,
+    nonDivisibleSequentialTransactionPlan,
     parallelTransactionPlan,
     pipe,
     Rpc,
     RpcSubscriptions,
     sendAndConfirmTransactionFactory,
+    sequentialTransactionPlan,
     setTransactionMessageComputeUnitLimit,
+    setTransactionMessageFeePayer,
     setTransactionMessageFeePayerSigner,
     setTransactionMessageLoadedAccountsDataSizeLimit,
     singleInstructionPlan,
     singleTransactionPlan,
     SingleTransactionPlanResult,
+    SOLANA_ERROR__FAILED_TO_SIGN_TRANSACTIONS,
+    SOLANA_ERROR__INVARIANT_VIOLATION__INVALID_TRANSACTION_PLAN_KIND,
     SolanaRpcApi,
     SolanaRpcSubscriptionsApi,
+    TransactionPlan,
+    TransactionPlanResult,
+    Transaction,
+    TransactionModifyingSigner,
+    TransactionPartialSigner,
+    TransactionSigner,
+    TransactionWithinSizeLimit,
+    TransactionWithLifetime,
 } from '@solana/kit';
-import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
+import { assert, beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
-import { rpcTransactionPlanExecutor, rpcTransactionPlanner, rpcTransactionPlanSendingExecutor } from '../src';
+import {
+    RpcSignContext,
+    rpcTransactionPlanExecutor,
+    rpcTransactionPlanner,
+    rpcTransactionPlanSendingExecutor,
+    rpcTransactionPlanSigningExecutor,
+} from '../src';
 
 const MOCK_BLOCKHASH = { blockhash: '11111111111111111111111111111111', lastValidBlockHeight: 0n };
 const MOCK_INSTRUCTION = {
@@ -698,6 +722,329 @@ describe('rpcTransactionPlanSendingExecutor', () => {
                 // @ts-expect-error Missing RPC Subscriptions on the client.
                 .use(rpcTransactionPlanSendingExecutor()),
         ).toThrow();
+    });
+});
+
+describe('rpcTransactionPlanSigningExecutor', () => {
+    it('does not request a blockhash for an empty plan', async () => {
+        const payer = await generateKeyPairSigner();
+        const getLatestBlockhash = vi.fn().mockRejectedValue(new Error('RPC unavailable'));
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: vi.fn() }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const client = createClient()
+            .use(() => ({ payer, rpc }))
+            .use(rpcTransactionPlanner())
+            .use(rpcTransactionPlanSigningExecutor());
+
+        await expect(client.signTransactions([])).resolves.toBeDefined();
+
+        expect(getLatestBlockhash).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unknown nested transaction plan kind with an invariant error', async () => {
+        const payer = await generateKeyPairSigner();
+        const getLatestBlockhash = vi.fn();
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: vi.fn() }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const client = createClient()
+            .use(() => ({ payer, rpc }))
+            .use(rpcTransactionPlanner())
+            .use(rpcTransactionPlanSigningExecutor());
+        const malformedPlan = parallelTransactionPlan([{ kind: 'unknown' } as unknown as TransactionPlan]);
+
+        const error = await client.signTransactions(malformedPlan).catch((error: unknown) => error);
+
+        expect(isSolanaError(error, SOLANA_ERROR__INVARIANT_VIOLATION__INVALID_TRANSACTION_PLAN_KIND)).toBe(true);
+        expect(getLatestBlockhash).not.toHaveBeenCalled();
+    });
+
+    it('adds signing functions and returns a signed transaction with its prepared message and signature', async () => {
+        const payer = await generateKeyPairSigner();
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        const simulateTransaction = vi.fn().mockResolvedValue({ value: { unitsConsumed: 42n } });
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: simulateTransaction }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const client = createClient()
+            .use(() => ({ payer, rpc }))
+            .use(rpcTransactionPlanner())
+            .use(rpcTransactionPlanSigningExecutor());
+
+        expect(client.signTransaction).toBeTypeOf('function');
+        expect(client.signTransactions).toBeTypeOf('function');
+        expect(client).not.toHaveProperty('sendTransaction');
+        expect(client).not.toHaveProperty('transactionPlanExecutor');
+
+        const result = await client.signTransaction(singleInstructionPlan(MOCK_INSTRUCTION));
+
+        expect(result.context.message.lifetimeConstraint).toEqual(MOCK_BLOCKHASH);
+        expect(getTransactionMessageComputeUnitLimit(result.context.message)).toBe(342);
+        expect(result.context.transaction).toBeDefined();
+        expect(result.context.transactionBase64).toBe(getBase64EncodedWireTransaction(result.context.transaction));
+        expect(result.context.signature).toBe(getSignatureFromTransaction(result.context.transaction));
+        expect(getLatestBlockhash).toHaveBeenCalledOnce();
+        expect(simulateTransaction).toHaveBeenCalledOnce();
+        expect(sendAndConfirmTransactionFactory).not.toHaveBeenCalled();
+    });
+
+    it('returns a partially signed transaction without a signature when the fee payer did not sign', async () => {
+        const payer = await generateKeyPairSigner();
+        const unsignedFeePayer = address('11111111111111111111111111111111');
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        const simulateTransaction = vi.fn();
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: simulateTransaction }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const client = createClient()
+            .use(() => ({ payer, rpc }))
+            .use(rpcTransactionPlanner({ estimateResourceLimits: false }))
+            .use(rpcTransactionPlanSigningExecutor({ estimateResourceLimits: false }));
+        const message = setTransactionMessageFeePayer(unsignedFeePayer, createTransactionMessage({ version: 0 }));
+
+        const result = await client.signTransaction(message);
+
+        expect(result.context.transaction.signatures[unsignedFeePayer]).toBeNull();
+        expect(result.context.transactionBase64).toBe(getBase64EncodedWireTransaction(result.context.transaction));
+        expect(result.context.signature).toBeUndefined();
+        expect(simulateTransaction).not.toHaveBeenCalled();
+    });
+
+    it('preserves a lifetime changed by a transaction-modifying signer', async () => {
+        const nonceAccountAddress = address('11111111111111111111111111111111');
+        const lifetimeConstraint = {
+            nonce: MOCK_BLOCKHASH.blockhash as Nonce,
+            nonceAccountAddress,
+        };
+        const modifyingPayer = {
+            address: nonceAccountAddress,
+            modifyAndSignTransactions: vi.fn(
+                (transactions: readonly (Transaction | (Transaction & TransactionWithLifetime))[]) =>
+                    Promise.resolve(
+                        transactions.map(
+                            transaction =>
+                                ({
+                                    ...transaction,
+                                    lifetimeConstraint,
+                                }) as Transaction & TransactionWithinSizeLimit & TransactionWithLifetime,
+                        ),
+                    ),
+            ),
+        } satisfies TransactionModifyingSigner;
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: vi.fn() }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const client = createClient()
+            .use(() => ({ payer: modifyingPayer, rpc }))
+            .use(rpcTransactionPlanner({ estimateResourceLimits: false }))
+            .use(rpcTransactionPlanSigningExecutor({ estimateResourceLimits: false }));
+        const message = setTransactionMessageFeePayerSigner(modifyingPayer, createTransactionMessage({ version: 0 }));
+
+        const result = await client.signTransaction(message);
+
+        expect(result.context.message.lifetimeConstraint).toEqual(MOCK_BLOCKHASH);
+        expect(result.context.transaction.lifetimeConstraint).toEqual(lifetimeConstraint);
+        expect(modifyingPayer.modifyAndSignTransactions).toHaveBeenCalledOnce();
+    });
+
+    it('preserves nested transaction plan shape while signing all leaves with one blockhash', async () => {
+        const payer = await generateKeyPairSigner();
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: vi.fn() }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const client = createClient()
+            .use(() => ({ payer, rpc }))
+            .use(rpcTransactionPlanner({ estimateResourceLimits: false }))
+            .use(rpcTransactionPlanSigningExecutor({ estimateResourceLimits: false }));
+        const message = setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }));
+        const transactionPlan = parallelTransactionPlan([
+            nonDivisibleSequentialTransactionPlan([message, message]),
+            sequentialTransactionPlan([message, message]),
+        ]);
+
+        const result = await client.signTransactions(transactionPlan);
+
+        expect(result.kind).toBe('parallel');
+        assert(result.kind === 'parallel');
+        expect(result.plans[0]).toMatchObject({ divisible: false, kind: 'sequential' });
+        expect(result.plans[1]).toMatchObject({ divisible: true, kind: 'sequential' });
+        expect(flattenTransactionPlanResult(result)).toHaveLength(4);
+        expect(flattenTransactionPlanResult(result).every(leaf => leaf.status === 'successful')).toBe(true);
+        expect(getLatestBlockhash).toHaveBeenCalledOnce();
+    });
+
+    it('shares the transaction concurrency limit across simultaneous signing calls', async () => {
+        const keyPairPayer = await generateKeyPairSigner();
+        let signingCalls = 0;
+        const signingResolvers: Array<() => void> = [];
+        const payer: TransactionPartialSigner = {
+            address: keyPairPayer.address,
+            signTransactions(transactions, config) {
+                signingCalls++;
+                return new Promise((resolve, reject) => {
+                    signingResolvers.push(() => {
+                        void keyPairPayer.signTransactions(transactions, config).then(resolve, reject);
+                    });
+                });
+            },
+        };
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        const simulateTransaction = vi.fn().mockResolvedValue({ value: { unitsConsumed: 42n } });
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: simulateTransaction }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const client = createClient()
+            .use(() => ({ payer, rpc }))
+            .use(rpcTransactionPlanner())
+            .use(rpcTransactionPlanSigningExecutor({ maxConcurrency: 2 }));
+        const singlePlan = await client.planTransactions(singleInstructionPlan(MOCK_INSTRUCTION));
+        const transactionPlan = sequentialTransactionPlan([singlePlan, singlePlan]);
+
+        const firstPromise = client.signTransactions(transactionPlan);
+        const secondPromise = client.signTransactions(transactionPlan);
+
+        await vi.waitFor(() => expect(signingCalls).toBe(2));
+        expect(simulateTransaction).toHaveBeenCalledTimes(2);
+        signingResolvers[0]();
+        await vi.waitFor(() => expect(signingCalls).toBe(3));
+        expect(simulateTransaction).toHaveBeenCalledTimes(3);
+        signingResolvers[1]();
+        await vi.waitFor(() => expect(signingCalls).toBe(4));
+        expect(simulateTransaction).toHaveBeenCalledTimes(4);
+        signingResolvers[2]();
+        signingResolvers[3]();
+        await Promise.all([firstPromise, secondPromise]);
+        expect(getLatestBlockhash).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not prepare or sign queued leaves after the abort signal fires', async () => {
+        const keyPairPayer = await generateKeyPairSigner();
+        let signingCalls = 0;
+        const signingReleasers: Array<() => void> = [];
+        const payer: TransactionPartialSigner = {
+            address: keyPairPayer.address,
+            signTransactions() {
+                signingCalls++;
+                return new Promise((_resolve, reject) => {
+                    signingReleasers.push(() => reject(new Error('released')));
+                });
+            },
+        };
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        const simulateTransaction = vi.fn().mockResolvedValue({ value: { unitsConsumed: 42n } });
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: simulateTransaction }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const client = createClient()
+            .use(() => ({ payer, rpc }))
+            .use(rpcTransactionPlanner())
+            .use(rpcTransactionPlanSigningExecutor({ maxConcurrency: 1 }));
+        const singlePlan = await client.planTransactions(singleInstructionPlan(MOCK_INSTRUCTION));
+        const transactionPlan = sequentialTransactionPlan([singlePlan, singlePlan]);
+        const abortController = new AbortController();
+
+        const pendingError = client
+            .signTransactions(transactionPlan, { abortSignal: abortController.signal })
+            .catch((error: unknown) => error);
+        await vi.waitFor(() => expect(signingCalls).toBe(1));
+        abortController.abort();
+        const error = await pendingError;
+        assert(isSolanaError(error, SOLANA_ERROR__FAILED_TO_SIGN_TRANSACTIONS));
+
+        // Free the concurrency slot held by the first leaf so the queued second
+        // leaf gets its turn, then verify it bails out without doing any work.
+        signingReleasers[0]();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(signingCalls).toBe(1);
+        expect(simulateTransaction).toHaveBeenCalledOnce();
+    });
+
+    it('attempts every sequential leaf and reports successful siblings when one signer fails', async () => {
+        const payer = await generateKeyPairSigner();
+        const signingError = new Error('signing failed');
+        const failingPayer = {
+            address: address('11111111111111111111111111111111'),
+            signTransactions: vi.fn().mockRejectedValue(signingError),
+        } satisfies TransactionSigner;
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: vi.fn() }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const client = createClient()
+            .use(() => ({ payer, rpc }))
+            .use(rpcTransactionPlanner({ estimateResourceLimits: false }))
+            .use(rpcTransactionPlanSigningExecutor({ estimateResourceLimits: false }));
+        const failingMessage = setTransactionMessageFeePayerSigner(
+            failingPayer,
+            createTransactionMessage({ version: 0 }),
+        );
+        const successfulMessage = setTransactionMessageFeePayerSigner(payer, createTransactionMessage({ version: 0 }));
+        const transactionPlan = sequentialTransactionPlan([failingMessage, successfulMessage]);
+
+        const error = await client.signTransactions(transactionPlan).catch((error: unknown) => error);
+
+        assert(isSolanaError(error, SOLANA_ERROR__FAILED_TO_SIGN_TRANSACTIONS));
+        const result = (error.context as { transactionPlanResult: TransactionPlanResult<RpcSignContext> })
+            .transactionPlanResult;
+        expect(flattenTransactionPlanResult(result).map(leaf => leaf.status)).toEqual(['failed', 'successful']);
+        expect(failingPayer.signTransactions).toHaveBeenCalledOnce();
+    });
+
+    it('preserves the context recorded before a signer failure on the failed result', async () => {
+        const signingError = new Error('signing failed');
+        const failingPayer = {
+            address: address('11111111111111111111111111111111'),
+            signTransactions: vi.fn().mockRejectedValue(signingError),
+        } satisfies TransactionSigner;
+        const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
+        const simulateTransaction = vi.fn().mockResolvedValue({ value: { unitsConsumed: 42n } });
+        const rpc = {
+            getLatestBlockhash: () => ({ send: getLatestBlockhash }),
+            simulateTransaction: () => ({ send: simulateTransaction }),
+        } as unknown as Rpc<SolanaRpcApi>;
+        const client = createClient()
+            .use(() => ({ payer: failingPayer, rpc }))
+            .use(rpcTransactionPlanner({ estimateResourceLimits: false }))
+            .use(rpcTransactionPlanSigningExecutor());
+        const message = setTransactionMessageFeePayerSigner(failingPayer, createTransactionMessage({ version: 0 }));
+
+        const error = await client.signTransactions(message).catch((error: unknown) => error);
+
+        assert(isSolanaError(error, SOLANA_ERROR__FAILED_TO_SIGN_TRANSACTIONS));
+        const result = (error.context as { transactionPlanResult: TransactionPlanResult<RpcSignContext> })
+            .transactionPlanResult;
+        const [failedLeaf] = flattenTransactionPlanResult(result);
+        assert(failedLeaf.status === 'failed');
+        expect(failedLeaf.error).toBe(signingError);
+        expect(failedLeaf.context.message?.lifetimeConstraint).toEqual(MOCK_BLOCKHASH);
+        expect(getTransactionMessageComputeUnitLimit(failedLeaf.context.message!)).toBe(342);
+        expect(failedLeaf.context.transaction).toBeUndefined();
+        expect(failedLeaf.context.transactionBase64).toBeUndefined();
+        expect(failedLeaf.context.signature).toBeUndefined();
+    });
+
+    it('requires an RPC API on the client', async () => {
+        const payer = await generateKeyPairSigner();
+        expect(() =>
+            createClient()
+                .use(() => ({ payer }))
+                .use(rpcTransactionPlanner())
+                // @ts-expect-error Missing RPC on the client.
+                .use(rpcTransactionPlanSigningExecutor()),
+        ).toThrow(/An RPC instance is required/);
     });
 });
 
