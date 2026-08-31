@@ -90,7 +90,7 @@
         "react-dom": "^19.2.8"
     },
     "peerDependencies": {
-        "@solana/kit": "^8.0.0",
+        "@solana/kit": "^8.2.0",
         "@solana/react": "^8.1.0",
         "react": "^19.2.8"
     },
