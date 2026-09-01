@@ -114,9 +114,19 @@ function addressMatchesPublicKey(address: string, publicKey: ReadonlyUint8Array)
     return getAddressDecoder().decode(publicKey) === address;
 }
 
-// Copies bytes provided by a wallet, or returns `null` if they aren't a
-// `Uint8Array`. A `Uint8Array` from another realm (e.g. an iframe) is accepted.
-function copyBytes(bytes: unknown): ReadonlyUint8Array | null {
+/**
+ * Copies bytes provided by a wallet, so the wallet can't change them after
+ * they are verified.
+ *
+ * A `Uint8Array` from another realm (e.g. an iframe) is accepted.
+ *
+ * @param bytes - Bytes provided by a wallet, which are not trusted to be a
+ *   `Uint8Array`.
+ * @returns A copy of the bytes, or `null` if they aren't a `Uint8Array`.
+ *
+ * @internal
+ */
+export function copyBytes(bytes: unknown): ReadonlyUint8Array | null {
     if (!(bytes instanceof Uint8Array || (ArrayBuffer.isView(bytes) && bytes.constructor.name === 'Uint8Array'))) {
         return null;
     }
