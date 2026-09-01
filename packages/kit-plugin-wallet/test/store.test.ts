@@ -1,7 +1,25 @@
 import {
+    type Address,
+    compileOffchainMessageV0Envelope,
+    compileOffchainMessageV1Envelope,
+    generateKeyPair,
+    getAddressEncoder,
+    getAddressFromPublicKey,
+    isFullySignedOffchainMessageEnvelope,
+    isSolanaError,
+    offchainMessageApplicationDomain,
+    offchainMessageContentRestrictedAsciiOf1232BytesMax,
+    partiallySignOffchainMessageEnvelope,
+    type SignatureBytes,
+    SOLANA_ERROR__OFFCHAIN_MESSAGE__ADDRESSES_CANNOT_SIGN_OFFCHAIN_MESSAGE,
+    SOLANA_ERROR__OFFCHAIN_MESSAGE__CONTENT_DOES_NOT_MATCH_EXPECTED,
+    SOLANA_ERROR__OFFCHAIN_MESSAGE__REQUIRED_SIGNATORIES_DO_NOT_MATCH_EXPECTED,
+    SOLANA_ERROR__OFFCHAIN_MESSAGE__SIGNATURE_VERIFICATION_FAILURE,
+    SOLANA_ERROR__OFFCHAIN_MESSAGE__UNEXPECTED_VERSION,
     SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE,
     SOLANA_ERROR__WALLET__NOT_CONNECTED,
     SolanaError,
+    verifyOffchainMessageEnvelope,
 } from '@solana/kit';
 import { isWalletStandardError } from '@wallet-standard/errors';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -22,6 +40,7 @@ import {
     registryListeners,
     signInMock,
     signMessageMock,
+    signOffchainMessageMock,
     unregisterWallet,
     updateRegisteredWallet,
     walletEventHandlers,
@@ -53,6 +72,13 @@ describe.skipIf(__BROWSER__)('store (SSR / non-browser)', () => {
         const store = createWalletStore({ chain: 'solana:mainnet' });
         await expect(() => store.signMessage(new Uint8Array())).rejects.toThrow(
             new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signMessage' }),
+        );
+    });
+
+    it('throws for signOffchainMessage on server', async () => {
+        const store = createWalletStore({ chain: 'solana:mainnet' });
+        await expect(() => store.signOffchainMessage({ message: 'Hello', version: 1 })).rejects.toThrow(
+            new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signOffchainMessage' }),
         );
     });
 
@@ -1602,6 +1628,207 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
 
         await store.disconnect();
         expect(listener).not.toHaveBeenCalled();
+    });
+});
+
+describe.skipIf(!__BROWSER__)('store signOffchainMessage (browser)', () => {
+    /**
+     * Builds a connected-wallet fixture backed by a real Ed25519 key pair, so
+     * the action's unconditional decode-and-verify path runs against genuine
+     * signatures. The store's own `mockSignerAddress` fixture is 32 zero
+     * bytes, which WebCrypto cannot import as an Ed25519 public key.
+     */
+    async function createOffchainFixture(otherSignerAddresses: readonly Address[] = []) {
+        const keyPair = await generateKeyPair();
+        const signerAddress = await getAddressFromPublicKey(keyPair.publicKey);
+        const account = createMockAccount(signerAddress, ['solana:signOffchainMessage', 'solana:signTransaction']);
+        const wallet = createMockUiWallet({
+            accounts: [account],
+            features: ['standard:connect', 'standard:events', 'solana:signOffchainMessage'],
+            name: 'OffchainWallet',
+        });
+        registerWallet(wallet);
+
+        /** The response a spec-conforming wallet would produce for `message`. */
+        async function signAsWallet(message: string) {
+            const envelope = compileOffchainMessageV1Envelope({
+                content: message,
+                requiredSignatories: [signerAddress, ...otherSignerAddresses].map(address => ({ address })),
+                version: 1,
+            });
+            const signed = await partiallySignOffchainMessageEnvelope([keyPair], envelope);
+            return {
+                signature: signed.signatures[signerAddress] as SignatureBytes,
+                signedOffchainMessage: signed.content,
+            };
+        }
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(wallet);
+        return { account, signAsWallet, signerAddress, store };
+    }
+
+    it('throws when not connected', async () => {
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await expect(store.signOffchainMessage({ message: 'Hello', version: 1 })).rejects.toThrow(
+            new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signOffchainMessage' }),
+        );
+    });
+
+    it('throws a WalletStandardError when the account does not support solana:signOffchainMessage', async () => {
+        const account = createMockAccount('11111111111111111111111111111111', ['solana:signTransaction']);
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            features: ['standard:connect', 'standard:events', 'solana:signOffchainMessage'],
+            name: 'AccountWithoutOffchain',
+        });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(mockWallet);
+
+        await expect(store.signOffchainMessage({ message: 'Hello', version: 1 })).rejects.toSatisfy(
+            isWalletStandardError,
+        );
+        expect(signOffchainMessageMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects with the signal reason and never calls the wallet when already aborted', async () => {
+        const { store } = await createOffchainFixture();
+
+        const controller = new AbortController();
+        controller.abort(new Error('aborted by caller'));
+
+        await expect(
+            store.signOffchainMessage({ message: 'Hello', version: 1 }, { abortSignal: controller.signal }),
+        ).rejects.toThrow('aborted by caller');
+        expect(signOffchainMessageMock).not.toHaveBeenCalled();
+    });
+
+    it('throws when an explicit requiredSigners list omits the active account', async () => {
+        const { store } = await createOffchainFixture();
+        const other = await getAddressFromPublicKey((await generateKeyPair()).publicKey);
+
+        await expect(
+            store.signOffchainMessage({ message: 'Hello', requiredSigners: [other], version: 1 }),
+        ).rejects.toSatisfy(e =>
+            isSolanaError(e, SOLANA_ERROR__OFFCHAIN_MESSAGE__ADDRESSES_CANNOT_SIGN_OFFCHAIN_MESSAGE),
+        );
+        expect(signOffchainMessageMock).not.toHaveBeenCalled();
+    });
+
+    it('signs, verifies, and returns a fully signed envelope for a single signer', async () => {
+        const { signAsWallet, signerAddress, store } = await createOffchainFixture();
+        signOffchainMessageMock.mockResolvedValueOnce([await signAsWallet('Hello')]);
+
+        const envelope = await store.signOffchainMessage({ message: 'Hello', version: 1 });
+
+        expect(envelope.signatures[signerAddress]).toBeInstanceOf(Uint8Array);
+        expect(isFullySignedOffchainMessageEnvelope(envelope)).toBe(true);
+        // The envelope must compose with Kit's full verification directly.
+        await expect(verifyOffchainMessageEnvelope(envelope)).resolves.toBeUndefined();
+    });
+
+    it('passes the feature the account, message, version 1, and encoded required signers', async () => {
+        const { account, signAsWallet, signerAddress, store } = await createOffchainFixture();
+        signOffchainMessageMock.mockResolvedValueOnce([await signAsWallet('Hello')]);
+
+        await store.signOffchainMessage({ message: 'Hello', version: 1 });
+
+        // The store encodes the account's *address* to public-key bytes; the
+        // mock account's own `publicKey` field is a zeroed placeholder, so
+        // compare against a fresh encoding rather than against it.
+        expect(signOffchainMessageMock).toHaveBeenCalledExactlyOnceWith({
+            account,
+            message: 'Hello',
+            messageVersion: 1,
+            requiredSigners: [getAddressEncoder().encode(signerAddress)],
+        });
+    });
+
+    it('passes the underlying wallet account to the feature, not the UiWalletAccount handle', async () => {
+        const { account, signAsWallet, store } = await createOffchainFixture();
+        signOffchainMessageMock.mockResolvedValueOnce([await signAsWallet('Hello')]);
+
+        await store.signOffchainMessage({ message: 'Hello', version: 1 });
+
+        // Wallets may compare the input account by reference against their own
+        // WalletAccount object (e.g. `if (account !== this.#account) throw`),
+        // so the store must dematerialize the UiWalletAccount handle into the
+        // wallet's own account object before invoking the feature.
+        const rawWallet = registeredWallets.find(w => w.name === 'OffchainWallet')!;
+        const passedAccount = (signOffchainMessageMock.mock.calls[0][0] as { account: unknown }).account;
+        expect(passedAccount).toBe(rawWallet.accounts[0]);
+        expect(passedAccount).not.toBe(account);
+    });
+
+    it('returns a partially signed envelope keyed by the decoded signatories for multiple signers', async () => {
+        const otherAddress = await getAddressFromPublicKey((await generateKeyPair()).publicKey);
+        const { signAsWallet, signerAddress, store } = await createOffchainFixture([otherAddress]);
+        signOffchainMessageMock.mockResolvedValueOnce([await signAsWallet('Hello')]);
+
+        const envelope = await store.signOffchainMessage({
+            message: 'Hello',
+            requiredSigners: [signerAddress, otherAddress],
+            version: 1,
+        });
+
+        expect(envelope.signatures[signerAddress]).toBeInstanceOf(Uint8Array);
+        expect(envelope.signatures[otherAddress]).toBeNull();
+        // The signature map lists every decoded signatory, in canonical order.
+        expect(Object.keys(envelope.signatures).sort()).toEqual([signerAddress, otherAddress].slice().sort());
+        expect(isFullySignedOffchainMessageEnvelope(envelope)).toBe(false);
+    });
+
+    it('throws CONTENT_DOES_NOT_MATCH_EXPECTED when the wallet signs different content', async () => {
+        const { signAsWallet, store } = await createOffchainFixture();
+        // The wallet signs 'Goodbye' — a valid, verifiable message, just not
+        // the one that was requested.
+        signOffchainMessageMock.mockResolvedValueOnce([await signAsWallet('Goodbye')]);
+
+        await expect(store.signOffchainMessage({ message: 'Hello', version: 1 })).rejects.toSatisfy(e =>
+            isSolanaError(e, SOLANA_ERROR__OFFCHAIN_MESSAGE__CONTENT_DOES_NOT_MATCH_EXPECTED),
+        );
+    });
+
+    it('throws REQUIRED_SIGNATORIES_DO_NOT_MATCH_EXPECTED when the wallet changes the signer set', async () => {
+        const otherAddress = await getAddressFromPublicKey((await generateKeyPair()).publicKey);
+        // The wallet includes an extra signatory the app never asked for.
+        const { signAsWallet, store } = await createOffchainFixture([otherAddress]);
+        signOffchainMessageMock.mockResolvedValueOnce([await signAsWallet('Hello')]);
+
+        await expect(store.signOffchainMessage({ message: 'Hello', version: 1 })).rejects.toSatisfy(e =>
+            isSolanaError(e, SOLANA_ERROR__OFFCHAIN_MESSAGE__REQUIRED_SIGNATORIES_DO_NOT_MATCH_EXPECTED),
+        );
+    });
+
+    it('throws SIGNATURE_VERIFICATION_FAILURE when the signature does not verify', async () => {
+        const { signAsWallet, store } = await createOffchainFixture();
+        const response = await signAsWallet('Hello');
+        signOffchainMessageMock.mockResolvedValueOnce([{ ...response, signature: new Uint8Array(64).fill(7) }]);
+
+        await expect(store.signOffchainMessage({ message: 'Hello', version: 1 })).rejects.toSatisfy(e =>
+            isSolanaError(e, SOLANA_ERROR__OFFCHAIN_MESSAGE__SIGNATURE_VERIFICATION_FAILURE),
+        );
+    });
+
+    it('throws UNEXPECTED_VERSION when the wallet returns a non-v1 message', async () => {
+        const { signAsWallet, signerAddress, store } = await createOffchainFixture();
+        const v0 = compileOffchainMessageV0Envelope({
+            // Any 32-byte base58 string works as an application domain; reuse
+            // the signer address to avoid inventing one.
+            applicationDomain: offchainMessageApplicationDomain(signerAddress),
+            content: offchainMessageContentRestrictedAsciiOf1232BytesMax('Hello'),
+            requiredSignatories: [{ address: signerAddress }],
+            version: 0,
+        });
+        signOffchainMessageMock.mockResolvedValueOnce([
+            { signature: (await signAsWallet('Hello')).signature, signedOffchainMessage: v0.content },
+        ]);
+
+        await expect(store.signOffchainMessage({ message: 'Hello', version: 1 })).rejects.toSatisfy(e =>
+            isSolanaError(e, SOLANA_ERROR__OFFCHAIN_MESSAGE__UNEXPECTED_VERSION),
+        );
     });
 });
 

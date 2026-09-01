@@ -139,6 +139,9 @@ export let connectMock = vi.fn<() => Promise<void>>().mockResolvedValue(undefine
 export let disconnectMock = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
 export let signInMock: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue([{}]);
 export let signMessageMock: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue([{ signature: new Uint8Array(64) }]);
+export let signOffchainMessageMock: ReturnType<typeof vi.fn> = vi
+    .fn()
+    .mockResolvedValue([{ signature: new Uint8Array(64), signedOffchainMessage: new Uint8Array([1]) }]);
 export let eventListenerCleanup: ReturnType<typeof vi.fn<() => void>> = vi.fn<() => void>();
 
 // Active `standard:events` change handlers, keyed by wallet name. The store
@@ -176,6 +179,13 @@ function resolveFeatureImpl(feature: IdentifierString, walletName?: string): unk
     }
     if (feature === 'solana:signMessage') {
         return { signMessage: signMessageMock, version: '1.0.0' };
+    }
+    if (feature === 'solana:signOffchainMessage') {
+        return {
+            signOffchainMessage: signOffchainMessageMock,
+            supportedMessageVersions: [1],
+            version: '1.0.0',
+        };
     }
     throw new Error(`Feature ${feature} not supported`);
 }
@@ -278,6 +288,9 @@ beforeEach(() => {
     disconnectMock = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
     signInMock = vi.fn().mockResolvedValue([{}]);
     signMessageMock = vi.fn().mockResolvedValue([{ signature: new Uint8Array(64) }]);
+    signOffchainMessageMock = vi
+        .fn()
+        .mockResolvedValue([{ signature: new Uint8Array(64), signedOffchainMessage: new Uint8Array([1]) }]);
     createSignerMock = vi.fn<(...args: unknown[]) => unknown>().mockReturnValue(mockSigner);
     eventListenerCleanup = vi.fn<() => void>();
 });

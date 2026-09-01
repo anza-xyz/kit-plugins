@@ -2,7 +2,14 @@ import { renderHook } from '@testing-library/react';
 import type { UiWallet, UiWalletAccount } from '@wallet-standard/ui';
 import { describe, expect, it, vi } from 'vitest';
 
-import { useConnect, useDisconnect, useSelectAccount, useSignIn, useSignMessage } from '../src/react';
+import {
+    useConnect,
+    useDisconnect,
+    useSelectAccount,
+    useSignIn,
+    useSignMessage,
+    useSignOffchainMessage,
+} from '../src/react';
 import type { ClientWithWallet } from '../src/types';
 
 /** Wrap a wallet namespace in a client so it can be passed to a hook. */
@@ -93,6 +100,23 @@ describe('useSignMessage', () => {
         expect(returned).toBe(signature);
         expect(signMessage).toHaveBeenCalledWith(
             message,
+            expect.objectContaining({ abortSignal: expect.any(AbortSignal) }),
+        );
+    });
+});
+
+describe('useSignOffchainMessage', () => {
+    it('dispatches signOffchainMessage with the message input and a threaded abort signal', async () => {
+        const envelope = { content: new Uint8Array([1]), signatures: {} };
+        const signOffchainMessage = vi.fn().mockResolvedValue(envelope);
+        const { result: hook } = renderHook(() => useSignOffchainMessage(clientFor({ signOffchainMessage })));
+
+        const input = { message: 'Hello', version: 1 } as const;
+        const returned = await hook.current.dispatchAsync(input);
+
+        expect(returned).toBe(envelope);
+        expect(signOffchainMessage).toHaveBeenCalledWith(
+            input,
             expect.objectContaining({ abortSignal: expect.any(AbortSignal) }),
         );
     });
