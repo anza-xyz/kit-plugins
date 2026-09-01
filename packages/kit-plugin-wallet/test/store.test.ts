@@ -17,6 +17,7 @@ import {
     disconnectMock,
     emitWalletChange,
     lateRegisterWallet,
+    registeredWallets,
     registerWallet,
     registryListeners,
     signInMock,
@@ -616,6 +617,33 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
 
         expect(signMessageMock).toHaveBeenCalledExactlyOnceWith({ account, message });
         expect(result).toBe(expectedSignature);
+    });
+
+    it('signMessage passes the underlying wallet account to the feature, not the UiWalletAccount handle', async () => {
+        const account = createMockAccount('11111111111111111111111111111111', [
+            'solana:signTransaction',
+            'solana:signMessage',
+        ]);
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            features: ['standard:connect', 'standard:events', 'solana:signMessage'],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(mockWallet);
+
+        await store.signMessage(new Uint8Array([1, 2, 3]));
+
+        // Wallets may compare the input account by reference against their own
+        // WalletAccount object (e.g. `if (account !== this.#account) throw`),
+        // so the store must dematerialize the UiWalletAccount handle into the
+        // wallet's own account object before invoking the feature.
+        const rawWallet = registeredWallets.find(w => w.name === 'TestWallet')!;
+        const passedAccount = (signMessageMock.mock.calls[0][0] as { account: unknown }).account;
+        expect(passedAccount).toBe(rawWallet.accounts[0]);
+        expect(passedAccount).not.toBe(account);
     });
 
     it('signMessage throws when wallet does not support solana:signMessage', async () => {
