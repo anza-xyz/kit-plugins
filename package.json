@@ -15,7 +15,7 @@
         "@solana/kit": "^8.2.0",
         "@types/node": "^26",
         "agadoo": "^3.0.0",
-        "happy-dom": "^20.11.12",
+        "happy-dom": "^20.11.15",
         "oxfmt": "^0.65.0",
         "oxlint": "^1.80.0",
         "oxlint-tsgolint": "^7.0.2001",
