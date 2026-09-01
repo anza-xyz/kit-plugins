@@ -25,7 +25,11 @@ import {
 } from '@wallet-standard/features';
 import type { UiWallet, UiWalletAccount } from '@wallet-standard/ui';
 import { getWalletAccountFeature, getWalletFeature } from '@wallet-standard/ui-features';
-import { getOrCreateUiWalletForStandardWallet, getWalletForHandle } from '@wallet-standard/ui-registry';
+import {
+    getOrCreateUiWalletForStandardWallet,
+    getWalletAccountForUiWalletAccount,
+    getWalletForHandle,
+} from '@wallet-standard/ui-registry';
 
 import { isWalletWarmingUp } from './status';
 import type {
@@ -707,9 +711,17 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             account,
             SolanaSignMessage,
         ) as SolanaSignMessageFeature[typeof SolanaSignMessage];
+        // Dematerialize the UiWalletAccount handle into the wallet's own
+        // WalletAccount object: the handle is a copy made by the wallet-ui
+        // registry, and wallets may compare the input account by reference
+        // against their own account.
+        const walletAccount = getWalletAccountForUiWalletAccount(account);
         // The wallet-standard `SolanaSignMessageInput.message` is a mutable `Uint8Array`; signing
         // only reads the bytes, so coerce the read-only input at this single boundary.
-        const [output] = await signMessageFeature.signMessage({ account, message: message as Uint8Array });
+        const [output] = await signMessageFeature.signMessage({
+            account: walletAccount,
+            message: message as Uint8Array,
+        });
         return output.signature as SignatureBytes;
     }
 

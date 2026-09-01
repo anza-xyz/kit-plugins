@@ -66,7 +66,10 @@ export const registryListeners: Record<string, Array<(...args: unknown[]) => voi
 
 function createMockRawWallet(uiWallet: UiWallet) {
     return {
-        accounts: [...uiWallet.accounts],
+        // Copy each account into a distinct object. In the real registry a
+        // UiWalletAccount handle is never the same object as the wallet's own
+        // WalletAccount, so identity between the two must not hold in tests.
+        accounts: uiWallet.accounts.map((account): UiWalletAccount => ({ ...account })),
         chains: [...uiWallet.chains],
         features: Object.fromEntries(uiWallet.features.map(f => [f, { version: '1.0.0' }])),
         icon: uiWallet.icon,
@@ -103,13 +106,8 @@ const nameToRaw = new Map<string, object>();
 // registry's WeakMap does. Populated by registerWallet / updateRegisteredWallet.
 const accountToRaw = new WeakMap<object, object>();
 
-vi.mock('@wallet-standard/ui-registry', () => ({
-    getOrCreateUiWalletForStandardWallet: (raw: object) => {
-        const ui = rawToUi.get(raw);
-        if (!ui) throw new Error('No UiWallet registered for this raw wallet');
-        return ui;
-    },
-    getWalletForHandle: (handle: UiWallet | UiWalletAccount) => {
+vi.mock('@wallet-standard/ui-registry', () => {
+    function getWalletForHandle(handle: UiWallet | UiWalletAccount) {
         // Account handle? Resolve by object identity, like the real WeakMap registry.
         const rawFromAccount = accountToRaw.get(handle as unknown as object);
         if (rawFromAccount) return rawFromAccount;
@@ -117,8 +115,24 @@ vi.mock('@wallet-standard/ui-registry', () => ({
         const raw = nameToRaw.get((handle as UiWallet).name);
         if (!raw) throw new Error(`No raw wallet registered for "${(handle as UiWallet).name}"`);
         return raw;
-    },
-}));
+    }
+    return {
+        getOrCreateUiWalletForStandardWallet: (raw: object) => {
+            const ui = rawToUi.get(raw);
+            if (!ui) throw new Error('No UiWallet registered for this raw wallet');
+            return ui;
+        },
+        // Mirrors the real registry: resolves the owning wallet, then finds the
+        // wallet's own account object by address.
+        getWalletAccountForUiWalletAccount: (account: UiWalletAccount) => {
+            const raw = getWalletForHandle(account) as { accounts: readonly UiWalletAccount[] };
+            const walletAccount = raw.accounts.find(({ address }) => address === account.address);
+            if (!walletAccount) throw new Error(`No underlying account for address "${account.address}"`);
+            return walletAccount;
+        },
+        getWalletForHandle,
+    };
+});
 
 // Track the connect/disconnect/events mocks per wallet.
 export let connectMock = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
