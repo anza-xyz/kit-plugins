@@ -159,6 +159,30 @@ All wallet state is accessed via `client.wallet.getState()`, which returns a ref
     const signature = await client.wallet.signMessage(new TextEncoder().encode('Hello'));
     ```
 
+- **`signOffchainMessage(input, options?)`** — Sign a [Solana offchain message](https://github.com/solana-foundation/SRFCs/discussions/3) with the connected account, via the wallet's `solana:signOffchainMessage` feature. The input carries the format `version` (currently always `1`) alongside the `message` text, so future format versions can be added without changing the call shape.
+
+    The wallet constructs the specification preamble and body it signs, so the plugin verifies the response before resolving: it decodes the returned bytes, asserts they encode exactly the message and signer set you requested, and checks the signature against the connected account's public key. A wallet that signs something else rejects with a Kit `SolanaError` (`CONTENT_DOES_NOT_MATCH_EXPECTED`, `REQUIRED_SIGNATORIES_DO_NOT_MATCH_EXPECTED`, or `SIGNATURE_VERIFICATION_FAILURE`).
+
+    Resolves with a Kit `OffchainMessageEnvelope` (`{ content, signatures }`) built from the verified bytes:
+
+    ```ts
+    const envelope = await client.wallet.signOffchainMessage({
+        message: 'Sign in to Example App',
+        version: 1,
+    });
+    ```
+
+    For messages that require multiple signers, pass every signer's address (including the connected account's) as `requiredSigners`. The envelope then carries this wallet's signature alongside `null` entries for the others; collect their signatures elsewhere and verify the completed envelope with Kit's `verifyOffchainMessageEnvelope`:
+
+    ```ts
+    const envelope = await client.wallet.signOffchainMessage({
+        message: 'Escrow release approved',
+        requiredSigners: [aliceAddress, bobAddress], // connected account = alice
+        version: 1,
+    });
+    envelope.signatures[bobAddress]; // null — to be collected from Bob's wallet
+    ```
+
 - **`signIn(wallet, input)`** — Sign In With Solana (SIWS-as-connect). Connects the wallet, calls `solana:signIn`, and sets up full connection state. Pass `{}` for `input` if no sign-in customization is needed. To sign in with the already-connected wallet, pass `getState().connected.wallet`.
 
     ```ts
@@ -181,13 +205,14 @@ The **state** hooks subscribe via `useSyncExternalStore`, each to a single slice
 
 The **action** hooks wrap the async wallet actions with `useAction` from `@solana/react`, returning its result (`dispatch`, `dispatchAsync`, `data`, `error`, `status`, `isRunning`, `reset`, …). The hook manages the `AbortSignal` internally, so an in-flight call is aborted when a newer one is dispatched:
 
-| Hook               | Wraps                                                                     |
-| ------------------ | ------------------------------------------------------------------------- |
-| `useConnect`       | `client.wallet.connect` — `dispatch(wallet)`                              |
-| `useDisconnect`    | `client.wallet.disconnect` — `dispatch()`                                 |
-| `useSignIn`        | `client.wallet.signIn` — `dispatch(wallet, input)`                        |
-| `useSignMessage`   | `client.wallet.signMessage` — `dispatch(message)`                         |
-| `useSelectAccount` | `client.wallet.selectAccount` — returns the synchronous callback directly |
+| Hook                     | Wraps                                                                                    |
+| ------------------------ | ---------------------------------------------------------------------------------------- |
+| `useConnect`             | `client.wallet.connect` — `dispatch(wallet)`                                             |
+| `useDisconnect`          | `client.wallet.disconnect` — `dispatch()`                                                |
+| `useSignIn`              | `client.wallet.signIn` — `dispatch(wallet, input)`                                       |
+| `useSignMessage`         | `client.wallet.signMessage` — `dispatch(message)`                                        |
+| `useSignOffchainMessage` | `client.wallet.signOffchainMessage` — `dispatch({ message, requiredSigners?, version })` |
+| `useSelectAccount`       | `client.wallet.selectAccount` — returns the synchronous callback directly                |
 
 Each component receives the `client` and passes it to the hooks it uses:
 
