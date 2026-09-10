@@ -7,12 +7,17 @@ import {
 } from '@solana/kit';
 import { createSignerFromWalletAccount } from '@solana/wallet-account-signer';
 import {
+    SolanaSignAndSendTransaction,
+    type SolanaSignAndSendTransactionFeature,
     SolanaSignIn,
     type SolanaSignInFeature,
     type SolanaSignInInput,
     type SolanaSignInOutput,
     SolanaSignMessage,
     type SolanaSignMessageFeature,
+    SolanaSignTransaction,
+    type SolanaSignTransactionFeature,
+    type SolanaTransactionVersion,
 } from '@solana/wallet-standard-features';
 import { getWallets } from '@wallet-standard/app';
 import {
@@ -64,8 +69,22 @@ type WalletStoreState = {
     reconnectingTo: UiWalletAccount | null;
     signer: WalletSigner | null;
     status: WalletStatus;
+    supportedTransactionVersions: ReadonlySet<SolanaTransactionVersion>;
     wallets: readonly UiWallet[];
 };
+
+// The subset of the state derived from a single wallet account's chains and
+// features. Derived together so the two can never disagree about the account
+// they describe.
+type AccountSignerState = Pick<WalletStoreState, 'signer' | 'supportedTransactionVersions'>;
+
+// Shared empty set for accounts that support no transaction versions, so the
+// value stays referentially stable while no account (or a read-only one) is
+// active.
+const NO_TRANSACTION_VERSIONS: ReadonlySet<SolanaTransactionVersion> = new Set();
+
+// The features that carry `supportedTransactionVersions`.
+const TRANSACTION_SIGNING_FEATURES = [SolanaSignAndSendTransaction, SolanaSignTransaction] as const;
 
 // -- Store ------------------------------------------------------------------
 
@@ -106,6 +125,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         reconnectingTo: null,
         signer: null,
         status: 'pending',
+        supportedTransactionVersions: NO_TRANSACTION_VERSIONS,
         wallets: [],
     };
 
@@ -153,6 +173,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
                     ? Object.freeze({
                           account: s.account,
                           signer: s.signer,
+                          supportedTransactionVersions: s.supportedTransactionVersions,
                           wallet: s.connectedWallet,
                       })
                     : null,
@@ -204,6 +225,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             state.reconnectingTo !== prev.reconnectingTo ||
             state.status !== prev.status ||
             state.signer !== prev.signer ||
+            state.supportedTransactionVersions !== prev.supportedTransactionVersions ||
             state.wallets !== prev.wallets
         ) {
             snapshot = deriveSnapshot(state);
@@ -241,6 +263,46 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             // non-Solana chain).
             return null;
         }
+    }
+
+    // The transaction versions the account can sign, intersected across every
+    // signing feature it has. `createSignerFromWalletAccount` exposes one
+    // method per feature — `modifyAndSignTransactions` for
+    // `solana:signTransaction`, `signAndSendTransactions` for
+    // `solana:signAndSendTransaction` — and the call site, not this plugin,
+    // decides which one Kit reaches for. A version is therefore only safe to
+    // report if every path the signer exposes accepts it: picking one feature's
+    // list would over-report for whichever path the app happens to take.
+    // An account with no signing feature (read-only, or message-signing only)
+    // supports no versions at all.
+    //
+    // Read account-scoped rather than wallet-scoped for the same reason the
+    // signer is: an account may expose a narrower feature set than its wallet,
+    // and the registry regenerates the account handle precisely when that set
+    // changes. Feature resolution can still throw for a malformed or stale
+    // wallet, which degrades to the empty set rather than failing the
+    // connection over a metadata read.
+    function getSupportedTransactionVersions(account: UiWalletAccount): ReadonlySet<SolanaTransactionVersion> {
+        const featureNames = TRANSACTION_SIGNING_FEATURES.filter(name => account.features.includes(name));
+        if (featureNames.length === 0) return NO_TRANSACTION_VERSIONS;
+        try {
+            const [first, ...rest] = featureNames.map(name => {
+                const feature = getWalletAccountFeature(account, name) as
+                    | SolanaSignAndSendTransactionFeature[typeof SolanaSignAndSendTransaction]
+                    | SolanaSignTransactionFeature[typeof SolanaSignTransaction];
+                return feature.supportedTransactionVersions;
+            });
+            return new Set(first.filter(version => rest.every(versions => versions.includes(version))));
+        } catch {
+            return NO_TRANSACTION_VERSIONS;
+        }
+    }
+
+    function deriveAccountSignerState(account: UiWalletAccount): AccountSignerState {
+        return {
+            signer: tryCreateSigner(account),
+            supportedTransactionVersions: getSupportedTransactionVersions(account),
+        };
     }
 
     // -- Wallet discovery --------------------------------------------------
@@ -331,6 +393,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             updates.connectedWallet = null;
             updates.account = null;
             updates.signer = null;
+            updates.supportedTransactionVersions = NO_TRANSACTION_VERSIONS;
             updates.status = 'disconnected';
             clearPersistedAccount();
         }
@@ -354,7 +417,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         // events (a listener the already-run disposer can't clean up) or reports
         // itself connected.
         if (disposed) return;
-        const signer = tryCreateSigner(account);
+        const signerState = deriveAccountSignerState(account);
         disconnectingWalletName = null;
         // Reconcile `wallets` alongside the connection: `connect`/`signIn`/silent
         // reconnect authorize accounts on the underlying wallet, which regenerates
@@ -368,9 +431,9 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         updateState({
             account,
             connectedWallet: wallet,
-            signer,
             status: 'connected',
             wallets: reconcileWalletList(),
+            ...signerState,
         });
         if (options?.persist !== false) {
             persistAccount(account, wallet);
@@ -445,7 +508,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
 
         // The active account changed (switched, removed, or regenerated because
         // its features/chains changed) — recreate the signer for it.
-        return { account: activeAccount, signer: tryCreateSigner(activeAccount) };
+        return { account: activeAccount, ...deriveAccountSignerState(activeAccount) };
     }
 
     // -- Connection lifecycle ----------------------------------------------
@@ -606,6 +669,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             connectedWallet: null,
             signer: null,
             status: 'disconnected',
+            supportedTransactionVersions: NO_TRANSACTION_VERSIONS,
             // Reconcile the list too: when this runs from the change handler
             // because the connected wallet dropped the configured chain or
             // failed the filter, that wallet must leave `wallets` immediately
@@ -687,8 +751,12 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         // Switch the active connection (owner may differ from the current one). The
         // previously-active wallet is left authorized — we never disconnect it. Its
         // event subscription persists, so switching back stays live.
-        const signer = tryCreateSigner(selectedAccount);
-        updateState({ account: selectedAccount, connectedWallet: refreshed, signer, status: 'connected' });
+        updateState({
+            account: selectedAccount,
+            connectedWallet: refreshed,
+            status: 'connected',
+            ...deriveAccountSignerState(selectedAccount),
+        });
         persistAccount(selectedAccount, refreshed);
     }
 

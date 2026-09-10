@@ -41,8 +41,9 @@ export function useWalletStatus(client: ClientWithWallet): WalletStatus {
  * the connection changes (connect, disconnect, or account switch).
  *
  * @param client - A client with a wallet plugin installed (e.g. `walletSigner()`).
- * @returns The active connection — `{ account, signer, wallet }` — or `null` when disconnected.
- *   `signer` is `null` for read-only wallets.
+ * @returns The active connection — `{ account, signer, supportedTransactionVersions, wallet }` — or
+ *   `null` when disconnected. `signer` is `null` for read-only wallets, whose
+ *   `supportedTransactionVersions` is empty.
  *
  * @example
  * ```tsx

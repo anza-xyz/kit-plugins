@@ -116,11 +116,19 @@ All wallet state is accessed via `client.wallet.getState()`, which returns a ref
     }
     ```
 
-- **`getState().connected`** — The active connection (wallet, account, and signer), or `null` when disconnected.
+- **`getState().connected`** — The active connection (wallet, account, signer, and supported transaction versions), or `null` when disconnected.
 
     ```ts
     const { connected } = client.wallet.getState();
     console.log(connected?.account.address);
+    ```
+
+- **`getState().connected.supportedTransactionVersions`** — The transaction versions the active account can sign, as a `ReadonlySet<SolanaTransactionVersion>` — `'legacy'` plus whichever numbered versions the installed `@solana/wallet-standard-features` defines. Intersected across every signing feature the account has, because `signer` exposes one method per feature (`modifyAndSignTransactions` for `solana:signTransaction`, `signAndSendTransactions` for `solana:signAndSendTransaction`) and the Kit helper you call decides which one is used — a version is only reported when every path accepts it. Wallets that predate versioned transactions report `Set(['legacy'])`, and read-only or message-only accounts report an empty set — so check membership rather than emptiness.
+
+    ```ts
+    const { connected } = client.wallet.getState();
+    // Test for the version you intend to send rather than assuming a ceiling.
+    const canSendV0 = connected?.supportedTransactionVersions.has(0) ?? false;
     ```
 
 - **`getState().status`** — The current connection status: `'pending'`, `'disconnected'`, `'connecting'`, `'connected'`, `'disconnecting'`, or `'reconnecting'`.

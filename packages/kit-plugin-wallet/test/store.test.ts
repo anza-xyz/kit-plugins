@@ -22,6 +22,8 @@ import {
     registryListeners,
     signInMock,
     signMessageMock,
+    supportedTransactionVersions,
+    transactionFeatureFailure,
     unregisterWallet,
     updateRegisteredWallet,
     walletEventHandlers,
@@ -3170,5 +3172,188 @@ describe.skipIf(!__BROWSER__)('store whenReady (browser)', () => {
         store[Symbol.dispose]();
         expect(store.getState().status).toBe('disconnected');
         await expect(store.whenReady()).resolves.toBeUndefined();
+    });
+});
+
+describe.skipIf(!__BROWSER__)('store supportedTransactionVersions (browser)', () => {
+    it('reports the versions from solana:signTransaction alone when it is the only feature', async () => {
+        supportedTransactionVersions['solana:signTransaction'] = ['legacy', 0];
+        // The other feature advertises less, but the account does not have it,
+        // so it must not narrow the result.
+        supportedTransactionVersions['solana:signAndSendTransaction'] = ['legacy'];
+        const account = createMockAccount(undefined, ['solana:signTransaction']);
+        const mockWallet = createMockUiWallet({ accounts: [account], name: 'TestWallet' });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(mockWallet);
+
+        expect(store.getState().connected!.supportedTransactionVersions).toEqual(new Set(['legacy', 0]));
+    });
+
+    it('reports the union when both features advertise the same versions', async () => {
+        supportedTransactionVersions['solana:signAndSendTransaction'] = ['legacy', 0];
+        supportedTransactionVersions['solana:signTransaction'] = ['legacy', 0];
+        const account = createMockAccount(undefined, ['solana:signTransaction', 'solana:signAndSendTransaction']);
+        const mockWallet = createMockUiWallet({ accounts: [account], name: 'TestWallet' });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(mockWallet);
+
+        expect(store.getState().connected!.supportedTransactionVersions).toEqual(new Set(['legacy', 0]));
+    });
+
+    it('intersects the two features when solana:signTransaction is the narrower one', async () => {
+        supportedTransactionVersions['solana:signAndSendTransaction'] = ['legacy', 0];
+        supportedTransactionVersions['solana:signTransaction'] = ['legacy'];
+        const account = createMockAccount(undefined, ['solana:signTransaction', 'solana:signAndSendTransaction']);
+        const mockWallet = createMockUiWallet({ accounts: [account], name: 'TestWallet' });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(mockWallet);
+
+        // The signer exposes both signing paths, so only versions every path
+        // supports may be reported.
+        expect(store.getState().connected!.supportedTransactionVersions).toEqual(new Set(['legacy']));
+    });
+
+    it('intersects the two features when solana:signAndSendTransaction is the narrower one', async () => {
+        supportedTransactionVersions['solana:signAndSendTransaction'] = ['legacy'];
+        supportedTransactionVersions['solana:signTransaction'] = ['legacy', 0];
+        const account = createMockAccount(undefined, ['solana:signTransaction', 'solana:signAndSendTransaction']);
+        const mockWallet = createMockUiWallet({ accounts: [account], name: 'TestWallet' });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(mockWallet);
+
+        expect(store.getState().connected!.supportedTransactionVersions).toEqual(new Set(['legacy']));
+    });
+
+    it('reports the versions from solana:signAndSendTransaction alone when it is the only feature', async () => {
+        supportedTransactionVersions['solana:signAndSendTransaction'] = ['legacy', 0];
+        supportedTransactionVersions['solana:signTransaction'] = ['legacy'];
+        const account = createMockAccount(undefined, ['solana:signAndSendTransaction']);
+        const mockWallet = createMockUiWallet({ accounts: [account], name: 'TestWallet' });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(mockWallet);
+
+        expect(store.getState().connected!.supportedTransactionVersions).toEqual(new Set(['legacy', 0]));
+    });
+
+    it('reports a legacy-only set rather than null', async () => {
+        supportedTransactionVersions['solana:signTransaction'] = ['legacy'];
+        const account = createMockAccount(undefined, ['solana:signTransaction']);
+        const mockWallet = createMockUiWallet({ accounts: [account], name: 'TestWallet' });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(mockWallet);
+
+        expect(store.getState().connected!.supportedTransactionVersions).toEqual(new Set(['legacy']));
+    });
+
+    it('reports an empty set for an account with no transaction signing feature', async () => {
+        const account = createMockAccount(undefined, ['solana:signMessage']);
+        const mockWallet = createMockUiWallet({ accounts: [account], name: 'TestWallet' });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(mockWallet);
+
+        expect(store.getState().connected!.supportedTransactionVersions).toEqual(new Set());
+    });
+
+    it('keeps the set referentially stable across an unrelated snapshot change', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({ accounts: [account], name: 'TestWallet' });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(mockWallet);
+        const before = store.getState().connected!.supportedTransactionVersions;
+        expect(before).toEqual(new Set(['legacy', 0]));
+
+        // A second wallet appearing rebuilds the snapshot without touching the
+        // active account, so the set must not be reallocated.
+        lateRegisterWallet(createMockUiWallet({ name: 'OtherWallet' }));
+
+        expect(store.getState().wallets).toHaveLength(2);
+        expect(store.getState().connected!.supportedTransactionVersions).toBe(before);
+    });
+
+    it('updates when the active account is regenerated with different versions', async () => {
+        supportedTransactionVersions['solana:signTransaction'] = ['legacy', 0];
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({ accounts: [account], name: 'TestWallet' });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(mockWallet);
+        expect(store.getState().connected!.supportedTransactionVersions).toEqual(new Set(['legacy', 0]));
+
+        // The wallet drops versioned-transaction support and regenerates the
+        // account handle to reflect it.
+        supportedTransactionVersions['solana:signTransaction'] = ['legacy'];
+        updateRegisteredWallet(createMockUiWallet({ accounts: [{ ...account }], name: 'TestWallet' }));
+        emitWalletChange('TestWallet', { features: true });
+
+        expect(store.getState().connected!.supportedTransactionVersions).toEqual(new Set(['legacy']));
+    });
+
+    it('reports an empty set when the account loses signing support', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({ accounts: [account], name: 'TestWallet' });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(mockWallet);
+        expect(store.getState().connected!.supportedTransactionVersions.size).toBeGreaterThan(0);
+
+        createSignerMock.mockImplementation(() => {
+            throw new Error('No signing features');
+        });
+        updateRegisteredWallet(createMockUiWallet({ accounts: [{ ...account, features: [] }], name: 'TestWallet' }));
+        emitWalletChange('TestWallet', { features: true });
+
+        const { connected } = store.getState();
+        expect(connected!.signer).toBeNull();
+        expect(connected!.supportedTransactionVersions).toEqual(new Set());
+    });
+
+    it('reports an empty set when the feature lookup throws for a malformed wallet', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({ accounts: [account], name: 'TestWallet' });
+        registerWallet(mockWallet);
+        // The account advertises `solana:signTransaction` but the wallet does
+        // not implement it, so resolving the feature throws.
+        transactionFeatureFailure.error = new Error('Wallet does not implement solana:signTransaction');
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(mockWallet);
+
+        const { connected } = store.getState();
+        expect(connected!.supportedTransactionVersions).toEqual(new Set());
+        // The connection itself must survive a failed metadata read.
+        expect(connected!.signer).not.toBeNull();
+        expect(store.getState().status).toBe('connected');
+    });
+
+    it('passes through numbered versions beyond v0', async () => {
+        supportedTransactionVersions['solana:signTransaction'] = ['legacy', 0, 1];
+        const account = createMockAccount(undefined, ['solana:signTransaction']);
+        const mockWallet = createMockUiWallet({ accounts: [account], name: 'TestWallet' });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(mockWallet);
+
+        // The store reports whatever the wallet advertises — it must not filter
+        // the set down to the versions it happens to know about.
+        expect(store.getState().connected!.supportedTransactionVersions).toEqual(new Set(['legacy', 0, 1]));
     });
 });
