@@ -1,4 +1,11 @@
-import type { MessageSigner, ReadonlyUint8Array, SignatureBytes, TransactionSigner } from '@solana/kit';
+import type {
+    Address,
+    MessageSigner,
+    OffchainMessageEnvelope,
+    ReadonlyUint8Array,
+    SignatureBytes,
+    TransactionSigner,
+} from '@solana/kit';
 import type { SolanaChain } from '@solana/wallet-standard-chains';
 import type { SolanaSignInInput, SolanaSignInOutput } from '@solana/wallet-standard-features';
 import type { IdentifierString } from '@wallet-standard/base';
@@ -87,6 +94,7 @@ export type WalletState = {
  * @see {@link WalletNamespace.disconnect}
  * @see {@link WalletNamespace.signMessage}
  * @see {@link WalletNamespace.signIn}
+ * @see {@link WalletNamespace.signOffchainMessage}
  */
 export type WalletActionOptions = {
     /**
@@ -102,6 +110,33 @@ export type WalletActionOptions = {
      * undoing what the wallet already did.
      */
     abortSignal?: AbortSignal;
+};
+
+/**
+ * Message input accepted by {@link WalletNamespace.signOffchainMessage},
+ * discriminated on `version`.
+ *
+ * Only version 1 of the Solana offchain message format is currently
+ * supported; future format versions would be added as new union members
+ * carrying their own version-specific fields.
+ */
+export type WalletSignOffchainMessageInput = {
+    /**
+     * UTF-8 message text to sign.
+     */
+    readonly message: string;
+    /**
+     * Addresses of every account that must sign the message for it to be
+     * valid. The list must include the connected account's
+     * address. Order does not matter.
+     *
+     * @default [the connected account's address]
+     */
+    readonly requiredSigners?: readonly Address[];
+    /**
+     * Version of the Solana offchain message format to sign.
+     */
+    readonly version: 1;
 };
 
 /**
@@ -343,6 +378,63 @@ export type WalletNamespace = {
      *   dispatched do not take effect.
      */
     signMessage: (message: ReadonlyUint8Array, options?: WalletActionOptions) => Promise<SignatureBytes>;
+
+    /**
+     * Sign a Solana offchain message with the connected account.
+     *
+     * Calls the wallet's `solana:signOffchainMessage` feature with the given
+     * message. The wallet — not this client — constructs the specification
+     * preamble and body it signs, so the returned bytes cannot be taken on
+     * trust; this action unconditionally verifies them before resolving. It
+     * decodes the returned bytes, asserts they encode exactly the requested
+     * message for exactly the requested signers
+     * ({@link assertOffchainMessageV1Equal}), and verifies the signature
+     * against the connected account's public key.
+     *
+     * @param input - The message to sign ({@link WalletSignOffchainMessageInput}):
+     *   the format `version` (currently always `1`), the UTF-8 `message` text,
+     *   and optionally the `requiredSigners` list.
+     * @returns An {@link OffchainMessageEnvelope} — `{ content, signatures }` —
+     *   composed of the wallet's verified bytes and signature. With the default
+     *   single-signer list the envelope is fully signed and can be passed to
+     *   `verifyOffchainMessageEnvelope` directly; with additional
+     *   `requiredSigners` the other signatories map to `null` until their
+     *   signatures are collected elsewhere.
+     * @throws `SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED)` if no wallet is connected.
+     * @throws `WalletStandardError(WALLET_STANDARD_ERROR__FEATURES__WALLET_ACCOUNT_FEATURE_UNIMPLEMENTED)`
+     *   if the wallet or the connected account does not support
+     *   `solana:signOffchainMessage`.
+     * @throws `SolanaError(SOLANA_ERROR__OFFCHAIN_MESSAGE__ADDRESSES_CANNOT_SIGN_OFFCHAIN_MESSAGE)`
+     *   if an explicit `requiredSigners` list omits the connected account.
+     * @throws `SolanaError(SOLANA_ERROR__OFFCHAIN_MESSAGE__UNEXPECTED_VERSION)` if the
+     *   wallet returns a message of a version other than the requested one.
+     * @throws `SolanaError(SOLANA_ERROR__OFFCHAIN_MESSAGE__CONTENT_DOES_NOT_MATCH_EXPECTED)`
+     *   or `SolanaError(SOLANA_ERROR__OFFCHAIN_MESSAGE__REQUIRED_SIGNATORIES_DO_NOT_MATCH_EXPECTED)`
+     *   if the wallet signed different bytes than were requested. Do not trust
+     *   its signature.
+     * @throws `SolanaError(SOLANA_ERROR__OFFCHAIN_MESSAGE__SIGNATURE_VERIFICATION_FAILURE)`
+     *   if the wallet's signature does not verify against the returned bytes.
+     * @throws `options.abortSignal.reason` if the signal is already aborted
+     *   when the action is called. Aborts after the wallet call has been
+     *   dispatched do not take effect.
+     *
+     * @example
+     * ```ts
+     * const envelope = await client.wallet.signOffchainMessage({
+     *     message: 'Sign in to Example App',
+     *     version: 1,
+     * });
+     * // envelope.content are the exact bytes the wallet signed;
+     * // envelope.signatures maps the account's address to its signature.
+     * ```
+     *
+     * @see {@link WalletSignOffchainMessageInput}
+     * @see {@link WalletNamespace.signMessage} for raw-bytes message signing.
+     */
+    signOffchainMessage: (
+        input: WalletSignOffchainMessageInput,
+        options?: WalletActionOptions,
+    ) => Promise<OffchainMessageEnvelope>;
 
     /**
      * Subscribe to any wallet state change. Compatible with React's

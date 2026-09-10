@@ -1,4 +1,4 @@
-import type { ReadonlyUint8Array, SignatureBytes } from '@solana/kit';
+import type { OffchainMessageEnvelope, ReadonlyUint8Array, SignatureBytes } from '@solana/kit';
 import { type ActionResult, useAction } from '@solana/react';
 import type { SolanaSignInInput, SolanaSignInOutput } from '@solana/wallet-standard-features';
 import type { UiWallet, UiWalletAccount } from '@wallet-standard/ui';
@@ -6,7 +6,13 @@ import type { ReactNode } from 'react';
 import { useSyncExternalStore } from 'react';
 
 import { isWalletWarmingUp } from '../status';
-import type { ClientWithWallet, WalletNamespace, WalletState, WalletStatus } from '../types';
+import type {
+    ClientWithWallet,
+    WalletNamespace,
+    WalletSignOffchainMessageInput,
+    WalletState,
+    WalletStatus,
+} from '../types';
 
 // -- State hooks ------------------------------------------------------------
 
@@ -247,6 +253,37 @@ export function useSignIn(
 export function useSignMessage(client: ClientWithWallet): ActionResult<[message: ReadonlyUint8Array], SignatureBytes> {
     const { wallet } = client;
     return useAction((abortSignal, message: ReadonlyUint8Array) => wallet.signMessage(message, { abortSignal }));
+}
+
+/**
+ * Signs a Solana offchain message with the connected account from a React component.
+ *
+ * Wraps `client.wallet.signOffchainMessage` with {@link useAction}. The action decodes and
+ * verifies the wallet's response before resolving — see
+ * `WalletNamespace.signOffchainMessage` for the guarantees and failure modes.
+ *
+ * `dispatch`/`dispatchAsync` take a `WalletSignOffchainMessageInput` — the format `version`
+ * (currently always `1`), the `message` text, and optionally the full list of required signer
+ * addresses (defaulting to the connected account) — and resolve with the verified
+ * `OffchainMessageEnvelope`.
+ *
+ * @param client - A client with a wallet plugin installed (e.g. `walletSigner()`).
+ *
+ * @example
+ * ```tsx
+ * const { dispatch } = useSignOffchainMessage(client);
+ * dispatch({ message: 'Sign in to Example App', version: 1 });
+ * ```
+ *
+ * @see {@link useSignMessage}
+ */
+export function useSignOffchainMessage(
+    client: ClientWithWallet,
+): ActionResult<[input: WalletSignOffchainMessageInput], OffchainMessageEnvelope> {
+    const { wallet } = client;
+    return useAction((abortSignal, input: WalletSignOffchainMessageInput) =>
+        wallet.signOffchainMessage(input, { abortSignal }),
+    );
 }
 
 /**
