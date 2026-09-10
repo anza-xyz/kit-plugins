@@ -1,6 +1,6 @@
 import type { MessageSigner, ReadonlyUint8Array, SignatureBytes, TransactionSigner } from '@solana/kit';
 import type { SolanaChain } from '@solana/wallet-standard-chains';
-import type { SolanaSignInInput, SolanaSignInOutput } from '@solana/wallet-standard-features';
+import type { SolanaSignInInput, SolanaSignInOutput, SolanaTransactionVersion } from '@solana/wallet-standard-features';
 import type { IdentifierString } from '@wallet-standard/base';
 import type { UiWallet, UiWalletAccount } from '@wallet-standard/ui';
 
@@ -59,6 +59,33 @@ export type WalletState = {
         readonly account: UiWalletAccount;
         /** The signer for the active account, or `null` for read-only wallets. */
         readonly signer: WalletSigner | null;
+        /**
+         * The transaction versions the active account can sign, intersected
+         * across every signing feature it has — `solana:signTransaction`,
+         * `solana:signAndSendTransaction`, or both.
+         *
+         * The intersection is deliberate. {@link signer} exposes one method per
+         * feature (`modifyAndSignTransactions` and `signAndSendTransactions`),
+         * and the Kit helper you call decides which one is used — so a version
+         * is only reported when every path the signer exposes accepts it. For a
+         * wallet advertising different versions per feature, this is narrower
+         * than either list. Read the features directly with
+         * `getWalletAccountFeature` if you need the per-path lists.
+         *
+         * Empty when the account has no signing feature — a read-only wallet,
+         * or one that only signs messages. A wallet that predates versioned
+         * transactions reports `Set(['legacy'])`, so check membership rather
+         * than emptiness before building a versioned transaction.
+         *
+         * @example
+         * ```ts
+         * const { connected } = client.wallet.getState();
+         * // Test for the version you intend to send rather than assuming a ceiling —
+         * // the set grows as wallet-standard adds versions.
+         * const canSendV0 = connected?.supportedTransactionVersions.has(0) ?? false;
+         * ```
+         */
+        readonly supportedTransactionVersions: ReadonlySet<SolanaTransactionVersion>;
         readonly wallet: UiWallet;
     } | null;
     /**

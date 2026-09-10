@@ -1,4 +1,5 @@
 import { address } from '@solana/kit';
+import type { SolanaTransactionVersion } from '@solana/wallet-standard-features';
 import {
     WALLET_STANDARD_ERROR__FEATURES__WALLET_ACCOUNT_FEATURE_UNIMPLEMENTED,
     WalletStandardError,
@@ -152,6 +153,24 @@ export function emitWalletChange(name: string, props: Record<string, unknown>): 
 
 type IdentifierString = `${string}:${string}`;
 
+// `supportedTransactionVersions` reported by each transaction-signing feature
+// mock. Mutated in place by tests to exercise the precedence between
+// `solana:signAndSendTransaction` and `solana:signTransaction`; reset in
+// `beforeEach`.
+export const supportedTransactionVersions: {
+    'solana:signAndSendTransaction': readonly SolanaTransactionVersion[];
+    'solana:signTransaction': readonly SolanaTransactionVersion[];
+} = {
+    'solana:signAndSendTransaction': ['legacy', 0],
+    'solana:signTransaction': ['legacy', 0],
+};
+
+// When set, the transaction-signing feature mocks throw this instead of
+// resolving. Simulates a malformed wallet whose account advertises a feature
+// the wallet itself does not implement, which is what makes the real
+// `getWalletAccountFeature` throw past the account-level feature check.
+export const transactionFeatureFailure: { error: Error | null } = { error: null };
+
 function resolveFeatureImpl(feature: IdentifierString, walletName?: string): unknown {
     if (feature === 'standard:connect') {
         return { connect: connectMock, version: '1.0.0' };
@@ -176,6 +195,10 @@ function resolveFeatureImpl(feature: IdentifierString, walletName?: string): unk
     }
     if (feature === 'solana:signMessage') {
         return { signMessage: signMessageMock, version: '1.0.0' };
+    }
+    if (feature === 'solana:signTransaction' || feature === 'solana:signAndSendTransaction') {
+        if (transactionFeatureFailure.error) throw transactionFeatureFailure.error;
+        return { supportedTransactionVersions: supportedTransactionVersions[feature], version: '1.0.0' };
     }
     throw new Error(`Feature ${feature} not supported`);
 }
@@ -279,6 +302,9 @@ beforeEach(() => {
     signInMock = vi.fn().mockResolvedValue([{}]);
     signMessageMock = vi.fn().mockResolvedValue([{ signature: new Uint8Array(64) }]);
     createSignerMock = vi.fn<(...args: unknown[]) => unknown>().mockReturnValue(mockSigner);
+    supportedTransactionVersions['solana:signAndSendTransaction'] = ['legacy', 0];
+    supportedTransactionVersions['solana:signTransaction'] = ['legacy', 0];
+    transactionFeatureFailure.error = null;
     eventListenerCleanup = vi.fn<() => void>();
 });
 
