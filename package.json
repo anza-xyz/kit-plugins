@@ -9,7 +9,7 @@
         "publish-packages": "pnpm build && changeset publish"
     },
     "devDependencies": {
-        "@changesets/changelog-github": "^1.0.0",
+        "@changesets/changelog-github": "^1.0.1",
         "@changesets/cli": "^3.0.2",
         "@solana-config/oxc": "^0.1.1",
         "@solana/kit": "^8.2.0",
