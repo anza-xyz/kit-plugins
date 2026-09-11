@@ -66,8 +66,8 @@ importers:
         specifier: ^0.14.1
         version: 0.14.1(@solana/kit@8.2.0(typescript@7.0.2))
       '@solana-program/token':
-        specifier: ^0.16.0
-        version: 0.16.0(@solana/kit@8.2.0(typescript@7.0.2))
+        specifier: ^0.16.1
+        version: 0.16.1(@solana/kit@8.2.0(typescript@7.0.2))
       '@solana/kit':
         specifier: ^8.2.0
         version: 8.2.0(typescript@7.0.2)
@@ -1142,9 +1142,8 @@ packages:
     peerDependencies:
       '@solana/kit': ^8.2.0
 
-  '@solana-program/token@0.16.0':
-    resolution: {integrity: sha512-VuFIu5vXsw1zwqls4/sGB88234oucmpuig553A33UnrbYnPZ8yXmqLYULBD92/k1pCGnMK+NMLWvsKzlZQ/1Kw==}
-    engines: {node: '>=24.0.0'}
+  '@solana-program/token@0.16.1':
+    resolution: {integrity: sha512-X9dsvbh+VDq4SuCfvxn95P1DCvtBYHJOBiVmgBJMfW8l/lp8uSwEhy9IurpcdltnGi5kNIkCm4sk4YOXKAMiCw==}
     peerDependencies:
       '@solana/kit': ^8.2.0
 
@@ -3080,7 +3079,7 @@ snapshots:
     dependencies:
       '@solana/kit': 8.2.0(typescript@7.0.2)
 
-  '@solana-program/token@0.16.0(@solana/kit@8.2.0(typescript@7.0.2))':
+  '@solana-program/token@0.16.1(@solana/kit@8.2.0(typescript@7.0.2))':
     dependencies:
       '@solana-program/system': 0.14.1(@solana/kit@8.2.0(typescript@7.0.2))
       '@solana/kit': 8.2.0(typescript@7.0.2)
@@ -4057,7 +4056,7 @@ snapshots:
   litesvm@1.4.1(typescript@7.0.2):
     dependencies:
       '@solana-program/system': 0.14.1(@solana/kit@8.2.0(typescript@7.0.2))
-      '@solana-program/token': 0.16.0(@solana/kit@8.2.0(typescript@7.0.2))
+      '@solana-program/token': 0.16.1(@solana/kit@8.2.0(typescript@7.0.2))
       '@solana/kit': 8.2.0(typescript@7.0.2)
     optionalDependencies:
       litesvm-darwin-arm64: 1.4.1
