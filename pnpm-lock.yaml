@@ -136,8 +136,8 @@ importers:
         specifier: ^8.2.0
         version: 8.2.0(typescript@7.0.2)
       '@solana/wallet-account-signer':
-        specifier: ^8.2.0
-        version: 8.2.0(typescript@7.0.2)
+        specifier: ^8.3.0
+        version: 8.3.0(typescript@7.0.2)
       '@solana/wallet-standard-chains':
         specifier: ^1.1.2
         version: 1.1.2
@@ -1730,8 +1730,8 @@ packages:
       typescript:
         optional: true
 
-  '@solana/wallet-account-signer@8.2.0':
-    resolution: {integrity: sha512-Uy1MR/yp5CVt5Yfr64BN57LWXrf6IPbadRbNurEItUkMYrRTzp80Hs0hPN7C/n2TUVm7fC2MWvZG9soy0FheWA==}
+  '@solana/wallet-account-signer@8.3.0':
+    resolution: {integrity: sha512-YdUKgl7ukHYWrmYU2/FQ/tF51Y9T3kRiIyJU8CH//dfb1NpeNzSEP5cYRsSL84tvayMbKJ5Kpg2Obm694p5JCg==}
     engines: {node: '>=20.18.0'}
     peerDependencies:
       typescript: '>=5.4.0'
@@ -3953,15 +3953,15 @@ snapshots:
     transitivePeerDependencies:
       - fastestsmallesttextencoderdecoder
 
-  '@solana/wallet-account-signer@8.2.0(typescript@7.0.2)':
+  '@solana/wallet-account-signer@8.3.0(typescript@7.0.2)':
     dependencies:
-      '@solana/addresses': 8.2.0(typescript@7.0.2)
-      '@solana/codecs-core': 8.2.0(typescript@7.0.2)
-      '@solana/keys': 8.2.0(typescript@7.0.2)
-      '@solana/promises': 8.2.0(typescript@7.0.2)
-      '@solana/signers': 8.2.0(typescript@7.0.2)
-      '@solana/transaction-messages': 8.2.0(typescript@7.0.2)
-      '@solana/transactions': 8.2.0(typescript@7.0.2)
+      '@solana/addresses': 8.3.0(typescript@7.0.2)
+      '@solana/codecs-core': 8.3.0(typescript@7.0.2)
+      '@solana/keys': 8.3.0(typescript@7.0.2)
+      '@solana/promises': 8.3.0(typescript@7.0.2)
+      '@solana/signers': 8.3.0(typescript@7.0.2)
+      '@solana/transaction-messages': 8.3.0(typescript@7.0.2)
+      '@solana/transactions': 8.3.0(typescript@7.0.2)
       '@solana/wallet-standard-chains': 1.1.2
       '@solana/wallet-standard-features': 1.5.0
       '@wallet-standard/base': 1.1.1
