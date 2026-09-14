@@ -84,15 +84,15 @@
     "devDependencies": {
         "@solana/react": "^8.2.0",
         "@testing-library/react": "^16.3.3",
-        "@types/react": "^19.2.18",
+        "@types/react": "^19.3.0",
         "@wallet-standard/errors": "^0.1.2",
-        "react": "^19.2.8",
-        "react-dom": "^19.2.8"
+        "react": "^19.3.0",
+        "react-dom": "^19.3.0"
     },
     "peerDependencies": {
         "@solana/kit": "^8.2.0",
         "@solana/react": "^8.2.0",
-        "react": "^19.2.8"
+        "react": "^19.3.0"
     },
     "peerDependenciesMeta": {
         "@solana/react": {
