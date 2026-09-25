@@ -9,7 +9,7 @@
         "start": "node src/index.ts"
     },
     "dependencies": {
-        "@solana-program/system": "^0.14.1",
+        "@solana-program/system": "^0.15.0",
         "@solana/kit": "^8.3.0",
         "@solana/kit-plugin-rpc": "workspace:*",
         "@solana/kit-plugin-signer": "workspace:*"

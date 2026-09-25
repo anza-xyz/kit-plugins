@@ -63,8 +63,8 @@ importers:
   examples/token-airdrop:
     dependencies:
       '@solana-program/system':
-        specifier: ^0.14.1
-        version: 0.14.1(@solana/kit@8.3.0(typescript@7.0.2))
+        specifier: ^0.15.0
+        version: 0.15.0(@solana/kit@8.3.0(typescript@7.0.2))
       '@solana-program/token':
         specifier: ^0.17.0
         version: 0.17.0(@solana/kit@8.3.0(typescript@7.0.2))
@@ -81,8 +81,8 @@ importers:
   examples/transfer-lamports:
     dependencies:
       '@solana-program/system':
-        specifier: ^0.14.1
-        version: 0.14.1(@solana/kit@8.3.0(typescript@7.0.2))
+        specifier: ^0.15.0
+        version: 0.15.0(@solana/kit@8.3.0(typescript@7.0.2))
       '@solana/kit':
         specifier: ^8.3.0
         version: 8.3.0(typescript@7.0.2)
@@ -112,8 +112,8 @@ importers:
         version: 1.4.1(typescript@7.0.2)
     devDependencies:
       '@solana-program/system':
-        specifier: ^0.14.1
-        version: 0.14.1(@solana/kit@8.3.0(typescript@7.0.2))
+        specifier: ^0.15.0
+        version: 0.15.0(@solana/kit@8.3.0(typescript@7.0.2))
 
   packages/kit-plugin-rpc:
     dependencies:
