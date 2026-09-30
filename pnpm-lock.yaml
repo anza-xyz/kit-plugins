@@ -57,8 +57,8 @@ importers:
         specifier: ^5.0.2
         version: 5.0.2(@types/node@26.6.3)(happy-dom@20.14.5)(vite@7.3.1(@types/node@26.6.3)(yaml@2.9.1))
       ws:
-        specifier: ^8.21.3
-        version: 8.21.3
+        specifier: ^8.22.0
+        version: 8.22.0
 
   examples/token-airdrop:
     dependencies:
@@ -2447,8 +2447,8 @@ packages:
     engines: {node: '>=20.11'}
     hasBin: true
 
-  ws@8.21.3:
-    resolution: {integrity: sha512-201TZ/kPWxoPr/OKWjquZR1SWKXcvxdH+e1xrx89b3YbmzLMFCLfnaG1HFIgWzJOEWZ7MvpK++odZufgYR50Rw==}
+  ws@8.22.0:
+    resolution: {integrity: sha512-Ydggc987+RO0AnWtZ/7Wq9FtNvcrL1b/RO0ud9mWjUPgDrsAAwQSF51sm2hm1XofbU/4jkpGEsLFsZZxU+1DOg==}
     engines: {node: '>=10.0.0'}
     peerDependencies:
       bufferutil: ^4.0.1
@@ -3414,7 +3414,7 @@ snapshots:
       '@solana/functional': 8.3.0(typescript@7.0.2)
       '@solana/rpc-subscriptions-spec': 8.3.0(typescript@7.0.2)
       '@solana/subscribable': 8.3.0(typescript@7.0.2)
-      ws: 8.21.3
+      ws: 8.22.0
     optionalDependencies:
       typescript: 7.0.2
     transitivePeerDependencies:
@@ -4014,7 +4014,7 @@ snapshots:
       buffer-image-size: 0.6.4
       entities: 7.0.1
       whatwg-mimetype: 3.0.0
-      ws: 8.21.3
+      ws: 8.22.0
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -4460,6 +4460,6 @@ snapshots:
 
   why-is-node-running@3.2.2: {}
 
-  ws@8.21.3: {}
+  ws@8.22.0: {}
 
   yaml@2.9.1: {}
