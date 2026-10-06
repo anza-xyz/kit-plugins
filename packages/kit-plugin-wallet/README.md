@@ -373,6 +373,10 @@ walletSigner({
 
 By default the plugin uses `localStorage` to remember the last connected wallet and auto-reconnects on the next page load. Pass `storage: null` to disable, or provide a custom adapter (e.g. `sessionStorage` or an IndexedDB wrapper).
 
+## Account verification
+
+The plugin drops any wallet account whose `publicKey` doesn't match its `address`, and copies the rest so the wallet can't change them later. As a result, the wallets and accounts it exposes are not the same objects as `@wallet-standard/ui-registry` returns, but they work with the same helpers, such as `getWalletFeature`.
+
 ## SSR / server-side rendering
 
 All four wallet plugins are safe to include in a shared client that runs on both server and browser. On the server, `status` stays `'pending'` permanently, all actions throw, and no registry listeners or storage reads are made. In the browser the plugin initializes normally.

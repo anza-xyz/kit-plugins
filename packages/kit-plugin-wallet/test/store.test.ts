@@ -4,6 +4,7 @@ import {
     SolanaError,
 } from '@solana/kit';
 import { isWalletStandardError } from '@wallet-standard/errors';
+import type { UiWalletAccount } from '@wallet-standard/ui';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createWalletStore } from '../src/store';
@@ -235,7 +236,7 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         unregisterWallet(mockWallet);
         expect(store.getState().wallets.length).toBe(0);
 
-        resolve([{ account: { address: account.address } }]);
+        resolve([{ account }]);
         // signIn cannot connect to a wallet absent from the list, so it rejects
         // rather than resolving with the sign-in output while disconnected.
         await expect(signInPromise).rejects.toThrow(
@@ -531,13 +532,11 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
             ...account2,
             features: ['solana:signAndSendTransaction'] as const,
             label: 'Refreshed Account 2',
-            publicKey: new Uint8Array(32).fill(2),
         };
         const staleAccount2 = {
             ...account2,
             features: [] as const,
             label: 'Stale Account 2',
-            publicKey: new Uint8Array(32).fill(9),
         };
         const mockWallet = createMockUiWallet({
             accounts: [account1, account2],
@@ -569,8 +568,8 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         store.selectAccount(staleAccount2);
 
         const state = store.getState();
-        expect(state.connected!.account).toBe(refreshedAccount2);
-        expect(state.connected!.wallet.accounts[1]).toBe(refreshedAccount2);
+        expect(state.connected!.account).toEqual(refreshedAccount2);
+        expect(state.connected!.wallet.accounts[1]).toBe(state.connected!.account);
         expect(createSignerMock).toHaveBeenCalledWith(refreshedAccount2, 'solana:mainnet');
     });
 
@@ -727,13 +726,14 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         });
         registerWallet(mockWallet);
 
-        signInMock.mockResolvedValueOnce([{ account: { address: account.address } }]);
+        signInMock.mockResolvedValueOnce([{ account }]);
 
         const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
         const result = await store.signIn(mockWallet, { domain: 'example.com' });
 
         expect(signInMock).toHaveBeenCalledWith({ domain: 'example.com' });
-        expect(result).toEqual({ account: { address: account.address } });
+        expect(result).toEqual({ account });
+        expect(result.account).toBe(store.getState().connected!.account);
         const state = store.getState();
         expect(state.status).toBe('connected');
         expect(state.connected).not.toBeNull();
@@ -759,7 +759,7 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
                     name: 'TestWallet',
                 }),
             );
-            return Promise.resolve([{ account: { address: account.address } }]);
+            return Promise.resolve([{ account }]);
         });
 
         const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
@@ -805,7 +805,7 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
 
         expect(store.getState().status).toBe('connecting');
 
-        resolve([{ account: { address: account.address } }]);
+        resolve([{ account }]);
         await signInPromise;
 
         expect(store.getState().status).toBe('connected');
@@ -1097,9 +1097,7 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         registerWallet(wallet2);
 
         const first = Promise.withResolvers<unknown[]>();
-        signInMock
-            .mockReturnValueOnce(first.promise)
-            .mockResolvedValueOnce([{ account: { address: account2.address } }]);
+        signInMock.mockReturnValueOnce(first.promise).mockResolvedValueOnce([{ account: account2 }]);
 
         const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
 
@@ -1111,7 +1109,7 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
 
         // Resolve the first signIn — it was superseded, so it rejects with an
         // AbortError rather than applying its result.
-        first.resolve([{ account: { address: account1.address } }]);
+        first.resolve([{ account: account1 }]);
         await expect(firstPromise).rejects.toThrow('superseded');
         await secondPromise;
 
@@ -1143,7 +1141,7 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
 
         // signIn resolves stale — it was superseded, so it rejects with an
         // AbortError and must not overwrite wallet2's connection.
-        pendingSignIn.resolve([{ account: { address: account1.address } }]);
+        pendingSignIn.resolve([{ account: account1 }]);
         await expect(signInPromise).rejects.toThrow('superseded');
 
         expect(store.getState().status).toBe('connected');
@@ -2344,7 +2342,7 @@ describe.skipIf(!__BROWSER__)('store auto-connect (browser)', () => {
         await vi.advanceTimersByTimeAsync(0);
 
         expect(store.getState().status).toBe('reconnecting');
-        expect(store.getState().reconnectingTo).toBe(account);
+        expect(store.getState().reconnectingTo).toEqual(account);
         expect(store.getState().connected).toBeNull();
 
         reconnect.resolve();
@@ -2489,7 +2487,7 @@ describe.skipIf(!__BROWSER__)('store late wallet registration (browser)', () => 
         await vi.advanceTimersByTimeAsync(0);
 
         expect(store.getState().status).toBe('reconnecting');
-        expect(store.getState().reconnectingTo).toBe(account);
+        expect(store.getState().reconnectingTo).toEqual(account);
 
         reconnect.resolve();
         await vi.advanceTimersByTimeAsync(0);
@@ -3094,7 +3092,7 @@ describe.skipIf(!__BROWSER__)('store whenReady (browser)', () => {
 
         await vi.advanceTimersByTimeAsync(0);
         expect(store.getState().status).toBe('reconnecting');
-        expect(store.getState().reconnectingTo).toBe(account);
+        expect(store.getState().reconnectingTo).toEqual(account);
         // Same transient episode — still the same promise.
         expect(store.whenReady()).toBe(p);
         // If `p` were already resolved the race would pick 'ready'; it is still pending.
@@ -3355,5 +3353,208 @@ describe.skipIf(!__BROWSER__)('store supportedTransactionVersions (browser)', ()
         // The store reports whatever the wallet advertises — it must not filter
         // the set down to the versions it happens to know about.
         expect(store.getState().connected!.supportedTransactionVersions).toEqual(new Set(['legacy', 0, 1]));
+    });
+});
+
+describe.skipIf(!__BROWSER__)('store account hardening (browser)', () => {
+    const otherAddress = 'Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ';
+
+    // An account that claims `otherAddress` but carries the public key for a
+    // different address.
+    function createMismatchedAccount() {
+        return {
+            ...createMockAccount(otherAddress),
+            publicKey: createMockAccount('3JF3sEqM796hk5WFqA6EtmEwJQ9quALszsfJyvXNQKy3').publicKey,
+        } as UiWalletAccount;
+    }
+
+    it('drops accounts whose public key does not encode their address', async () => {
+        const valid = createMockAccount();
+        const mockWallet = createMockUiWallet({ accounts: [createMismatchedAccount(), valid], name: 'TestWallet' });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        expect(store.getState().wallets[0].accounts).toEqual([valid]);
+
+        const accounts = await store.connect(mockWallet);
+        expect(accounts).toEqual([valid]);
+        expect(store.getState().connected!.account).toEqual(valid);
+        expect(store.getState().connected!.wallet.accounts).toEqual([valid]);
+    });
+
+    it.each([
+        ['is too short', new Uint8Array(31)],
+        ['is too long', new Uint8Array(33)],
+        ['is not a Uint8Array', Array.from({ length: 32 }, () => 0)],
+        ['is a different typed array', new Int8Array(32)],
+        ['is a different typed array of the same byte length', new Uint16Array(16)],
+        ['encodes a different address', createMockAccount('3JF3sEqM796hk5WFqA6EtmEwJQ9quALszsfJyvXNQKy3').publicKey],
+    ])('drops accounts whose public key %s', (_, publicKey) => {
+        const account = { ...createMockAccount(), publicKey } as unknown as UiWalletAccount;
+        const mockWallet = createMockUiWallet({ accounts: [account], name: 'TestWallet' });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        expect(store.getState().wallets[0].accounts).toEqual([]);
+    });
+
+    it('rejects connect when no account has a matching public key', async () => {
+        const mockWallet = createMockUiWallet({ accounts: [createMismatchedAccount()], name: 'TestWallet' });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await expect(store.connect(mockWallet)).rejects.toThrow(
+            new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'connect' }),
+        );
+        expect(store.getState().connected).toBeNull();
+    });
+
+    it('rejects signIn with an account whose public key does not match its address', async () => {
+        const mismatched = createMismatchedAccount();
+        const mockWallet = createMockUiWallet({
+            accounts: [mismatched],
+            features: ['standard:connect', 'standard:events', 'solana:signIn'],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+        signInMock.mockResolvedValueOnce([{ account: mismatched }]);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await expect(store.signIn(mockWallet, {})).rejects.toThrow(
+            new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signIn' }),
+        );
+        expect(store.getState().connected).toBeNull();
+    });
+
+    it.each([
+        ['a different valid public key', createMockAccount('3JF3sEqM796hk5WFqA6EtmEwJQ9quALszsfJyvXNQKy3').publicKey],
+        ['a public key that is not a Uint8Array', Array.from({ length: 32 }, () => 0)],
+        ['no public key', undefined],
+    ])('rejects signIn whose output pairs an exposed account address with %s', async (_, publicKey) => {
+        // The wallet exposes a legitimate account, but the sign-in output
+        // claims that address with another key — which an app verifying the
+        // output would otherwise accept as proof of the exposed account.
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            features: ['standard:connect', 'standard:events', 'solana:signIn'],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+        signInMock.mockResolvedValueOnce([{ account: { ...account, publicKey } }]);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await expect(store.signIn(mockWallet, {})).rejects.toThrow(
+            new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signIn' }),
+        );
+        expect(store.getState().connected).toBeNull();
+    });
+
+    it('returns the hardened account from signIn, not the wallet-provided one', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({
+            accounts: [account],
+            features: ['standard:connect', 'standard:events', 'solana:signIn'],
+            name: 'TestWallet',
+        });
+        registerWallet(mockWallet);
+        const signature = new Uint8Array(64).fill(1);
+        const signedMessage = new Uint8Array([1, 2, 3]);
+        const walletAccount = { ...account, label: 'Wallet-provided' };
+        signInMock.mockResolvedValueOnce([{ account: walletAccount, signature, signedMessage }]);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        const result = await store.signIn(mockWallet, {});
+
+        expect(result.account).toBe(store.getState().connected!.account);
+        expect(result.account.label).toBe(account.label);
+        expect(result.signature).toBe(signature);
+        expect(result.signedMessage).toBe(signedMessage);
+    });
+
+    it('omits optional account fields the wallet does not provide, like the registry does', () => {
+        const { address, chains, features, publicKey } = createMockAccount();
+        const account = { address, chains, features, publicKey } as UiWalletAccount;
+        const mockWallet = createMockUiWallet({ accounts: [account], name: 'TestWallet' });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        const [hardened] = store.getState().wallets[0].accounts;
+
+        expect(hardened).toStrictEqual(account);
+        expect('icon' in hardened).toBe(false);
+        expect('label' in hardened).toBe(false);
+    });
+
+    it('selectAccount rejects an account whose public key does not match its address', async () => {
+        const valid = createMockAccount();
+        const mismatched = createMismatchedAccount();
+        const mockWallet = createMockUiWallet({ accounts: [valid, mismatched], name: 'TestWallet' });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(mockWallet);
+
+        expect(() => store.selectAccount(mismatched)).toThrow(
+            new SolanaError(SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE, {
+                account: mismatched.address,
+                operation: 'selectAccount',
+            }),
+        );
+        expect(store.getState().connected!.account).toEqual(valid);
+    });
+
+    it('copies the public key so the wallet cannot change it after verification', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({ accounts: [account], name: 'TestWallet' });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(mockWallet);
+
+        const { account: connectedAccount } = store.getState().connected!;
+        expect(connectedAccount).not.toBe(account);
+        expect(connectedAccount.publicKey).not.toBe(account.publicKey);
+        expect(Object.isFrozen(connectedAccount)).toBe(true);
+
+        (account.publicKey as Uint8Array).fill(7);
+        expect(connectedAccount.publicKey).toEqual(new Uint8Array(32));
+    });
+
+    it('reads each account value once, so a wallet cannot swap it after verification', async () => {
+        const valid = createMockAccount();
+        let addressReads = 0;
+        // Serves the verified address on the first read, then a different one.
+        const shapeshifting = new Proxy(valid, {
+            get(target, property, receiver) {
+                if (property === 'address') return addressReads++ === 0 ? target.address : otherAddress;
+                return Reflect.get(target, property, receiver) as unknown;
+            },
+        });
+        const mockWallet = createMockUiWallet({ accounts: [shapeshifting], name: 'TestWallet' });
+        registerWallet(mockWallet);
+        // Registering the mock reads the address; start counting from the store.
+        addressReads = 0;
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(mockWallet);
+
+        const { account } = store.getState().connected!;
+        expect(account.address).toBe(valid.address);
+        expect(account.address).toBe(valid.address);
+    });
+
+    it('keeps hardened handles referentially stable while the wallet is unchanged', async () => {
+        const account = createMockAccount();
+        const mockWallet = createMockUiWallet({ accounts: [account], name: 'TestWallet' });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        const [connectedAccount] = await store.connect(mockWallet);
+
+        const { connected, wallets } = store.getState();
+        expect(connected!.account).toBe(connectedAccount);
+        expect(connected!.wallet).toBe(wallets[0]);
+        expect(wallets[0].accounts[0]).toBe(connectedAccount);
     });
 });

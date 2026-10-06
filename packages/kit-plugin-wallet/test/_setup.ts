@@ -1,4 +1,4 @@
-import { address } from '@solana/kit';
+import { address, getAddressEncoder } from '@solana/kit';
 import type { SolanaTransactionVersion } from '@solana/wallet-standard-features';
 import {
     WALLET_STANDARD_ERROR__FEATURES__WALLET_ACCOUNT_FEATURE_UNIMPLEMENTED,
@@ -21,7 +21,8 @@ export function createMockAccount(
         features,
         icon: 'data:image/png;base64,',
         label: 'Account 1',
-        publicKey: new Uint8Array(32),
+        // The store drops accounts whose public key doesn't encode their address.
+        publicKey: new Uint8Array(getAddressEncoder().encode(address(addr))),
     } as unknown as UiWalletAccount;
 }
 
@@ -132,6 +133,11 @@ vi.mock('@wallet-standard/ui-registry', () => {
             return walletAccount;
         },
         getWalletForHandle,
+        // Registers the store's hardened copies against their raw wallet. Only
+        // account handles need recording: wallet handles resolve by name.
+        registerWalletHandle: (handle: UiWallet | UiWalletAccount, raw: object) => {
+            if (!('name' in handle)) accountToRaw.set(handle, raw);
+        },
     };
 });
 

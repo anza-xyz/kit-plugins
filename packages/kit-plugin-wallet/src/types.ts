@@ -339,12 +339,15 @@ export type WalletNamespace = {
      * leaves any existing connection in place rather than disconnecting it.
      *
      * @returns The wallet's sign-in output, once the connection is established.
+     *   Its `account` is the plugin's verified copy of the connected account,
+     *   not the wallet's own object.
      * @throws `WalletStandardError(WALLET_STANDARD_ERROR__FEATURES__WALLET_ACCOUNT_FEATURE_UNIMPLEMENTED)`
      *   if the wallet does not support `solana:signIn`.
      * @throws `SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED)` if the wallet
      *   unregisters (or drops a required feature/chain) while its sign-in prompt
-     *   is open, or signs in with an account it does not expose. Any previously
-     *   connected wallet is left in place.
+     *   is open, or signs in with an account it does not expose (or with a
+     *   different public key than the account it exposes for that address).
+     *   Any previously connected wallet is left in place.
      * @throws `DOMException` with `name: 'AbortError'` if a newer `connect` or
      *   `signIn` is started before this call resolves. The newer request wins
      *   and owns the resulting connection; this superseded call rejects so it

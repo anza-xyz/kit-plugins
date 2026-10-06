@@ -20,6 +20,7 @@ import {
     type SolanaTransactionVersion,
 } from '@solana/wallet-standard-features';
 import { getWallets } from '@wallet-standard/app';
+import type { Wallet } from '@wallet-standard/base';
 import {
     StandardConnect,
     type StandardConnectFeature,
@@ -36,6 +37,7 @@ import {
     getWalletForHandle,
 } from '@wallet-standard/ui-registry';
 
+import { hardenUiWallet, publicKeyMatches } from './harden';
 import { isWalletWarmingUp } from './status';
 import type {
     WalletActionOptions,
@@ -312,6 +314,14 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
     // an `on()` function to subscribe to wallet registration/unregistration events.
     const registry = getWallets();
 
+    // Every `UiWallet` the store holds or hands out goes through here: the
+    // hardened copy drops any account whose `publicKey` doesn't encode its
+    // `address`, and snapshots each account's values so the wallet can't
+    // change them after they've been verified. See `hardenUiWallet`.
+    function getUiWallet(wallet: Wallet): UiWallet {
+        return hardenUiWallet(getOrCreateUiWalletForStandardWallet(wallet));
+    }
+
     function filterWallet(uiWallet: UiWallet): boolean {
         const supportsChain = uiWallet.chains.includes(config.chain);
         const supportsConnect = uiWallet.features.includes(StandardConnect);
@@ -320,7 +330,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
     }
 
     function buildWalletList(): readonly UiWallet[] {
-        return Object.freeze(registry.get().map(getOrCreateUiWalletForStandardWallet).filter(filterWallet));
+        return Object.freeze(registry.get().map(getUiWallet).filter(filterWallet));
     }
 
     // Rebuilds the filtered wallet list but returns the *existing* `state.wallets`
@@ -441,8 +451,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
     }
 
     function refreshUiWallet(staleUiWallet: UiWallet): UiWallet {
-        const rawWallet = getWalletForHandle(staleUiWallet);
-        return getOrCreateUiWalletForStandardWallet(rawWallet);
+        return getUiWallet(getWalletForHandle(staleUiWallet));
     }
 
     function subscribeToWalletEvents(uiWallet: UiWallet): () => void {
@@ -708,7 +717,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         // throws — surface it as ACCOUNT_NOT_AVAILABLE.
         let owner: UiWallet;
         try {
-            owner = getOrCreateUiWalletForStandardWallet(getWalletForHandle(account));
+            owner = getUiWallet(getWalletForHandle(account));
         } catch {
             throw new SolanaError(SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE, {
                 account: account.address,
@@ -833,20 +842,27 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             }
 
             // Set up full connection state using the account from the sign-in response.
+            // Read the wallet's account once, so the values checked are the
+            // values used.
+            const { address: signedInAddress, publicKey: signedInPublicKey } = result.account;
             const refreshedWallet = refreshUiWallet(uiWallet);
-            const activeAccount = refreshedWallet.accounts.find(a => a.address === result.account.address);
+            const activeAccount = refreshedWallet.accounts.find(a => a.address === signedInAddress);
 
-            if (!activeAccount) {
-                // The wallet signed in with an account it doesn't expose — a
-                // protocol violation that can't be mapped to a connection. Throw
-                // so the failure surfaces as a rejection rather than resolving
-                // with a sign-in result the store can't act on; the `catch`
-                // reverts to any prior connection.
+            // The wallet signed in with an account it doesn't expose (or whose
+            // public key doesn't encode its address, so was dropped), or with a
+            // different public key than the account it exposes for that
+            // address. Apps verify the sign-in signature against the output's
+            // `publicKey`, so a mismatch would let a signature by one key pass as
+            // proof of another account. Throw so the failure surfaces as a
+            // rejection; the `catch` reverts to any prior connection.
+            if (!activeAccount || !publicKeyMatches(signedInPublicKey, activeAccount.publicKey)) {
                 throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signIn' });
             }
 
             setConnected(activeAccount, refreshedWallet);
-            return result;
+            // Return the hardened account rather than the wallet's own, so the
+            // app never sees an unverified `publicKey`.
+            return { ...result, account: activeAccount };
         } catch (error) {
             if (generation === connectGeneration) {
                 revertToPreviousConnectionOrDisconnect();
@@ -909,12 +925,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
 
             if (existing) {
                 await attemptSilentReconnect(savedAddress, existing);
-            } else if (
-                registry.get().some(w => {
-                    const ui = getOrCreateUiWalletForStandardWallet(w);
-                    return ui.name === walletName;
-                })
-            ) {
+            } else if (registry.get().some(w => w.name === walletName)) {
                 // Wallet registered but doesn't pass the filter.
                 updateState({ status: 'disconnected' });
                 clearPersistedAccount();
@@ -946,12 +957,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
                             unsubRegisterForReconnect();
                             reconnectCleanup = null;
                             await attemptSilentReconnect(savedAddress, found);
-                        } else if (
-                            registry.get().some(w => {
-                                const ui = getOrCreateUiWalletForStandardWallet(w);
-                                return ui.name === walletName;
-                            })
-                        ) {
+                        } else if (registry.get().some(w => w.name === walletName)) {
                             // Wallet registered but filtered out.
                             clearTimeout(statusTimeout);
                             unsubRegisterForReconnect();
