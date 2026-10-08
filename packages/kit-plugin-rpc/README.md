@@ -41,7 +41,7 @@ All options are provided via a `SolanaRpcConfig` object:
 - `rpcSubscriptionsUrl`: URL of the RPC Subscriptions endpoint. Defaults to the `rpcUrl` with the protocol changed from `http` to `ws`. As a convenience, the exact strings `http://127.0.0.1:8899` and `http://localhost:8899` (the canonical local validator RPC endpoints) are rewritten to port `8900`. The match is exact-string only — any other host, scheme, or port (including `https://localhost:8899` or `http://0.0.0.0:8899`) is left untouched. Pass `rpcSubscriptionsUrl` explicitly when your RPC and WebSocket endpoints use different ports.
 - `rpcConfig`: Optional configuration forwarded to `createSolanaRpc`.
 - `rpcSubscriptionsConfig`: Optional configuration forwarded to `createSolanaRpcSubscriptions`.
-- `transactionConfig`: Options to configure how transaction messages are created. See the `rpcTransactionPlanner` options below.
+- `transactionConfig`: Options to configure how transaction messages are created, such as the transaction version, priority fees, or the maximum number of instructions per transaction. See the `rpcTransactionPlanner` options below.
 - `maxConcurrency`: Maximum number of concurrent transaction executions in the sending executor and transaction preparations in the signing executor. The executors have independent limits. Defaults to 10.
 - `skipPreflight`: Whether to always skip preflight simulation. Defaults to `false`.
 
@@ -281,6 +281,11 @@ All options are provided via a `TransactionPlannerConfig` object. Its shape is d
     - `version`: Set to `1` to create version 1 transaction messages.
     - `priorityFeeLamports`: The total priority fee in lamports, written to the version 1 resource header. Defaults to no priority fees.
     - `estimateResourceLimits`: Whether to estimate and set resource limits by simulating before signing or sending. For version 1 transactions, estimation covers both the compute unit limit and the loaded accounts data size limit. Defaults to `true`.
+
+- For all transaction versions:
+
+    - `maxInstructionsPerTransaction`: The maximum number of instructions in each planned transaction message. Instructions that don't fit are moved to new transaction messages. Must be between 1 and 64. Defaults to 16, which leaves headroom for inner instructions, since these also count towards the runtime's limit of 64 instructions per transaction. The limit includes instructions added by `onTransactionMessageUpdated` and, for legacy and version 0 transactions, the compute budget instructions added by the planner (the provisory compute unit limit and any compute unit price), whereas version 1 transactions store these in the resource header instead.
+    - `onTransactionMessageUpdated`: A function called whenever a transaction message is updated during planning, which must return the (possibly modified) message. It may be called several times on the same message, so it should be idempotent.
 
 ## `rpcTransactionPlanSendingExecutor` plugin
 

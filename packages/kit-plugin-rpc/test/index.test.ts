@@ -1,4 +1,13 @@
-import { createClient, createSolanaRpc, createSolanaRpcSubscriptions, mainnet, TransactionSigner } from '@solana/kit';
+import {
+    Address,
+    createClient,
+    createSolanaRpc,
+    createSolanaRpcSubscriptions,
+    flattenTransactionPlan,
+    generateKeyPairSigner,
+    mainnet,
+    TransactionSigner,
+} from '@solana/kit';
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 import {
@@ -176,6 +185,23 @@ describe('solanaRpc', () => {
                 }),
             );
         expect(client).toHaveProperty('rpcSubscriptions');
+    });
+
+    it('forwards the transaction config to the transaction planner', async () => {
+        const payer = await generateKeyPairSigner();
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(
+                solanaRpc({
+                    rpcUrl: 'https://api.mainnet-beta.solana.com',
+                    transactionConfig: { estimateResourceLimits: false, maxInstructionsPerTransaction: 2 },
+                }),
+            );
+
+        const instruction = { programAddress: '11111111111111111111111111111111' as Address };
+        const transactionPlan = await client.planTransactions([instruction, instruction, instruction]);
+        const instructionCounts = flattenTransactionPlan(transactionPlan).map(p => p.message.instructions.length);
+        expect(instructionCounts).toStrictEqual([2, 1]);
     });
 });
 

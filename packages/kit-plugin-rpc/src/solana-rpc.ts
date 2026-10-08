@@ -99,8 +99,9 @@ export type SolanaRpcConfig<TClusterUrl extends ClusterUrl = ClusterUrl> = Solan
     skipPreflight?: boolean;
     /**
      * Options to configure how transaction messages are created, such as
-     * choosing a transaction version, configuring priority fees, or toggling
-     * resource limit estimation. This is the single source for
+     * choosing a transaction version, configuring priority fees, toggling
+     * resource limit estimation, or limiting the number of instructions per
+     * transaction. See {@link rpcTransactionPlanner}. This is the single source for
      * `estimateResourceLimits`, which is applied to both the planner and the
      * executor.
      */

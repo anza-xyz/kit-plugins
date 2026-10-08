@@ -10,6 +10,7 @@ import {
     setTransactionMessageFeePayerSigner,
     setTransactionMessagePriorityFeeLamports,
     TransactionPlanner,
+    TransactionPlannerConfig as KitTransactionPlannerConfig,
 } from '@solana/kit';
 import { transactionPlanner } from '@solana/kit-plugin-instruction-plan';
 
@@ -50,6 +51,14 @@ import { transactionPlanner } from '@solana/kit-plugin-instruction-plan';
  * rpcTransactionPlanner({ estimateResourceLimits: false });
  * ```
  *
+ * @example
+ * Allowing up to 32 instructions per transaction message, including the
+ * compute budget instructions added by the planner.
+ *
+ * ```ts
+ * rpcTransactionPlanner({ maxInstructionsPerTransaction: 32 });
+ * ```
+ *
  * @see {@link rpcTransactionPlanSendingExecutor}
  */
 export function rpcTransactionPlanner(config: TransactionPlannerConfig = {}) {
@@ -71,8 +80,11 @@ function createPlanner(client: ClientWithPayer, config: TransactionPlannerConfig
  * priority fee to the resource header.
  */
 function createV1Planner(client: ClientWithPayer, config: TransactionPlannerConfigV1): TransactionPlanner {
-    const { estimateResourceLimits = true, priorityFeeLamports } = config;
+    // `version` is only destructured to exclude it from the options forwarded to Kit.
+    // oxlint-disable-next-line no-unused-vars
+    const { estimateResourceLimits = true, priorityFeeLamports, version: _version, ...plannerConfig } = config;
     return createTransactionPlanner({
+        ...plannerConfig,
         createTransactionMessage: () =>
             pipe(
                 createTransactionMessage({ version: 1 }),
@@ -91,8 +103,9 @@ function createV1Planner(client: ClientWithPayer, config: TransactionPlannerConf
  * expressing the priority fee as a `setComputeUnitPrice` instruction.
  */
 function createLegacyPlanner(client: ClientWithPayer, config: TransactionPlannerConfigLegacy): TransactionPlanner {
-    const { estimateResourceLimits = true, microLamportsPerComputeUnit, version = 0 } = config;
+    const { estimateResourceLimits = true, microLamportsPerComputeUnit, version = 0, ...plannerConfig } = config;
     return createTransactionPlanner({
+        ...plannerConfig,
         createTransactionMessage: () =>
             pipe(
                 createTransactionMessage({ version }),
@@ -108,8 +121,12 @@ function createLegacyPlanner(client: ClientWithPayer, config: TransactionPlanner
 
 /**
  * Configuration options shared by all transaction versions.
+ *
+ * This includes every option of Kit's `createTransactionPlanner` (such as
+ * `maxInstructionsPerTransaction` and `onTransactionMessageUpdated`) except
+ * `createTransactionMessage`, which the planner provides itself.
  */
-type SharedTransactionPlannerConfig = {
+type SharedTransactionPlannerConfig = Omit<KitTransactionPlannerConfig, 'createTransactionMessage'> & {
     /**
      * Whether to estimate and set resource limits (the compute unit limit and,
      * for version 1 transactions, the loaded accounts data size limit) by
@@ -138,7 +155,8 @@ type SharedTransactionPlannerConfig = {
  * version 0 transaction messages.
  *
  * For these versions, resource limits and priority fees are expressed as compute
- * budget instructions appended to the transaction, which cost message bytes.
+ * budget instructions appended to the transaction, which cost message bytes and
+ * count towards `maxInstructionsPerTransaction`.
  */
 export type TransactionPlannerConfigLegacy = SharedTransactionPlannerConfig & {
     /**
