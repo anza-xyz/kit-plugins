@@ -38,7 +38,7 @@ const client = createClient().use(payer(myPayer)).use(litesvm());
 
 All options are provided via a `LiteSvmConfig` object:
 
-- `transactionConfig`: Options to configure how transaction messages are created. See the `litesvmTransactionPlanner` options below.
+- `transactionConfig`: Options to configure how transaction messages are created, such as the transaction version, priority fees, or the maximum number of instructions per transaction. See the `litesvmTransactionPlanner` options below.
 
 ### Features
 
@@ -169,6 +169,11 @@ All options are provided via a `TransactionPlannerConfig` object. Its shape is d
     - `priorityFeeLamports`: The total priority fee in lamports, written to the version 1 resource header. Defaults to no priority fees.
     - `computeUnitLimit`: The compute unit limit, written to the version 1 resource header. Defaults to the maximum limit of 1,400,000 compute units.
     - `loadedAccountsDataSizeLimit`: The loaded accounts data size limit in bytes, written to the version 1 resource header. Defaults to the maximum limit of 64 MiB.
+
+- For all transaction versions:
+
+    - `maxInstructionsPerTransaction`: The maximum number of instructions in each planned transaction message. Instructions that don't fit are moved to new transaction messages. Must be between 1 and 64. Defaults to 16, which leaves headroom for inner instructions, since these also count towards the runtime's limit of 64 instructions per transaction. The limit includes instructions added by `onTransactionMessageUpdated` and, for legacy and version 0 transactions, the `setComputeUnitPrice` instruction added when `microLamportsPerComputeUnit` is set, whereas version 1 transactions store priority fees in the resource header instead.
+    - `onTransactionMessageUpdated`: A function called whenever a transaction message is updated during planning, which must return the (possibly modified) message. It may be called several times on the same message, so it should be idempotent.
 
 Unlike the RPC planner, the LiteSVM planner does not estimate resource limits, since LiteSVM executes transactions locally without a simulation-based estimation step. Since unset resource limits in a version 1 transaction config are treated as zero by the runtime, the planner writes maximum limits to the resource header by default.
 

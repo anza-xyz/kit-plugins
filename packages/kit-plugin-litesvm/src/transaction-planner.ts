@@ -11,6 +11,7 @@ import {
     setTransactionMessageLoadedAccountsDataSizeLimit,
     setTransactionMessagePriorityFeeLamports,
     TransactionPlanner,
+    TransactionPlannerConfig as KitTransactionPlannerConfig,
 } from '@solana/kit';
 import { transactionPlanner } from '@solana/kit-plugin-instruction-plan';
 
@@ -52,6 +53,13 @@ const MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES = 64 * 1024 * 1024;
  *     .use(litesvmTransactionPlanSendingExecutor());
  * ```
  *
+ * @example
+ * Allowing up to 32 instructions per transaction message.
+ *
+ * ```ts
+ * litesvmTransactionPlanner({ maxInstructionsPerTransaction: 32 });
+ * ```
+ *
  * @see {@link litesvmTransactionPlanSendingExecutor}
  */
 export function litesvmTransactionPlanner(config: TransactionPlannerConfig = {}) {
@@ -82,8 +90,13 @@ function createV1Planner(client: ClientWithPayer, config: TransactionPlannerConf
         computeUnitLimit = MAX_COMPUTE_UNIT_LIMIT,
         loadedAccountsDataSizeLimit = MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES,
         priorityFeeLamports,
+        // `version` is only destructured to exclude it from the options forwarded to Kit.
+        // oxlint-disable-next-line no-unused-vars
+        version: _version,
+        ...plannerConfig
     } = config;
     return createTransactionPlanner({
+        ...plannerConfig,
         createTransactionMessage: () =>
             pipe(
                 createTransactionMessage({ version: 1 }),
@@ -103,8 +116,9 @@ function createV1Planner(client: ClientWithPayer, config: TransactionPlannerConf
  * expressing the priority fee as a `setComputeUnitPrice` instruction.
  */
 function createLegacyPlanner(client: ClientWithPayer, config: TransactionPlannerConfigLegacy): TransactionPlanner {
-    const { microLamportsPerComputeUnit, version = 0 } = config;
+    const { microLamportsPerComputeUnit, version = 0, ...plannerConfig } = config;
     return createTransactionPlanner({
+        ...plannerConfig,
         createTransactionMessage: () =>
             pipe(
                 createTransactionMessage({ version }),
@@ -118,13 +132,23 @@ function createLegacyPlanner(client: ClientWithPayer, config: TransactionPlanner
 }
 
 /**
+ * Configuration options shared by all transaction versions.
+ *
+ * This includes every option of Kit's `createTransactionPlanner` (such as
+ * `maxInstructionsPerTransaction` and `onTransactionMessageUpdated`) except
+ * `createTransactionMessage`, which the planner provides itself.
+ */
+type SharedTransactionPlannerConfig = Omit<KitTransactionPlannerConfig, 'createTransactionMessage'>;
+
+/**
  * Configuration options for the transaction planner when creating legacy or
  * version 0 transaction messages.
  *
  * For these versions, priority fees are expressed as a `setComputeUnitPrice`
- * compute budget instruction appended to the transaction.
+ * compute budget instruction appended to the transaction, which counts towards
+ * `maxInstructionsPerTransaction`.
  */
-export type TransactionPlannerConfigLegacy = {
+export type TransactionPlannerConfigLegacy = SharedTransactionPlannerConfig & {
     /**
      * The priority fee to set on the transaction, in micro-lamports per compute
      * unit, added as a `setComputeUnitPrice` instruction.
@@ -147,7 +171,7 @@ export type TransactionPlannerConfigLegacy = {
  * a compute budget instruction, and are expressed as a total amount in lamports
  * rather than a per-compute-unit price.
  */
-export type TransactionPlannerConfigV1 = {
+export type TransactionPlannerConfigV1 = SharedTransactionPlannerConfig & {
     /**
      * The compute unit limit to set on the transaction, written to the
      * version 1 resource header.

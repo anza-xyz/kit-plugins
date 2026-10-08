@@ -1,16 +1,22 @@
 import {
     Address,
+    appendTransactionMessageInstruction,
     createClient,
+    flattenTransactionPlan,
     generateKeyPairSigner,
     getTransactionMessageComputeUnitLimit,
     getTransactionMessageComputeUnitPrice,
     getTransactionMessageLoadedAccountsDataSizeLimit,
     getTransactionMessagePriorityFeeLamports,
+    isSolanaError,
     Lamports,
     MicroLamports,
+    sequentialInstructionPlan,
     singleInstructionPlan,
     SingleTransactionPlan,
+    SOLANA_ERROR__INSTRUCTION_PLANS__INVALID_MAX_INSTRUCTIONS_PER_TRANSACTION,
     TransactionMessage,
+    TransactionPlan,
     TransactionSigner,
 } from '@solana/kit';
 import { assertType, describe, expect, it } from 'vitest';
@@ -20,6 +26,20 @@ import { rpcTransactionPlanner, TransactionPlannerConfig } from '../src';
 const MOCK_INSTRUCTION = {
     programAddress: '11111111111111111111111111111111' as Address,
 };
+
+const MARKER_INSTRUCTION = {
+    programAddress: 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr' as Address,
+};
+
+/** Returns the number of instructions in each planned transaction message, in order. */
+function getInstructionCounts(transactionPlan: TransactionPlan): number[] {
+    return flattenTransactionPlan(transactionPlan).map(plan => plan.message.instructions.length);
+}
+
+/** Creates a sequential instruction plan made of `count` mock instructions. */
+function getMockInstructionPlan(count: number) {
+    return sequentialInstructionPlan(Array.from({ length: count }, () => MOCK_INSTRUCTION));
+}
 
 describe('rpcTransactionPlanner', () => {
     it('provides a transactionPlanner on the client', () => {
@@ -190,6 +210,116 @@ describe('rpcTransactionPlanner', () => {
         expect(getTransactionMessageLoadedAccountsDataSizeLimit(transactionPlan.message)).toBeUndefined();
     });
 
+    it('splits instructions across transaction messages using the configured maxInstructionsPerTransaction', async () => {
+        const payer = await generateKeyPairSigner();
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(rpcTransactionPlanner({ estimateResourceLimits: false, maxInstructionsPerTransaction: 2 }));
+
+        const transactionPlan = await client.planTransactions(getMockInstructionPlan(3));
+        expect(transactionPlan.kind).toBe('sequential');
+        expect(getInstructionCounts(transactionPlan)).toStrictEqual([2, 1]);
+    });
+
+    it('counts the compute budget instructions added by the planner towards maxInstructionsPerTransaction', async () => {
+        const payer = await generateKeyPairSigner();
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(
+                rpcTransactionPlanner({
+                    maxInstructionsPerTransaction: 3,
+                    microLamportsPerComputeUnit: 100n as MicroLamports,
+                }),
+            );
+
+        // Each message holds a provisory compute unit limit, a compute unit
+        // price, and a single planned instruction.
+        const transactionPlan = await client.planTransactions(getMockInstructionPlan(2));
+        expect(getInstructionCounts(transactionPlan)).toStrictEqual([3, 3]);
+    });
+
+    it('does not use instruction slots for resource limits and priority fees on version 1 transactions', async () => {
+        const payer = await generateKeyPairSigner();
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(
+                rpcTransactionPlanner({
+                    maxInstructionsPerTransaction: 2,
+                    priorityFeeLamports: 100n as Lamports,
+                    version: 1,
+                }),
+            );
+
+        const transactionPlan = await client.planTransactions(getMockInstructionPlan(3));
+        expect(getInstructionCounts(transactionPlan)).toStrictEqual([2, 1]);
+    });
+
+    it('defaults to 16 instructions per transaction message', async () => {
+        const payer = await generateKeyPairSigner();
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(rpcTransactionPlanner({ estimateResourceLimits: false }));
+
+        const transactionPlan = await client.planTransactions(getMockInstructionPlan(20));
+        expect(getInstructionCounts(transactionPlan)).toStrictEqual([16, 4]);
+    });
+
+    it('rejects an invalid maxInstructionsPerTransaction when planning', async () => {
+        expect.assertions(1);
+        const payer = await generateKeyPairSigner();
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(rpcTransactionPlanner({ maxInstructionsPerTransaction: 65 }));
+
+        await expect(client.planTransactions(getMockInstructionPlan(1))).rejects.toSatisfy(error =>
+            isSolanaError(error, SOLANA_ERROR__INSTRUCTION_PLANS__INVALID_MAX_INSTRUCTIONS_PER_TRANSACTION),
+        );
+    });
+
+    it('uses the message returned by onTransactionMessageUpdated and counts its instructions towards the limit', async () => {
+        const payer = await generateKeyPairSigner();
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(
+                rpcTransactionPlanner({
+                    estimateResourceLimits: false,
+                    maxInstructionsPerTransaction: 3,
+                    // Idempotent, since the planner may call it several times on the same message.
+                    onTransactionMessageUpdated: message =>
+                        message.instructions.includes(MARKER_INSTRUCTION)
+                            ? message
+                            : appendTransactionMessageInstruction(MARKER_INSTRUCTION, message),
+                }),
+            );
+
+        // Each message holds the marker instruction and two planned instructions.
+        const transactionPlan = await client.planTransactions(getMockInstructionPlan(4));
+        const messages = flattenTransactionPlan(transactionPlan).map(plan => plan.message);
+        expect(messages).toHaveLength(2);
+        for (const message of messages) {
+            expect(message.instructions).toHaveLength(3);
+            expect(message.instructions.filter(ix => ix === MARKER_INSTRUCTION)).toHaveLength(1);
+        }
+    });
+
+    it('forwards onTransactionMessageUpdated on version 1 transactions', async () => {
+        const payer = await generateKeyPairSigner();
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(
+                rpcTransactionPlanner({
+                    onTransactionMessageUpdated: message =>
+                        message.instructions.includes(MARKER_INSTRUCTION)
+                            ? message
+                            : appendTransactionMessageInstruction(MARKER_INSTRUCTION, message),
+                    version: 1,
+                }),
+            );
+
+        const transactionMessage = await client.planTransaction(getMockInstructionPlan(1));
+        expect(transactionMessage.instructions).toStrictEqual([MOCK_INSTRUCTION, MARKER_INSTRUCTION]);
+    });
+
     it('requires a payer on the client', () => {
         // @ts-expect-error TypeScript fails but we don't throw an error at runtime.
         expect(() => createClient().use(rpcTransactionPlanner())).not.toThrow();
@@ -213,5 +343,23 @@ describe('rpcTransactionPlanner', () => {
             priorityFeeLamports: 1n as Lamports,
             version: 1,
         });
+
+        // `maxInstructionsPerTransaction` and `onTransactionMessageUpdated` are shared across all versions.
+        const onTransactionMessageUpdated = <T>(message: T) => message;
+        assertType<TransactionPlannerConfig>({ maxInstructionsPerTransaction: 8, onTransactionMessageUpdated });
+        assertType<TransactionPlannerConfig>({
+            maxInstructionsPerTransaction: 8,
+            onTransactionMessageUpdated,
+            version: 0,
+        });
+        assertType<TransactionPlannerConfig>({
+            maxInstructionsPerTransaction: 8,
+            onTransactionMessageUpdated,
+            version: 1,
+        });
+
+        // `createTransactionMessage` is provided by the planner and cannot be overridden.
+        // @ts-expect-error `createTransactionMessage` is not a valid option.
+        assertType<TransactionPlannerConfig>({ createTransactionMessage: () => ({}) });
     });
 });

@@ -12,8 +12,9 @@ import { litesvmTransactionPlanner, TransactionPlannerConfig } from './transacti
 /** Configuration for the {@link litesvm} plugin. */
 export type LiteSvmConfig = {
     /**
-     * Options to configure how transaction messages are created such as
-     * choosing a transaction version or setting priority fees.
+     * Options to configure how transaction messages are created, such as
+     * choosing a transaction version, setting priority fees, or limiting the
+     * number of instructions per transaction. See {@link litesvmTransactionPlanner}.
      */
     transactionConfig?: TransactionPlannerConfig;
 };

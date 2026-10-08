@@ -1,4 +1,11 @@
-import { createClient, TransactionPlanExecutor, TransactionSigner } from '@solana/kit';
+import {
+    Address,
+    createClient,
+    flattenTransactionPlan,
+    generateKeyPairSigner,
+    TransactionPlanExecutor,
+    TransactionSigner,
+} from '@solana/kit';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import type { LiteSvmSendContext } from '../src/index';
@@ -39,5 +46,17 @@ describe('litesvm', () => {
             .use(() => ({ payer }))
             .use(nodeLitesvm());
         expectTypeOf(client.transactionPlanExecutor).toEqualTypeOf<TransactionPlanExecutor<LiteSvmSendContext>>();
+    });
+
+    it('forwards the transaction config to the transaction planner', async () => {
+        const feePayer = await generateKeyPairSigner();
+        const client = createClient()
+            .use(() => ({ payer: feePayer }))
+            .use(litesvm({ transactionConfig: { maxInstructionsPerTransaction: 2 } }));
+
+        const instruction = { programAddress: '11111111111111111111111111111111' as Address };
+        const transactionPlan = await client.planTransactions([instruction, instruction, instruction]);
+        const instructionCounts = flattenTransactionPlan(transactionPlan).map(p => p.message.instructions.length);
+        expect(instructionCounts).toStrictEqual([2, 1]);
     });
 });
