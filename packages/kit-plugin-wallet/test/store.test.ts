@@ -3579,3 +3579,92 @@ describe.skipIf(!__BROWSER__)('store account hardening (browser)', () => {
         expect(wallets[0].accounts[0]).toBe(connectedAccount);
     });
 });
+
+describe.skipIf(!__BROWSER__)('store auto-connect with duplicate wallet names (browser)', () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    it('does not auto-connect when more than one registered wallet has the saved name', async () => {
+        const account = createMockAccount();
+        registerWallet(createMockUiWallet({ accounts: [account], name: 'TestWallet' }));
+        registerWallet(createMockUiWallet({ accounts: [account], name: 'TestWallet' }));
+
+        const storage = createMockStorage({ 'kit-wallet': `TestWallet:${account.address}` });
+        const store = createWalletStore({ chain: 'solana:mainnet', storage });
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(store.getState().status).toBe('disconnected');
+        expect(connectMock).not.toHaveBeenCalled();
+        expect(storage.getItem('kit-wallet')).toBe(`TestWallet:${account.address}`);
+    });
+
+    it('does not auto-connect when a wallet with the saved name is filtered out', async () => {
+        const account = createMockAccount();
+        registerWallet(createMockUiWallet({ accounts: [account], name: 'TestWallet' }));
+        registerWallet(createMockUiWallet({ accounts: [account], chains: ['solana:devnet'], name: 'TestWallet' }));
+
+        const storage = createMockStorage({ 'kit-wallet': `TestWallet:${account.address}` });
+        const store = createWalletStore({ chain: 'solana:mainnet', storage });
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(store.getState().status).toBe('disconnected');
+        expect(connectMock).not.toHaveBeenCalled();
+        expect(storage.getItem('kit-wallet')).toBe(`TestWallet:${account.address}`);
+    });
+
+    it('does not auto-connect when wallets with the saved name register late', async () => {
+        const account = createMockAccount();
+        const storage = createMockStorage({ 'kit-wallet': `TestWallet:${account.address}` });
+        const store = createWalletStore({ chain: 'solana:mainnet', storage });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(store.getState().status).toBe('reconnecting');
+
+        // Two wallets with the saved name are registered before the store hears about either.
+        registerWallet(createMockUiWallet({ accounts: [account], name: 'TestWallet' }));
+        lateRegisterWallet(createMockUiWallet({ accounts: [account], name: 'TestWallet' }));
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(store.getState().status).toBe('disconnected');
+        expect(connectMock).not.toHaveBeenCalled();
+        expect(storage.getItem('kit-wallet')).toBe(`TestWallet:${account.address}`);
+
+        // And it stops waiting for the saved wallet.
+        expect(registryListeners.register).toHaveLength(1);
+    });
+
+    it('does not connect when a wallet with the same name registers during the silent reconnect', async () => {
+        const account = createMockAccount();
+        registerWallet(createMockUiWallet({ accounts: [account], name: 'TestWallet' }));
+
+        // Hold the silent reconnect open.
+        const reconnectConnect = Promise.withResolvers<void>();
+        connectMock.mockReturnValueOnce(reconnectConnect.promise);
+
+        const storage = createMockStorage({ 'kit-wallet': `TestWallet:${account.address}` });
+        const store = createWalletStore({ chain: 'solana:mainnet', storage });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(store.getState().status).toBe('reconnecting');
+
+        // Another wallet registers with the same name while the reconnect is in flight.
+        lateRegisterWallet(createMockUiWallet({ accounts: [account], name: 'TestWallet' }));
+        reconnectConnect.resolve();
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(store.getState().status).toBe('disconnected');
+        expect(store.getState().connected).toBeNull();
+        expect(storage.getItem('kit-wallet')).toBe(`TestWallet:${account.address}`);
+    });
+
+    it('still auto-connects when another wallet has a different name', async () => {
+        const account = createMockAccount();
+        registerWallet(createMockUiWallet({ accounts: [account], name: 'TestWallet' }));
+        registerWallet(createMockUiWallet({ name: 'OtherWallet' }));
+
+        const storage = createMockStorage({ 'kit-wallet': `TestWallet:${account.address}` });
+        const store = createWalletStore({ chain: 'solana:mainnet', storage });
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(store.getState().status).toBe('connected');
+        expect(store.getState().connected!.wallet.name).toBe('TestWallet');
+    });
+});

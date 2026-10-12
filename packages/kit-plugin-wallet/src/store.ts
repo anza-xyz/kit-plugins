@@ -386,6 +386,16 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         return buildWalletList().some(w => w.name === uiWallet.name);
     }
 
+    // True if more than one registered wallet has this name. Wallet names
+    // aren't unique (any script on the page can register a wallet with an
+    // existing wallet's name), and the persisted connection only records the
+    // name, so silently reconnecting could pick an impostor instead of the
+    // wallet the user chose. All registered wallets are counted, filtered or
+    // not, since either of them could be the impostor.
+    function isWalletNameAmbiguous(walletName: string): boolean {
+        return registry.get().filter(w => w.name === walletName).length > 1;
+    }
+
     updateState({ wallets: buildWalletList() });
 
     // Listen for new wallets being registered
@@ -924,7 +934,12 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             const savedAddress = savedKey.slice(separatorIndex + 1);
             const existing = state.wallets.find(w => w.name === walletName);
 
-            if (existing) {
+            if (isWalletNameAmbiguous(walletName)) {
+                // Don't guess which of the wallets the user connected to. The
+                // saved connection is kept, since the duplicate may not be
+                // there on the next load.
+                updateState({ status: 'disconnected' });
+            } else if (existing) {
                 await attemptSilentReconnect(savedAddress, existing);
             } else if (registry.get().some(w => w.name === walletName)) {
                 // Wallet registered but doesn't pass the filter.
@@ -943,26 +958,34 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
                     }
                 }, 3000);
 
+                // Stop waiting for the saved wallet.
+                const settle = () => {
+                    clearTimeout(statusTimeout);
+                    unsubRegisterForReconnect();
+                    reconnectCleanup = null;
+                };
+
                 const unsubRegisterForReconnect = registry.on('register', () => {
                     const generation = connectGeneration;
                     void (async () => {
                         if (userHasSelected) {
-                            clearTimeout(statusTimeout);
-                            unsubRegisterForReconnect();
-                            reconnectCleanup = null;
+                            settle();
+                            return;
+                        }
+                        if (isWalletNameAmbiguous(walletName)) {
+                            // Another wallet registered with the same name. As
+                            // above, the saved connection is kept.
+                            settle();
+                            updateState({ status: 'disconnected' });
                             return;
                         }
                         const found = buildWalletList().find(w => w.name === walletName);
                         if (found) {
-                            clearTimeout(statusTimeout);
-                            unsubRegisterForReconnect();
-                            reconnectCleanup = null;
+                            settle();
                             await attemptSilentReconnect(savedAddress, found);
                         } else if (registry.get().some(w => w.name === walletName)) {
                             // Wallet registered but filtered out.
-                            clearTimeout(statusTimeout);
-                            unsubRegisterForReconnect();
-                            reconnectCleanup = null;
+                            settle();
                             updateState({ status: 'disconnected' });
                             clearPersistedAccount();
                         }
@@ -1010,6 +1033,15 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             if (!isWalletStillAvailable(uiWallet)) {
                 updateState({ status: 'disconnected' });
                 clearPersistedAccount();
+                return;
+            }
+
+            // Another wallet may have registered with the same name, so we
+            // can no longer be sure this is the wallet the user connected to.
+            // The saved connection is kept, since the duplicate may not be
+            // there on the next load.
+            if (isWalletNameAmbiguous(uiWallet.name)) {
+                updateState({ status: 'disconnected' });
                 return;
             }
 

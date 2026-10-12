@@ -373,6 +373,8 @@ walletSigner({
 
 By default the plugin uses `localStorage` to remember the last connected wallet and auto-reconnects on the next page load. Pass `storage: null` to disable, or provide a custom adapter (e.g. `sessionStorage` or an IndexedDB wrapper).
 
+The saved wallet is identified by its name, which isn't unique: any script on the page can register a wallet with the same name. If more than one registered wallet has the saved name, the plugin doesn't auto-reconnect, so it never silently connects to the wrong one.
+
 ## Account verification
 
 The plugin drops any wallet account whose `publicKey` doesn't match its `address`, and copies the rest so the wallet can't change them later. As a result, the wallets and accounts it exposes are not the same objects as `@wallet-standard/ui-registry` returns, but they work with the same helpers, such as `getWalletFeature`.
