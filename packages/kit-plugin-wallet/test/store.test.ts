@@ -476,8 +476,8 @@ describe.skipIf(!__BROWSER__)('store (browser)', () => {
         const account = createMockAccount();
         expect(() => store.selectAccount(account)).toThrow(
             new SolanaError(SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE, {
-                account: account.address,
-                operation: 'selectAccount',
+                address: account.address,
+                walletName: 'unknown',
             }),
         );
     });
@@ -2740,8 +2740,29 @@ describe.skipIf(!__BROWSER__)('store selectAccount cross-wallet (browser)', () =
         const orphan = createMockAccount('5bV6jUfhDHCQVA1WfKBUnXUsboJgoKgkzkKcxr3joew5');
         expect(() => store.selectAccount(orphan)).toThrow(
             new SolanaError(SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE, {
-                account: orphan.address,
-                operation: 'selectAccount',
+                address: orphan.address,
+                walletName: 'unknown',
+            }),
+        );
+    });
+
+    it('names the owning wallet when it is no longer available', async () => {
+        const accountA = createMockAccount('11111111111111111111111111111111');
+        const accountB = createMockAccount('5bV6jUfhDHCQVA1WfKBUnXUsboJgoKgkzkKcxr3joew5');
+        const walletA = createMockUiWallet({ accounts: [accountA], name: 'WalletA' });
+        const walletB = createMockUiWallet({ accounts: [accountB], name: 'WalletB' });
+        registerWallet(walletA);
+        registerWallet(walletB);
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(walletA);
+        const [handleB] = store.getState().wallets.find(w => w.name === 'WalletB')!.accounts;
+
+        unregisterWallet(walletB);
+
+        expect(() => store.selectAccount(handleB)).toThrow(
+            new SolanaError(SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE, {
+                address: accountB.address,
+                walletName: 'WalletB',
             }),
         );
     });
@@ -3497,8 +3518,8 @@ describe.skipIf(!__BROWSER__)('store account hardening (browser)', () => {
 
         expect(() => store.selectAccount(mismatched)).toThrow(
             new SolanaError(SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE, {
-                account: mismatched.address,
-                operation: 'selectAccount',
+                address: mismatched.address,
+                walletName: 'TestWallet',
             }),
         );
         expect(store.getState().connected!.account).toEqual(valid);

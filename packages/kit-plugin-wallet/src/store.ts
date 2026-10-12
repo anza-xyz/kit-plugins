@@ -714,22 +714,23 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         // Derive the owning wallet from the account handle. `getWalletForHandle`
         // keys a WeakMap on handle identity, so this is unambiguous even when the
         // same address is authorized in two wallets. A stale/unregistered handle
-        // throws — surface it as ACCOUNT_NOT_AVAILABLE.
+        // throws — surface it as ACCOUNT_NOT_AVAILABLE. The owning wallet is
+        // exactly what couldn't be resolved, so its name is unknown.
         let owner: UiWallet;
         try {
             owner = getUiWallet(getWalletForHandle(account));
         } catch {
             throw new SolanaError(SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE, {
-                account: account.address,
-                operation: 'selectAccount',
+                address: account.address,
+                walletName: 'unknown',
             });
         }
 
         // The owner must be currently authorized (discovered + passes the filter).
         if (!isWalletStillAvailable(owner)) {
             throw new SolanaError(SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE, {
-                account: account.address,
-                operation: 'selectAccount',
+                address: account.address,
+                walletName: owner.name,
             });
         }
 
@@ -742,8 +743,8 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         const selectedAccount = refreshed.accounts.find(a => a.address === account.address);
         if (!selectedAccount) {
             throw new SolanaError(SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE, {
-                account: account.address,
-                operation: 'selectAccount',
+                address: account.address,
+                walletName: refreshed.name,
             });
         }
 

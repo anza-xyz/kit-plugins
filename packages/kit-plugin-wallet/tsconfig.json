@@ -1,6 +1,9 @@
 {
     "$schema": "https://json.schemastore.org/tsconfig",
-    "compilerOptions": { "lib": ["ES2024.Promise"] },
+    // `ES2022.Error` provides the global `ErrorOptions` type used by the `SolanaError` constructor.
+    // Without it, `skipLibCheck` hides the unresolved type and error contexts are not type-checked.
+    // See https://github.com/anza-xyz/kit/pull/2110.
+    "compilerOptions": { "lib": ["ES2022.Error", "ES2024.Promise"] },
     "display": "@solana/kit-plugin-wallet",
     "extends": "../../tsconfig.json",
     "include": ["src", "test"]
