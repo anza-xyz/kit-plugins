@@ -4,7 +4,7 @@ import {
     SolanaError,
 } from '@solana/kit';
 import { isWalletStandardError } from '@wallet-standard/errors';
-import type { UiWalletAccount } from '@wallet-standard/ui';
+import type { UiWallet, UiWalletAccount } from '@wallet-standard/ui';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createWalletStore } from '../src/store';
@@ -3505,6 +3505,49 @@ describe.skipIf(!__BROWSER__)('store account hardening (browser)', () => {
         expect(hardened).toStrictEqual(account);
         expect('icon' in hardened).toBe(false);
         expect('label' in hardened).toBe(false);
+    });
+
+    it('keeps wallet and account icons that are image data URIs', () => {
+        const icon = 'data:image/svg+xml;base64,PHN2Zy8+';
+        const account = { ...createMockAccount(), icon } as UiWalletAccount;
+        const mockWallet = { ...createMockUiWallet({ accounts: [account], name: 'TestWallet' }), icon } as UiWallet;
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        const [wallet] = store.getState().wallets;
+
+        expect(wallet.icon).toBe(icon);
+        expect(wallet.accounts[0].icon).toBe(icon);
+    });
+
+    it('replaces a wallet icon that is not an image data URI with a placeholder', () => {
+        const mockWallet = {
+            ...createMockUiWallet({ name: 'TestWallet' }),
+            icon: 'https://example.com/icon.png',
+        } as unknown as UiWallet;
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        const [wallet] = store.getState().wallets;
+
+        expect(wallet.icon).not.toBe(mockWallet.icon);
+        expect(wallet.icon).toMatch(/^data:image\/svg\+xml;base64,/);
+    });
+
+    it.each([
+        ['a remote URL', 'https://example.com/icon.png'],
+        ['a non-image data URI', 'data:text/html;base64,PHNjcmlwdD4='],
+        ['not a string', { toString: (): string => 'data:image/png;base64,' }],
+    ])('omits an account icon that is %s', (_, icon) => {
+        const account = { ...createMockAccount(), icon } as unknown as UiWalletAccount;
+        const mockWallet = createMockUiWallet({ accounts: [account], name: 'TestWallet' });
+        registerWallet(mockWallet);
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        const [hardened] = store.getState().wallets[0].accounts;
+
+        expect(hardened.address).toBe(account.address);
+        expect('icon' in hardened).toBe(false);
     });
 
     it('selectAccount rejects an account whose public key does not match its address', async () => {

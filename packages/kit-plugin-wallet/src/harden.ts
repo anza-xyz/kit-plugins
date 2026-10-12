@@ -1,5 +1,5 @@
 import { bytesEqual, getAddressDecoder, type ReadonlyUint8Array } from '@solana/kit';
-import type { Wallet } from '@wallet-standard/base';
+import type { Wallet, WalletIcon } from '@wallet-standard/base';
 import type { UiWallet, UiWalletAccount } from '@wallet-standard/ui';
 import { getWalletForHandle, registerWalletHandle } from '@wallet-standard/ui-registry';
 
@@ -11,14 +11,20 @@ import { getWalletForHandle, registerWalletHandle } from '@wallet-standard/ui-re
 const hardenedWallets = new WeakMap<UiWallet, UiWallet>();
 const hardenedAccounts = new WeakMap<UiWalletAccount, UiWalletAccount | null>();
 
+// A blank SVG, used in place of a wallet icon that isn't a `data:image/` URI.
+const PLACEHOLDER_WALLET_ICON: WalletIcon =
+    'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxIDEiLz4=';
+
 /**
  * Returns a copy of a `UiWallet` that is safe to hand to apps, even if the
  * wallet is malicious.
  *
  * Accounts whose `publicKey` doesn't encode their `address` are dropped. The
  * rest are copied once verified, so the wallet can't change them later (e.g.
- * via a `Proxy`). The copies are registered as handles of the same wallet, so
- * they work with the `@wallet-standard/ui-features` helpers.
+ * via a `Proxy`). Icons that aren't `data:image/` URIs are dropped from
+ * accounts, and replaced with a blank placeholder for the wallet. The copies
+ * are registered as handles of the same wallet, so they work with the
+ * `@wallet-standard/ui-features` helpers.
  *
  * @param uiWallet - A `UiWallet` handle from the wallet-ui registry.
  * @returns The hardened copy, stable for as long as `uiWallet` is.
@@ -29,6 +35,7 @@ export function hardenUiWallet(uiWallet: UiWallet): UiWallet {
     const cached = hardenedWallets.get(uiWallet);
     if (cached) return cached;
     const wallet = getWalletForHandle(uiWallet);
+    const { icon } = uiWallet;
     const accounts: UiWalletAccount[] = [];
     for (const account of uiWallet.accounts) {
         const hardened = hardenUiWalletAccount(account, wallet);
@@ -38,7 +45,7 @@ export function hardenUiWallet(uiWallet: UiWallet): UiWallet {
         accounts: Object.freeze(accounts),
         chains: Object.freeze([...uiWallet.chains]),
         features: Object.freeze([...uiWallet.features]),
-        icon: uiWallet.icon,
+        icon: isImageDataUri(icon) ? icon : PLACEHOLDER_WALLET_ICON,
         name: uiWallet.name,
         version: uiWallet.version,
     }) as UiWallet;
@@ -62,7 +69,7 @@ function hardenUiWalletAccount(account: UiWalletAccount, wallet: Wallet): UiWall
             features: Object.freeze([...account.features]),
             // Optional: like the registry, omit the keys when the wallet doesn't
             // provide them, so the copy has the same shape as the handle.
-            ...(icon !== undefined && { icon }),
+            ...(isImageDataUri(icon) && { icon }),
             ...(label !== undefined && { label }),
             publicKey,
         }) as UiWalletAccount;
@@ -90,6 +97,13 @@ function hardenUiWalletAccount(account: UiWalletAccount, wallet: Wallet): UiWall
 export function publicKeyMatches(publicKey: unknown, expected: ReadonlyUint8Array): boolean {
     const bytes = copyBytes(publicKey);
     return !!bytes && bytesEqual(bytes, expected);
+}
+
+// True if a wallet-provided icon is an image data URI, as the Wallet Standard
+// requires. Anything else, such as a remote URL, could be used to track users
+// or be unsafe for apps to render.
+function isImageDataUri(icon: unknown): icon is WalletIcon {
+    return typeof icon === 'string' && icon.startsWith('data:image/');
 }
 
 // True if `address` is the base58 encoding of the 32-byte `publicKey`.
