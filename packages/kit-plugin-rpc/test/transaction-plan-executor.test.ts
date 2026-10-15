@@ -79,7 +79,9 @@ describe('rpcTransactionPlanSendingExecutor', () => {
     it('uses the RPC and RPC Subscriptions to send transactions', async () => {
         const payer = await generateKeyPairSigner();
         const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
-        const simulateTransaction = vi.fn().mockResolvedValue({ value: { unitsConsumed: 42 } });
+        const simulateTransaction = vi
+            .fn()
+            .mockResolvedValue({ value: { loadedAccountsDataSize: 5000, unitsConsumed: 42 } });
         const rpc = {
             getLatestBlockhash: () => ({ send: getLatestBlockhash }),
             simulateTransaction: () => ({ send: simulateTransaction }),
@@ -107,7 +109,9 @@ describe('rpcTransactionPlanSendingExecutor', () => {
     it('reports the signature and the transaction in the result context on success', async () => {
         const payer = await generateKeyPairSigner();
         const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
-        const simulateTransaction = vi.fn().mockResolvedValue({ value: { unitsConsumed: 42 } });
+        const simulateTransaction = vi
+            .fn()
+            .mockResolvedValue({ value: { loadedAccountsDataSize: 5000, unitsConsumed: 42 } });
         const rpc = {
             getLatestBlockhash: () => ({ send: getLatestBlockhash }),
             simulateTransaction: () => ({ send: simulateTransaction }),
@@ -665,7 +669,9 @@ describe('rpcTransactionPlanSendingExecutor', () => {
         const payer = await generateKeyPairSigner();
         const rpc = {
             getLatestBlockhash: () => ({ send: vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH }) }),
-            simulateTransaction: () => ({ send: vi.fn().mockResolvedValue({ value: { unitsConsumed: 42 } }) }),
+            simulateTransaction: () => ({
+                send: vi.fn().mockResolvedValue({ value: { loadedAccountsDataSize: 5000, unitsConsumed: 42 } }),
+            }),
         } as unknown as Rpc<SolanaRpcApi>;
         const rpcSubscriptions = {} as RpcSubscriptions<SolanaRpcSubscriptionsApi>;
         const resolvers: Array<() => void> = [];
@@ -708,7 +714,9 @@ describe('rpcTransactionPlanSendingExecutor', () => {
     it('does not prepare or send queued transactions after the abort signal fires', async () => {
         const payer = await generateKeyPairSigner();
         const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
-        const simulateTransaction = vi.fn().mockResolvedValue({ value: { unitsConsumed: 42n } });
+        const simulateTransaction = vi
+            .fn()
+            .mockResolvedValue({ value: { loadedAccountsDataSize: 5000, unitsConsumed: 42n } });
         const rpc = {
             getLatestBlockhash: () => ({ send: getLatestBlockhash }),
             simulateTransaction: () => ({ send: simulateTransaction }),
@@ -809,7 +817,9 @@ describe('rpcTransactionPlanSigningExecutor', () => {
     it('adds signing functions and returns a signed transaction with its prepared message and signature', async () => {
         const payer = await generateKeyPairSigner();
         const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
-        const simulateTransaction = vi.fn().mockResolvedValue({ value: { unitsConsumed: 42n } });
+        const simulateTransaction = vi
+            .fn()
+            .mockResolvedValue({ value: { loadedAccountsDataSize: 5000, unitsConsumed: 42n } });
         const rpc = {
             getLatestBlockhash: () => ({ send: getLatestBlockhash }),
             simulateTransaction: () => ({ send: simulateTransaction }),
@@ -942,7 +952,9 @@ describe('rpcTransactionPlanSigningExecutor', () => {
             },
         };
         const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
-        const simulateTransaction = vi.fn().mockResolvedValue({ value: { unitsConsumed: 42n } });
+        const simulateTransaction = vi
+            .fn()
+            .mockResolvedValue({ value: { loadedAccountsDataSize: 5000, unitsConsumed: 42n } });
         const rpc = {
             getLatestBlockhash: () => ({ send: getLatestBlockhash }),
             simulateTransaction: () => ({ send: simulateTransaction }),
@@ -985,7 +997,9 @@ describe('rpcTransactionPlanSigningExecutor', () => {
             },
         };
         const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
-        const simulateTransaction = vi.fn().mockResolvedValue({ value: { unitsConsumed: 42n } });
+        const simulateTransaction = vi
+            .fn()
+            .mockResolvedValue({ value: { loadedAccountsDataSize: 5000, unitsConsumed: 42n } });
         const rpc = {
             getLatestBlockhash: () => ({ send: getLatestBlockhash }),
             simulateTransaction: () => ({ send: simulateTransaction }),
@@ -1054,7 +1068,9 @@ describe('rpcTransactionPlanSigningExecutor', () => {
             signTransactions: vi.fn().mockRejectedValue(signingError),
         } satisfies TransactionSigner;
         const getLatestBlockhash = vi.fn().mockResolvedValue({ value: MOCK_BLOCKHASH });
-        const simulateTransaction = vi.fn().mockResolvedValue({ value: { unitsConsumed: 42n } });
+        const simulateTransaction = vi
+            .fn()
+            .mockResolvedValue({ value: { loadedAccountsDataSize: 5000, unitsConsumed: 42n } });
         const rpc = {
             getLatestBlockhash: () => ({ send: getLatestBlockhash }),
             simulateTransaction: () => ({ send: simulateTransaction }),

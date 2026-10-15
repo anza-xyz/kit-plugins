@@ -80,11 +80,22 @@ describe('rpcTransactionPlanner', () => {
         expect(transactionMessage.feePayer.address).toBe(second.address);
     });
 
-    it('creates version 0 transaction messages by default', async () => {
+    it('creates version 1 transaction messages by default', async () => {
         const payer = await generateKeyPairSigner();
         const client = createClient()
             .use(() => ({ payer }))
             .use(rpcTransactionPlanner());
+
+        const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
+        const transactionPlan = (await client.transactionPlanner(instructionPlan)) as SingleTransactionPlan;
+        expect(transactionPlan.message.version).toBe(1);
+    });
+
+    it('creates version 0 transaction messages when configured', async () => {
+        const payer = await generateKeyPairSigner();
+        const client = createClient()
+            .use(() => ({ payer }))
+            .use(rpcTransactionPlanner({ version: 0 }));
 
         const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
         const transactionPlan = (await client.transactionPlanner(instructionPlan)) as SingleTransactionPlan;
@@ -106,7 +117,7 @@ describe('rpcTransactionPlanner', () => {
         const payer = await generateKeyPairSigner();
         const client = createClient()
             .use(() => ({ payer }))
-            .use(rpcTransactionPlanner());
+            .use(rpcTransactionPlanner({ version: 0 }));
 
         const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
         const transactionPlan = (await client.transactionPlanner(instructionPlan)) as SingleTransactionPlan;
@@ -118,7 +129,7 @@ describe('rpcTransactionPlanner', () => {
         const payer = await generateKeyPairSigner();
         const client = createClient()
             .use(() => ({ payer }))
-            .use(rpcTransactionPlanner({ microLamportsPerComputeUnit: 100n as MicroLamports }));
+            .use(rpcTransactionPlanner({ microLamportsPerComputeUnit: 100n as MicroLamports, version: 0 }));
 
         const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
         const transactionPlan = (await client.transactionPlanner(instructionPlan)) as SingleTransactionPlan;
@@ -130,7 +141,7 @@ describe('rpcTransactionPlanner', () => {
         const payer = await generateKeyPairSigner();
         const client = createClient()
             .use(() => ({ payer }))
-            .use(rpcTransactionPlanner());
+            .use(rpcTransactionPlanner({ version: 0 }));
 
         const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
         const transactionPlan = (await client.transactionPlanner(instructionPlan)) as SingleTransactionPlan;
@@ -142,7 +153,7 @@ describe('rpcTransactionPlanner', () => {
         const payer = await generateKeyPairSigner();
         const client = createClient()
             .use(() => ({ payer }))
-            .use(rpcTransactionPlanner({ estimateResourceLimits: false }));
+            .use(rpcTransactionPlanner({ estimateResourceLimits: false, version: 0 }));
 
         const instructionPlan = singleInstructionPlan(MOCK_INSTRUCTION);
         const transactionPlan = (await client.transactionPlanner(instructionPlan)) as SingleTransactionPlan;
@@ -229,6 +240,7 @@ describe('rpcTransactionPlanner', () => {
                 rpcTransactionPlanner({
                     maxInstructionsPerTransaction: 3,
                     microLamportsPerComputeUnit: 100n as MicroLamports,
+                    version: 0,
                 }),
             );
 
@@ -335,6 +347,11 @@ describe('rpcTransactionPlanner', () => {
         assertType<TransactionPlannerConfig>({ priorityFeeLamports: 1n as Lamports, version: 1 });
         // @ts-expect-error `microLamportsPerComputeUnit` is only valid for legacy and version 0.
         assertType<TransactionPlannerConfig>({ microLamportsPerComputeUnit: 1n as MicroLamports, version: 1 });
+
+        // The version defaults to 1, so legacy and version 0 options require an explicit version.
+        assertType<TransactionPlannerConfig>({ priorityFeeLamports: 1n as Lamports });
+        // @ts-expect-error `microLamportsPerComputeUnit` requires an explicit legacy or version 0.
+        assertType<TransactionPlannerConfig>({ microLamportsPerComputeUnit: 1n as MicroLamports });
 
         // `estimateResourceLimits` is shared across all versions.
         assertType<TransactionPlannerConfig>({ estimateResourceLimits: false });

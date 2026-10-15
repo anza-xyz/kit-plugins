@@ -72,7 +72,13 @@ export function rpcTransactionPlanner(config: TransactionPlannerConfig = {}) {
  * construction time, so a dynamic `client.payer` is always respected.
  */
 function createPlanner(client: ClientWithPayer, config: TransactionPlannerConfig): TransactionPlanner {
-    return config.version === 1 ? createV1Planner(client, config) : createLegacyPlanner(client, config);
+    switch (config.version) {
+        case 'legacy':
+        case 0:
+            return createLegacyPlanner(client, config);
+        default:
+            return createV1Planner(client, config);
+    }
 }
 
 /**
@@ -103,7 +109,7 @@ function createV1Planner(client: ClientWithPayer, config: TransactionPlannerConf
  * expressing the priority fee as a `setComputeUnitPrice` instruction.
  */
 function createLegacyPlanner(client: ClientWithPayer, config: TransactionPlannerConfigLegacy): TransactionPlanner {
-    const { estimateResourceLimits = true, microLamportsPerComputeUnit, version = 0, ...plannerConfig } = config;
+    const { estimateResourceLimits = true, microLamportsPerComputeUnit, version, ...plannerConfig } = config;
     return createTransactionPlanner({
         ...plannerConfig,
         createTransactionMessage: () =>
@@ -168,9 +174,8 @@ export type TransactionPlannerConfigLegacy = SharedTransactionPlannerConfig & {
     microLamportsPerComputeUnit?: MicroLamports;
     /**
      * The transaction message version to use when creating transaction messages.
-     * Defaults to version 0.
      */
-    version?: 'legacy' | 0;
+    version: 'legacy' | 0;
 };
 
 /**
@@ -191,8 +196,9 @@ export type TransactionPlannerConfigV1 = SharedTransactionPlannerConfig & {
     priorityFeeLamports?: Lamports;
     /**
      * The transaction message version to use when creating transaction messages.
+     * Defaults to version 1.
      */
-    version: 1;
+    version?: 1;
 };
 
 /**
@@ -201,6 +207,7 @@ export type TransactionPlannerConfigV1 = SharedTransactionPlannerConfig & {
  * The `version` field determines the transaction version to use when creating
  * transaction messages and discriminates the shape of the rest of the
  * configuration, as some options are only applicable to certain versions.
+ * When omitted, version 1 transaction messages are created.
  *
  * @see {@link TransactionPlannerConfigLegacy}
  * @see {@link TransactionPlannerConfigV1}

@@ -268,19 +268,19 @@ const transactionPlan = await client.planTransactions(myInstructionPlan);
 
 ### Options
 
-All options are provided via a `TransactionPlannerConfig` object. Its shape is discriminated by the transaction `version`.
-
-- For legacy and version 0 transactions:
-
-    - `version`: The transaction message version to use. Accepts `0` or `'legacy'`. Defaults to `0`.
-    - `microLamportsPerComputeUnit`: The priority fee in micro-lamports per compute unit, added as a `setComputeUnitPrice` instruction. Defaults to no priority fees.
-    - `estimateResourceLimits`: Whether to estimate and set resource limits by simulating before signing or sending. Set to `false` to skip estimation and reserve no provisory limits, which is useful for transactions close to the message size limit. Defaults to `true`.
+All options are provided via a `TransactionPlannerConfig` object. Its shape is discriminated by the transaction `version`, which defaults to `1`.
 
 - For version 1 transactions:
 
-    - `version`: Set to `1` to create version 1 transaction messages.
+    - `version`: The transaction message version to use. Accepts `1`. Defaults to `1`.
     - `priorityFeeLamports`: The total priority fee in lamports, written to the version 1 resource header. Defaults to no priority fees.
     - `estimateResourceLimits`: Whether to estimate and set resource limits by simulating before signing or sending. For version 1 transactions, estimation covers both the compute unit limit and the loaded accounts data size limit. Defaults to `true`.
+
+- For legacy and version 0 transactions:
+
+    - `version`: Set to `0` or `'legacy'` to create legacy or version 0 transaction messages.
+    - `microLamportsPerComputeUnit`: The priority fee in micro-lamports per compute unit, added as a `setComputeUnitPrice` instruction. Defaults to no priority fees.
+    - `estimateResourceLimits`: Whether to estimate and set resource limits by simulating before signing or sending. Set to `false` to skip estimation and reserve no provisory limits, which is useful for transactions close to the message size limit. Defaults to `true`.
 
 - For all transaction versions:
 
