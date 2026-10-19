@@ -86,13 +86,13 @@
         "@testing-library/react": "^16.3.3",
         "@types/react": "^19.3.0",
         "@wallet-standard/errors": "^0.1.2",
-        "react": "^19.3.0",
-        "react-dom": "^19.3.0"
+        "react": "^19.3.1",
+        "react-dom": "^19.3.1"
     },
     "peerDependencies": {
         "@solana/kit": "^8.2.0",
         "@solana/react": "^8.4.0",
-        "react": "^19.3.0"
+        "react": "^19.3.1"
     },
     "peerDependenciesMeta": {
         "@solana/react": {
