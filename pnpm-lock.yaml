@@ -66,8 +66,8 @@ importers:
         specifier: ^0.16.0
         version: 0.16.0(@solana/kit@8.4.0(typescript@7.0.2))
       '@solana-program/token':
-        specifier: ^0.17.0
-        version: 0.17.0(@solana/kit@8.4.0(typescript@7.0.2))
+        specifier: ^0.18.0
+        version: 0.18.0(@solana/kit@8.4.0(typescript@7.0.2))
       '@solana/kit':
         specifier: ^8.4.0
         version: 8.4.0(typescript@7.0.2)
@@ -1161,11 +1161,6 @@ packages:
     peerDependencies:
       '@solana/kit': ^8.4.0
 
-  '@solana-program/system@0.15.0':
-    resolution: {integrity: sha512-xE08wZCyNRhOaO/XNRd9A3kSLfUrTe/BnmAHhql8uqc2eriNy2ZmnvaGRrs0m+kOSihvUbANzHljmJsTzGL5kg==}
-    peerDependencies:
-      '@solana/kit': ^8.4.0
-
   '@solana-program/system@0.16.0':
     resolution: {integrity: sha512-/RG6q2E2vG/XpdOt8Jj/kbQktPlL5JyJuNGAeN9wDcxKDKQtrGTJpDrJgQUxiEy23fsPNXQbLN8XeCtYoMof3Q==}
     peerDependencies:
@@ -1176,8 +1171,8 @@ packages:
     peerDependencies:
       '@solana/kit': ^8.4.0
 
-  '@solana-program/token@0.17.0':
-    resolution: {integrity: sha512-l7EhF3lCWXXdOllGI8qnbF4Pj7pCT/5zJTW2lPsNUQfa7G28pnFhSssHW2GCW7dzGttSHgPdJYdQRB5rvQoN9Q==}
+  '@solana-program/token@0.18.0':
+    resolution: {integrity: sha512-YNN13I4BxBnGPGk0NzP/LLQMCmJVdunbtgqjl7/Gfp1fDXQrKXh9df8xu+2ayNdvjGJYC4c9D5vZpVetHdyJaQ==}
     peerDependencies:
       '@solana/kit': ^8.4.0
 
@@ -3271,10 +3266,6 @@ snapshots:
     dependencies:
       '@solana/kit': 8.4.0(typescript@7.0.2)
 
-  '@solana-program/system@0.15.0(@solana/kit@8.4.0(typescript@7.0.2))':
-    dependencies:
-      '@solana/kit': 8.4.0(typescript@7.0.2)
-
   '@solana-program/system@0.16.0(@solana/kit@8.4.0(typescript@7.0.2))':
     dependencies:
       '@solana/kit': 8.4.0(typescript@7.0.2)
@@ -3284,9 +3275,9 @@ snapshots:
       '@solana-program/system': 0.14.1(@solana/kit@8.4.0(typescript@7.0.2))
       '@solana/kit': 8.4.0(typescript@7.0.2)
 
-  '@solana-program/token@0.17.0(@solana/kit@8.4.0(typescript@7.0.2))':
+  '@solana-program/token@0.18.0(@solana/kit@8.4.0(typescript@7.0.2))':
     dependencies:
-      '@solana-program/system': 0.15.0(@solana/kit@8.4.0(typescript@7.0.2))
+      '@solana-program/system': 0.16.0(@solana/kit@8.4.0(typescript@7.0.2))
       '@solana/kit': 8.4.0(typescript@7.0.2)
 
   '@solana/accounts@8.4.0(typescript@7.0.2)':
