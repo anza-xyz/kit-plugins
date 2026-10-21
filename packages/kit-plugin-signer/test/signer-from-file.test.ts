@@ -1,5 +1,7 @@
+import { resolve } from 'node:path';
+
 import { createClient, KeyPairSigner } from '@solana/kit';
-import { describe, expect, expectTypeOf, it } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 import { identityFromFile, payerFromFile, signerFromFile } from '../src';
 
@@ -17,6 +19,17 @@ describe('signerFromFile', () => {
             expectTypeOf(client.payer).toEqualTypeOf<KeyPairSigner>();
             expect(client.payer.address).toBe(EXPECTED_ADDRESS);
             expect(client.identity.address).toBe(EXPECTED_ADDRESS);
+        });
+
+        it('expands a leading `~` to the home directory', async () => {
+            vi.stubEnv('HOME', resolve('test'));
+            vi.stubEnv('USERPROFILE', resolve('test'));
+            try {
+                const client = await createClient().use(signerFromFile('~/mock_payer.json'));
+                expect(client.payer.address).toBe(EXPECTED_ADDRESS);
+            } finally {
+                vi.unstubAllEnvs();
+            }
         });
     } else {
         it('throws an error when used in non-Node.js environments', () => {
