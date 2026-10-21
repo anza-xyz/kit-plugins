@@ -104,3 +104,9 @@ const client = await createClient().use(signerFromFile('~/.config/solana/id.json
 ```
 
 Use `payerFromFile(path)` or `identityFromFile(path)` to load a signer for only one role.
+
+Pass `{ createIfMissing: true }` to generate and save a new keypair when the file doesn't exist yet. This is handy for scripts that should bootstrap their own wallet on the first run. Existing files are never overwritten.
+
+```ts
+const client = await createClient().use(signerFromFile('wallet.json', { createIfMissing: true }));
+```
