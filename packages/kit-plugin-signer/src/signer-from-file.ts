@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 
 import { createKeyPairSignerFromBytes } from '@solana/kit';
 
@@ -94,6 +95,8 @@ export function identityFromFile(path: string) {
 }
 
 async function getKeyPairSignerFromFile(path: string) {
-    const bytes = JSON.parse(readFileSync(path, 'utf-8')) as number[];
+    // Node's `fs` does not expand `~`, so `~/.config/solana/id.json` would otherwise be read relative to the cwd.
+    const expandedPath = /^~(?=$|[\\/])/.test(path) ? homedir() + path.slice(1) : path;
+    const bytes = JSON.parse(readFileSync(expandedPath, 'utf-8')) as number[];
     return await createKeyPairSignerFromBytes(new Uint8Array(bytes));
 }
