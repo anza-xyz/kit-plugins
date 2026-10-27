@@ -121,7 +121,11 @@ export type SignerFromFileConfig = {
 async function getKeyPairSignerFromFile(rawPath: string, config: SignerFromFileConfig) {
     const path = expandHomeDir(rawPath);
     if (config.createIfMissing && !existsSync(path)) {
-        await writeKeyPairSigner(await generateKeyPairSigner(true), path);
+        try {
+            await writeKeyPairSigner(await generateKeyPairSigner(true), path);
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+        }
     }
     const bytes = JSON.parse(readFileSync(path, 'utf-8')) as number[];
     return await createKeyPairSignerFromBytes(new Uint8Array(bytes));

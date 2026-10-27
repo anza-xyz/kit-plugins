@@ -128,6 +128,17 @@ describe.runIf(__NODEJS__)('createIfMissing', () => {
         expect(readFileSync(MOCK_KEYPAIR_PATH, 'utf-8')).toBe(before);
     });
 
+    it('loads the same keypair when concurrent calls race to create the file', async () => {
+        await withTempDir(async dir => {
+            const path = join(dir, 'wallet.json');
+            const [a, b] = await Promise.all([
+                createClient().use(signerFromFile(path, { createIfMissing: true })),
+                createClient().use(signerFromFile(path, { createIfMissing: true })),
+            ]);
+            expect(a.payer.address).toBe(b.payer.address);
+        });
+    });
+
     it('supports payerFromFile and identityFromFile', async () => {
         await withTempDir(async dir => {
             const payerClient = await createClient().use(
