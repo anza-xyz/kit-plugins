@@ -644,9 +644,15 @@ describe.each(WIRINGS)('$name', ({ createTestClient }) => {
             const logs = ['Program log: Error: insufficient funds'];
             const simulationData = {
                 accounts: null,
+                fee: null,
                 innerInstructions: null,
                 loadedAccountsDataSize: null,
+                loadedAddresses: null,
                 logs,
+                postBalances: null,
+                postTokenBalances: null,
+                preBalances: null,
+                preTokenBalances: null,
                 replacementBlockhash: null,
                 returnData: null,
                 unitsConsumed: 200_000n,
@@ -819,9 +825,15 @@ describe.each(WIRINGS)('$name', ({ createTestClient }) => {
             const logs = ['Program log: Error: insufficient funds'];
             const simulationData = {
                 accounts: null,
+                fee: null,
                 innerInstructions: null,
                 loadedAccountsDataSize: null,
+                loadedAddresses: null,
                 logs,
+                postBalances: null,
+                postTokenBalances: null,
+                preBalances: null,
+                preTokenBalances: null,
                 replacementBlockhash: null,
                 returnData: null,
                 unitsConsumed: 200_000n,
