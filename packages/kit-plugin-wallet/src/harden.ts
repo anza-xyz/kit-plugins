@@ -1,4 +1,15 @@
-import { bytesEqual, getAddressDecoder, type ReadonlyUint8Array } from '@solana/kit';
+import {
+    bytesEqual,
+    compileOffchainMessageV1Envelope,
+    getAddressDecoder,
+    getOffchainMessageDecoder,
+    isSignatureBytes,
+    type ReadonlyUint8Array,
+    SOLANA_ERROR__WALLET__INVALID_SIGN_IN_OUTPUT,
+    SolanaError,
+    verifyOffchainMessageEnvelope,
+} from '@solana/kit';
+import type { SolanaSignInOutput } from '@solana/wallet-standard-features';
 import type { Wallet, WalletIcon } from '@wallet-standard/base';
 import type { UiWallet, UiWalletAccount } from '@wallet-standard/ui';
 import { getWalletForHandle, registerWalletHandle } from '@wallet-standard/ui-registry';
@@ -131,4 +142,128 @@ export function copyBytes(bytes: unknown): ReadonlyUint8Array | null {
         return null;
     }
     return Uint8Array.from(bytes as Uint8Array);
+}
+
+/**
+ * Verifies the signed message format of a `solana:signIn` output, and the
+ * offchain message and signature when the format is an offchain message.
+ *
+ * The output is treated as a version 1 offchain message when the app requested
+ * one (`useOffchainMessage`) or when the wallet reports one in
+ * `signedMessageFormat`. Then `signedMessage` must be the canonical encoding of
+ * a version 1 offchain message whose only required signer is `address`, and
+ * `signature` must be a valid signature of it by `address`. The wallet may
+ * leave out `signedMessageFormat`, which is optional, but may not report a
+ * different format. The SIWS text inside the message is not checked against
+ * the sign-in input; that is left to the app, as for plain sign-in.
+ *
+ * @param output - The wallet's sign-in output, which is not trusted.
+ * @param offchainMessageRequested - Whether the app passed
+ *   `useOffchainMessage`.
+ * @param address - The address of the account the wallet signed in with,
+ *   whose public key is verified to encode it.
+ * @param walletName - The wallet's name, for the error context.
+ * @returns For an offchain message, copies of the verified `signature` and
+ *   `signedMessage` with `signedMessageFormat` set, so the wallet can't change
+ *   them afterwards. Otherwise, a frozen snapshot of the `signedMessageFormat`
+ *   that was read (if any), so the value returned is the value checked.
+ * @throws `SolanaError(SOLANA_ERROR__WALLET__INVALID_SIGN_IN_OUTPUT)` if an
+ *   offchain message output fails any check, or if reading the output throws.
+ *
+ * @internal
+ */
+export async function verifySignInOutputFormat(
+    output: SolanaSignInOutput,
+    offchainMessageRequested: boolean,
+    address: string,
+    walletName: string,
+): Promise<SignInOutputFormat> {
+    let verified: SignInOutputFormat | null;
+    try {
+        verified = await readVerifiedSignInOutputFormat(output, offchainMessageRequested, address);
+    } catch {
+        // A malformed message, or a wallet getter that threw.
+        verified = null;
+    }
+    if (!verified) {
+        throw new SolanaError(SOLANA_ERROR__WALLET__INVALID_SIGN_IN_OUTPUT, { address, walletName });
+    }
+    return verified;
+}
+
+type SignInOutputFormat = Partial<Pick<SolanaSignInOutput, 'signature' | 'signedMessage' | 'signedMessageFormat'>>;
+
+// Implements `verifySignInOutputFormat`, returning `null` if a check fails.
+async function readVerifiedSignInOutputFormat(
+    output: SolanaSignInOutput,
+    offchainMessageRequested: boolean,
+    address: string,
+): Promise<SignInOutputFormat | null> {
+    // Read each value exactly once, so the values that are verified are the
+    // values that are returned.
+    const { signature: walletSignature, signedMessage: walletSignedMessage, signedMessageFormat } = output;
+    const kind = signedMessageFormat?.kind;
+    const messageVersion = signedMessageFormat?.messageVersion;
+    if (!offchainMessageRequested && kind !== 'offchainMessage') {
+        // Return a snapshot of the values read, not the wallet's own object,
+        // which could report something else when the app reads it. Its kind
+        // isn't one the feature defines, so it can't be typed as one.
+        if (signedMessageFormat == null) return {};
+        const snapshot: unknown = Object.freeze({ kind, messageVersion });
+        return { signedMessageFormat: snapshot as SolanaSignInOutput['signedMessageFormat'] };
+    }
+    // `signedMessageFormat` is optional (a missing or `null` format is
+    // accepted), but if present it must match.
+    if (signedMessageFormat != null && (kind !== 'offchainMessage' || messageVersion !== 1)) return null;
+
+    const signature = copyBytes(walletSignature);
+    const signedMessage = copyBytes(walletSignedMessage);
+    if (!signature || !isSignatureBytes(signature) || !signedMessage) return null;
+    const message = getOffchainMessageDecoder().decode(signedMessage);
+    if (
+        message.version !== 1 ||
+        message.requiredSignatories.length !== 1 ||
+        message.requiredSignatories[0].address !== address
+    ) {
+        return null;
+    }
+    // Re-encode and require the exact bytes: Kit's UTF-8 decoder drops null
+    // bytes, so the decoded text alone could hide what was signed.
+    const { content } = compileOffchainMessageV1Envelope(message);
+    if (!bytesEqual(content, signedMessage)) return null;
+    // Throws if the signature is invalid.
+    await verifyOffchainMessageEnvelope({
+        content,
+        signatures: { [message.requiredSignatories[0].address]: signature },
+    });
+    return {
+        signature: signature as Uint8Array,
+        signedMessage: signedMessage as Uint8Array,
+        signedMessageFormat: Object.freeze({ kind: 'offchainMessage', messageVersion: 1 }),
+    };
+}
+
+/**
+ * The earliest version of the `solana:signIn` feature that supports
+ * `useOffchainMessage`.
+ *
+ * @internal
+ */
+export const OFFCHAIN_SIGN_IN_VERSION = '1.1.0';
+
+/**
+ * Returns `true` if a wallet-provided `solana:signIn` feature version supports
+ * `useOffchainMessage`: {@link OFFCHAIN_SIGN_IN_VERSION} or a later `1.x`
+ * version.
+ *
+ * @param version - The feature's `version`, which is not trusted to be a
+ *   string.
+ * @returns `true` if the version supports offchain sign-in.
+ *
+ * @internal
+ */
+export function isOffchainSignInVersion(version: unknown): boolean {
+    if (typeof version !== 'string') return false;
+    const match = /^1\.(\d+)\.\d+$/.exec(version);
+    return !!match && Number(match[1]) >= 1;
 }

@@ -197,6 +197,20 @@ All wallet state is accessed via `client.wallet.getState()`, which returns a ref
     const output = await client.wallet.signIn(selectedWallet, { domain: window.location.host });
     ```
 
+    To let hardware wallets sign in, pass `useOffchainMessage: { messageVersion: 1 }`. The wallet then signs the SIWS text wrapped in a version 1 [Solana offchain message](https://github.com/solana-foundation/SRFCs/discussions/3). Only wallets with `solana:signIn` version `1.1.0` or a later `1.x` version support this, so check with `supportsSignInWithOffchainMessage` first. For a wallet that doesn't support it, the call rejects with Kit's `SOLANA_ERROR__WALLET__FEATURE_VERSION_UNSUPPORTED` before reaching the wallet:
+
+    ```ts
+    import { supportsSignInWithOffchainMessage } from '@solana/kit-plugin-wallet';
+
+    const output = await client.wallet.signIn(selectedWallet, {
+        domain: window.location.host,
+        ...(supportsSignInWithOffchainMessage(selectedWallet) && { useOffchainMessage: { messageVersion: 1 } }),
+    });
+    output.signedMessageFormat; // { kind: 'offchainMessage', messageVersion: 1 }
+    ```
+
+    The plugin checks the wallet's response before resolving. `signedMessage` must be a version 1 offchain message whose only required signer is the signed-in account, and `signature` must be that account's valid signature of it. If either check fails, the call rejects with Kit's `SOLANA_ERROR__WALLET__INVALID_SIGN_IN_OUTPUT`. The same checks run whenever a wallet reports an offchain message, even if you didn't ask for one. `signedMessageFormat` is always set on a verified offchain output, even when the wallet leaves it out. The plugin doesn't check the SIWS text inside the message against your input; decode it with Kit's `getOffchainMessageDecoder()` and check it as you would a plain sign-in.
+
 ## React hooks
 
 The `@solana/kit-plugin-wallet/react` subpath exposes hooks for reading wallet state and driving wallet actions from React components. Install the optional peer dependencies (`react` and [`@solana/react`](https://www.npmjs.com/package/@solana/react)). Every hook takes your wallet-enabled `client` — a client built with a wallet plugin such as `walletSigner()` — as its first argument.

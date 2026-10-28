@@ -3,8 +3,10 @@ import {
     compileOffchainMessageV0Envelope,
     compileOffchainMessageV1Envelope,
     generateKeyPair,
+    getAddressDecoder,
     getAddressEncoder,
     getAddressFromPublicKey,
+    getOffchainMessageDecoder,
     isFullySignedOffchainMessageEnvelope,
     isSolanaError,
     offchainMessageApplicationDomain,
@@ -19,16 +21,21 @@ import {
     SOLANA_ERROR__OFFCHAIN_MESSAGE__REQUIRED_SIGNATORIES_DO_NOT_MATCH_EXPECTED,
     SOLANA_ERROR__OFFCHAIN_MESSAGE__SIGNATURE_VERIFICATION_FAILURE,
     SOLANA_ERROR__OFFCHAIN_MESSAGE__UNEXPECTED_VERSION,
+    SOLANA_ERROR__OFFCHAIN_MESSAGE__VERSION_NUMBER_NOT_SUPPORTED,
     SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE,
+    SOLANA_ERROR__WALLET__FEATURE_VERSION_UNSUPPORTED,
     SOLANA_ERROR__WALLET__INVALID_NUMBER_OF_OUTPUTS,
+    SOLANA_ERROR__WALLET__INVALID_SIGN_IN_OUTPUT,
     SOLANA_ERROR__WALLET__NOT_CONNECTED,
     SolanaError,
     verifyOffchainMessageEnvelope,
 } from '@solana/kit';
+import type { SolanaSignInInput } from '@solana/wallet-standard-features';
 import { isWalletStandardError } from '@wallet-standard/errors';
 import type { UiWallet, UiWalletAccount } from '@wallet-standard/ui';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { supportsSignInWithOffchainMessage } from '../src/sign-in';
 import { createWalletStore } from '../src/store';
 import type { WalletStorage } from '../src/types';
 import {
@@ -43,6 +50,7 @@ import {
     registeredWallets,
     registerWallet,
     registryListeners,
+    signInFeature,
     signInMock,
     signMessageMock,
     signOffchainMessageMock,
@@ -1956,6 +1964,396 @@ describe.skipIf(!__BROWSER__)('store signOffchainMessage (browser)', () => {
         signature.fill(0);
 
         await expect(verifyOffchainMessageEnvelope(envelope)).resolves.toBeUndefined();
+    });
+});
+
+// -- Offchain sign-in tests ---------------------------------------------------
+
+describe.skipIf(!__BROWSER__)('store signIn with useOffchainMessage (browser)', () => {
+    const offchainInput = { domain: 'example.com', useOffchainMessage: { messageVersion: 1 } } as const;
+    const offchainFormat = { kind: 'offchainMessage', messageVersion: 1 } as const;
+
+    /**
+     * Builds a wallet with `solana:signIn` version `1.1.0` whose account is
+     * backed by a real Ed25519 key pair, so the offchain sign-in output is
+     * verified against genuine signatures.
+     */
+    async function createOffchainSignInFixture() {
+        signInFeature.version = '1.1.0';
+        const keyPair = await generateKeyPair();
+        const signerAddress = await getAddressFromPublicKey(keyPair.publicKey);
+        const account = createMockAccount(signerAddress, ['solana:signIn', 'solana:signTransaction']);
+        const wallet = createMockUiWallet({
+            accounts: [account],
+            features: ['standard:connect', 'standard:events', 'solana:signIn'],
+            name: 'OffchainSignInWallet',
+        });
+        registerWallet(wallet);
+        const text = `example.com wants you to sign in with your Solana account:\n${signerAddress}`;
+
+        /** Signs `bytes` as the wallet's account, with the given output fields. */
+        async function signBytesAsWallet(bytes: ReadonlyUint8Array, fields: Record<string, unknown> = {}) {
+            return {
+                account,
+                signature: await signBytes(keyPair.privateKey, bytes),
+                signedMessage: bytes,
+                signedMessageFormat: offchainFormat,
+                ...fields,
+            };
+        }
+
+        /** Compiles the SIWS text as an offchain message with the given signatories. */
+        function compileSignInMessage(signatories: readonly Address[] = [signerAddress]) {
+            return compileOffchainMessageV1Envelope({
+                content: text,
+                requiredSignatories: signatories.map(address => ({ address })),
+                version: 1,
+            }).content;
+        }
+
+        /** The output a spec-conforming wallet would produce. */
+        function signAsWallet() {
+            return signBytesAsWallet(compileSignInMessage());
+        }
+
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        return { account, compileSignInMessage, signAsWallet, signBytesAsWallet, signerAddress, store, text, wallet };
+    }
+
+    function invalidOutput(address: Address) {
+        return new SolanaError(SOLANA_ERROR__WALLET__INVALID_SIGN_IN_OUTPUT, {
+            address,
+            walletName: 'OffchainSignInWallet',
+        });
+    }
+
+    it.each([
+        ['1.1.0', true],
+        ['1.2.3', true],
+        ['1.0.0', false],
+        ['2.0.0', false],
+        ['1.1', false],
+        ['latest', false],
+        [undefined, false],
+    ])('supportsSignInWithOffchainMessage reports %s as %s', (version, expected) => {
+        signInFeature.version = version;
+        const wallet = createMockUiWallet({ features: ['standard:connect', 'solana:signIn'] });
+        expect(supportsSignInWithOffchainMessage(wallet)).toBe(expected);
+    });
+
+    it('supportsSignInWithOffchainMessage is false when the wallet feature cannot be read', () => {
+        // The real `getWalletFeature` throws when the wallet's live features
+        // no longer include `solana:signIn`, or the handle isn't registered.
+        Object.defineProperty(signInFeature, 'version', {
+            configurable: true,
+            get: () => {
+                throw new Error('feature unavailable');
+            },
+        });
+        try {
+            const wallet = createMockUiWallet({ features: ['standard:connect', 'solana:signIn'] });
+            expect(supportsSignInWithOffchainMessage(wallet)).toBe(false);
+        } finally {
+            Object.defineProperty(signInFeature, 'version', { configurable: true, value: '1.0.0', writable: true });
+        }
+    });
+
+    it('supportsSignInWithOffchainMessage is false for a wallet without solana:signIn', () => {
+        signInFeature.version = '1.1.0';
+        expect(supportsSignInWithOffchainMessage(createMockUiWallet())).toBe(false);
+    });
+
+    it('signs in and returns copies of the verified offchain message and signature', async () => {
+        const { account, signAsWallet, signerAddress, store, text } = await createOffchainSignInFixture();
+        const output = await signAsWallet();
+        signInMock.mockResolvedValueOnce([output]);
+
+        const result = await store.signIn(store.getState().wallets[0], offchainInput);
+
+        expect(signInMock).toHaveBeenCalledWith(offchainInput);
+        expect(store.getState().status).toBe('connected');
+        expect(store.getState().connected!.account.address).toBe(account.address);
+        expect(result.account).toBe(store.getState().connected!.account);
+        expect(result.signedMessageFormat).toEqual(offchainFormat);
+        expect(result.signedMessage).toEqual(output.signedMessage);
+        expect(result.signature).toEqual(output.signature);
+        expect(result.signedMessage).not.toBe(output.signedMessage);
+        expect(result.signature).not.toBe(output.signature);
+        // The output is a fully signed offchain message envelope for the account.
+        const envelope = { content: result.signedMessage, signatures: { [signerAddress]: result.signature } };
+        await expect(verifyOffchainMessageEnvelope(envelope as never)).resolves.toBeUndefined();
+        expect(getOffchainMessageDecoder().decode(result.signedMessage).content).toBe(text);
+    });
+
+    it('rejects useOffchainMessage for a wallet older than solana:signIn 1.1.0, without calling it', async () => {
+        const account = createMockAccount();
+        const wallet = createMockUiWallet({
+            accounts: [account],
+            features: ['standard:connect', 'standard:events', 'solana:signIn'],
+            name: 'PlainSignInWallet',
+        });
+        registerWallet(wallet);
+        const store = createWalletStore({ chain: 'solana:mainnet', storage: null });
+        await store.connect(wallet);
+
+        await expect(store.signIn(wallet, offchainInput)).rejects.toThrow(
+            new SolanaError(SOLANA_ERROR__WALLET__FEATURE_VERSION_UNSUPPORTED, {
+                actualVersion: '1.0.0',
+                featureName: 'solana:signIn',
+                requiredVersion: '1.1.0',
+                walletName: 'PlainSignInWallet',
+            }),
+        );
+
+        expect(signInMock).not.toHaveBeenCalled();
+        // Rejected before any state changed, so the connection is untouched.
+        expect(store.getState().status).toBe('connected');
+        expect(store.getState().connected!.account.address).toBe(account.address);
+    });
+
+    it('does not verify the output of a plain sign-in', async () => {
+        const { account, store } = await createOffchainSignInFixture();
+        const output = { account, signature: new Uint8Array(64), signedMessage: new Uint8Array([1, 2, 3]) };
+        signInMock.mockResolvedValueOnce([output]);
+
+        const result = await store.signIn(store.getState().wallets[0], { domain: 'example.com' });
+
+        expect(result.signature).toBe(output.signature);
+        expect(result.signedMessage).toBe(output.signedMessage);
+    });
+
+    it('omits signedMessageFormat from a plain sign-in result when the wallet omits it', async () => {
+        const { account, store, wallet } = await createOffchainSignInFixture();
+        signInMock.mockResolvedValueOnce([
+            { account, signature: new Uint8Array(64), signedMessage: new Uint8Array([1, 2, 3]) },
+        ]);
+
+        const result = await store.signIn(wallet, { domain: 'example.com' });
+
+        expect('signedMessageFormat' in result).toBe(false);
+    });
+
+    it('returns a snapshot of the signedMessageFormat it checked for a plain sign-in', async () => {
+        // A wallet whose format reports a plain kind when checked, and an
+        // offchain message on every later read.
+        const { account, store, wallet } = await createOffchainSignInFixture();
+        let reads = 0;
+        const signedMessageFormat = {
+            get kind() {
+                return reads++ === 0 ? 'text' : 'offchainMessage';
+            },
+            messageVersion: 1,
+        };
+        signInMock.mockResolvedValueOnce([
+            { account, signature: new Uint8Array(64), signedMessage: new Uint8Array([1, 2, 3]), signedMessageFormat },
+        ]);
+
+        const result = await store.signIn(wallet, { domain: 'example.com' });
+
+        expect(result.signedMessageFormat).not.toBe(signedMessageFormat);
+        expect(result.signedMessageFormat).toEqual({ kind: 'text', messageVersion: 1 });
+        expect(Object.isFrozen(result.signedMessageFormat)).toBe(true);
+    });
+
+    it.each([
+        ['missing', (output: object) => Reflect.deleteProperty(output, 'signedMessageFormat')],
+        ['null', (output: object) => Reflect.set(output, 'signedMessageFormat', null)],
+    ])('accepts an offchain output whose signedMessageFormat is %s, and sets it on the result', async (_, omit) => {
+        // `signedMessageFormat` is optional in the feature; the verified bytes
+        // already show the format.
+        const { signAsWallet, store, wallet } = await createOffchainSignInFixture();
+        const output = await signAsWallet();
+        omit(output);
+        signInMock.mockResolvedValueOnce([output]);
+
+        const result = await store.signIn(wallet, offchainInput);
+
+        expect(result.signedMessageFormat).toEqual(offchainFormat);
+        expect(result.signedMessage).toEqual(output.signedMessage);
+        expect(store.getState().status).toBe('connected');
+    });
+
+    it('verifies an offchain output that the wallet reports for a plain sign-in', async () => {
+        const { signAsWallet, store, wallet } = await createOffchainSignInFixture();
+        const output = await signAsWallet();
+        signInMock.mockResolvedValueOnce([output]);
+
+        const result = await store.signIn(wallet, { domain: 'example.com' });
+
+        expect(result.signedMessageFormat).toEqual(offchainFormat);
+        expect(result.signedMessage).toEqual(output.signedMessage);
+        expect(result.signedMessage).not.toBe(output.signedMessage);
+        expect(result.signature).not.toBe(output.signature);
+    });
+
+    it('rejects an unverifiable offchain output that the wallet reports for a plain sign-in', async () => {
+        // Apps that branch on `signedMessageFormat` must not see an offchain
+        // format the plugin hasn't verified.
+        const { account, signerAddress, store, wallet } = await createOffchainSignInFixture();
+        signInMock.mockResolvedValueOnce([
+            {
+                account,
+                signature: new Uint8Array(64),
+                signedMessage: new Uint8Array([1, 2, 3]),
+                signedMessageFormat: offchainFormat,
+            },
+        ]);
+
+        await expect(store.signIn(wallet, { domain: 'example.com' })).rejects.toThrow(invalidOutput(signerAddress));
+        expect(store.getState().connected).toBeNull();
+    });
+
+    it.each([0, 2, undefined])(
+        'rejects useOffchainMessage with messageVersion %s without calling the wallet',
+        async messageVersion => {
+            const { store, wallet } = await createOffchainSignInFixture();
+            const input = { ...offchainInput, useOffchainMessage: { messageVersion } } as unknown as SolanaSignInInput;
+
+            await expect(store.signIn(wallet, input)).rejects.toThrow(
+                new SolanaError(SOLANA_ERROR__OFFCHAIN_MESSAGE__VERSION_NUMBER_NOT_SUPPORTED, {
+                    unsupportedVersion: Number(messageVersion),
+                }),
+            );
+            expect(signInMock).not.toHaveBeenCalled();
+            expect(store.getState().status).not.toBe('connecting');
+        },
+    );
+
+    it('rejects INVALID_SIGN_IN_OUTPUT when reading the output throws', async () => {
+        const { signAsWallet, signerAddress, store, wallet } = await createOffchainSignInFixture();
+        const output = await signAsWallet();
+        const signedMessageFormat = new Proxy(
+            {},
+            {
+                get: () => {
+                    throw new Error('wallet-chosen error');
+                },
+            },
+        );
+        signInMock.mockResolvedValueOnce([{ ...output, signedMessageFormat }]);
+
+        await expect(store.signIn(wallet, offchainInput)).rejects.toThrow(invalidOutput(signerAddress));
+    });
+
+    it('rejects with an AbortError when superseded while the output is verified', async () => {
+        const { signAsWallet, store, wallet } = await createOffchainSignInFixture();
+        const otherAccount = createMockAccount('Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ');
+        const otherWallet = createMockUiWallet({ accounts: [otherAccount], name: 'OtherWallet' });
+        registerWallet(otherWallet);
+        signInMock.mockResolvedValueOnce([await signAsWallet()]);
+        // Hold signature verification open, so a connect can start meanwhile.
+        const pendingVerify = Promise.withResolvers<boolean>();
+        const verifySpy = vi.spyOn(crypto.subtle, 'verify').mockReturnValueOnce(pendingVerify.promise);
+
+        const signInPromise = store.signIn(wallet, offchainInput);
+        await vi.waitFor(() => expect(verifySpy).toHaveBeenCalled());
+        await store.connect(otherWallet);
+        pendingVerify.resolve(true);
+
+        await expect(signInPromise).rejects.toThrow('superseded');
+        expect(store.getState().connected!.account.address).toBe(otherAccount.address);
+    });
+
+    it('rejects a superseded offchain sign-in with an AbortError even if its output is malformed', async () => {
+        const { store, wallet } = await createOffchainSignInFixture();
+        const otherAccount = createMockAccount('Dv1XzYJkvnB7knw4E3E1HXyKVEoiacnZN35u1UgCbUkQ');
+        const otherWallet = createMockUiWallet({ accounts: [otherAccount], name: 'OtherWallet' });
+        registerWallet(otherWallet);
+        const pendingSignIn = Promise.withResolvers<unknown[]>();
+        signInMock.mockReturnValueOnce(pendingSignIn.promise);
+
+        const signInPromise = store.signIn(wallet, offchainInput);
+        await store.connect(otherWallet);
+        pendingSignIn.resolve([]);
+
+        await expect(signInPromise).rejects.toThrow('superseded');
+        expect(store.getState().connected!.account.address).toBe(otherAccount.address);
+    });
+
+    type Fixture = Awaited<ReturnType<typeof createOffchainSignInFixture>>;
+    it.each<[string, (fixture: Fixture) => Promise<object>]>([
+        [
+            'a different signedMessageFormat kind',
+            f => f.signAsWallet().then(o => ({ ...o, signedMessageFormat: { kind: 'text', messageVersion: 1 } })),
+        ],
+        [
+            'a different signedMessageFormat version',
+            f => f.signAsWallet().then(o => ({ ...o, signedMessageFormat: { ...offchainFormat, messageVersion: 0 } })),
+        ],
+        ['the plain SIWS text', f => f.signBytesAsWallet(new TextEncoder().encode(f.text))],
+        [
+            'a version 0 offchain message',
+            f =>
+                f.signBytesAsWallet(
+                    compileOffchainMessageV0Envelope({
+                        applicationDomain: offchainMessageApplicationDomain(f.signerAddress),
+                        content: offchainMessageContentRestrictedAsciiOf1232BytesMax(f.text.replace('\n', ' ')),
+                        requiredSignatories: [{ address: f.signerAddress }],
+                        version: 0,
+                    }).content,
+                ),
+        ],
+        // Kit sorts signatories by address bytes, so these fixed addresses put
+        // the extra signer before and after the account.
+        [
+            'another required signer listed first',
+            f =>
+                f.signBytesAsWallet(
+                    f.compileSignInMessage([f.signerAddress, getAddressDecoder().decode(new Uint8Array(32))]),
+                ),
+        ],
+        [
+            'another required signer listed last',
+            f =>
+                f.signBytesAsWallet(
+                    f.compileSignInMessage([f.signerAddress, getAddressDecoder().decode(new Uint8Array(32).fill(255))]),
+                ),
+        ],
+        [
+            'a different required signer',
+            async f => {
+                const other = await getAddressFromPublicKey((await generateKeyPair()).publicKey);
+                return await f.signBytesAsWallet(f.compileSignInMessage([other]));
+            },
+        ],
+        ['a trailing null byte', f => f.signBytesAsWallet(Uint8Array.from([...f.compileSignInMessage(), 0]))],
+        [
+            'a signature by a different key',
+            async f => {
+                const otherKey = (await generateKeyPair()).privateKey;
+                const output = await f.signAsWallet();
+                return { ...output, signature: await signBytes(otherKey, output.signedMessage) };
+            },
+        ],
+        [
+            'a signature of different bytes',
+            async f => ({
+                ...(await f.signAsWallet()),
+                signature: (await f.signBytesAsWallet(new Uint8Array([1]))).signature,
+            }),
+        ],
+        [
+            'a signature of the wrong length',
+            f => f.signAsWallet().then(o => ({ ...o, signature: o.signature.slice(1) })),
+        ],
+        [
+            'a signature that is not a Uint8Array',
+            f => f.signAsWallet().then(o => ({ ...o, signature: [...o.signature] })),
+        ],
+        ['no signedMessage', f => f.signAsWallet().then(o => ({ ...o, signedMessage: undefined }))],
+        [
+            'a validly signed signedMessage that is not a Uint8Array',
+            f => f.signAsWallet().then(o => ({ ...o, signedMessage: [...o.signedMessage] })),
+        ],
+    ])('rejects INVALID_SIGN_IN_OUTPUT for an output with %s', async (_, buildOutput) => {
+        const fixture = await createOffchainSignInFixture();
+        signInMock.mockResolvedValueOnce([await buildOutput(fixture)]);
+
+        await expect(fixture.store.signIn(fixture.wallet, offchainInput)).rejects.toThrow(
+            invalidOutput(fixture.signerAddress),
+        );
+        expect(fixture.store.getState().status).toBe('disconnected');
+        expect(fixture.store.getState().connected).toBeNull();
     });
 });
 
