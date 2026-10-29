@@ -53,7 +53,7 @@ import { createClient } from '@solana/kit';
 import { solanaLocalRpc } from '@solana/kit-plugin-rpc';
 import { payerFromFile } from '@solana/kit-plugin-signer';
 
-const client = createClient().use(payerFromFile('~/.config/solana/id.json')).use(solanaLocalRpc());
+const client = await createClient().use(payerFromFile('~/.config/solana/id.json')).use(solanaLocalRpc());
 
 await client.sendTransaction([myInstruction]);
 ```

@@ -86,7 +86,7 @@ import { createClient } from '@solana/kit';
 import { solanaDevnetRpc } from '@solana/kit-plugin-rpc';
 import { payerFromFile } from '@solana/kit-plugin-signer';
 
-const client = createClient().use(payerFromFile('~/.config/solana/id.json')).use(solanaDevnetRpc());
+const client = await createClient().use(payerFromFile('~/.config/solana/id.json')).use(solanaDevnetRpc());
 ```
 
 ### Features
@@ -109,7 +109,7 @@ import { createClient } from '@solana/kit';
 import { solanaTestnetRpc } from '@solana/kit-plugin-rpc';
 import { payerFromFile } from '@solana/kit-plugin-signer';
 
-const client = createClient().use(payerFromFile('~/.config/solana/id.json')).use(solanaTestnetRpc());
+const client = await createClient().use(payerFromFile('~/.config/solana/id.json')).use(solanaTestnetRpc());
 ```
 
 ### Features
@@ -132,7 +132,7 @@ import { createClient } from '@solana/kit';
 import { solanaLocalRpc } from '@solana/kit-plugin-rpc';
 import { payerFromFile } from '@solana/kit-plugin-signer';
 
-const client = createClient().use(payerFromFile('~/.config/solana/id.json')).use(solanaLocalRpc());
+const client = await createClient().use(payerFromFile('~/.config/solana/id.json')).use(solanaLocalRpc());
 ```
 
 ### Features
