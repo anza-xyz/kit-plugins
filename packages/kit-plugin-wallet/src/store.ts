@@ -1,9 +1,25 @@
 import {
+    type Address,
+    assertOffchainMessageV1Equal,
+    bytesEqual,
+    compileOffchainMessageV1Envelope,
+    getAddressEncoder,
+    getOffchainMessageDecoder,
+    getPublicKeyFromAddress,
+    isSignatureBytes,
+    type OffchainMessage,
+    type OffchainMessageEnvelope,
     type ReadonlyUint8Array,
     type SignatureBytes,
+    SOLANA_ERROR__OFFCHAIN_MESSAGE__ADDRESSES_CANNOT_SIGN_OFFCHAIN_MESSAGE,
+    SOLANA_ERROR__OFFCHAIN_MESSAGE__CONTENT_DOES_NOT_MATCH_EXPECTED,
+    SOLANA_ERROR__OFFCHAIN_MESSAGE__SIGNATURE_VERIFICATION_FAILURE,
+    SOLANA_ERROR__OFFCHAIN_MESSAGE__UNEXPECTED_VERSION,
     SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE,
+    SOLANA_ERROR__WALLET__INVALID_NUMBER_OF_OUTPUTS,
     SOLANA_ERROR__WALLET__NOT_CONNECTED,
     SolanaError,
+    verifySignature,
 } from '@solana/kit';
 import { createSignerFromWalletAccount } from '@solana/wallet-account-signer';
 import {
@@ -18,6 +34,8 @@ import {
     SolanaSignTransaction,
     type SolanaSignTransactionFeature,
     type SolanaTransactionVersion,
+    SolanaSignOffchainMessage,
+    type SolanaSignOffchainMessageFeature,
 } from '@solana/wallet-standard-features';
 import { getWallets } from '@wallet-standard/app';
 import type { Wallet } from '@wallet-standard/base';
@@ -37,13 +55,14 @@ import {
     getWalletForHandle,
 } from '@wallet-standard/ui-registry';
 
-import { hardenUiWallet, publicKeyMatches } from './harden';
+import { copyBytes, hardenUiWallet, publicKeyMatches } from './harden';
 import { isWalletWarmingUp } from './status';
 import type {
     WalletActionOptions,
     WalletNamespace,
     WalletPluginConfig,
     WalletSigner,
+    WalletSignOffchainMessageInput,
     WalletState,
     WalletStatus,
     WalletStorage,
@@ -112,6 +131,10 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             signIn: () => Promise.reject(new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signIn' })),
             signMessage: () =>
                 Promise.reject(new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signMessage' })),
+            signOffchainMessage: () =>
+                Promise.reject(
+                    new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signOffchainMessage' }),
+                ),
             subscribe: () => () => {},
             subscribeSigner: () => () => {},
             whenReady: () => Promise.resolve(),
@@ -813,6 +836,121 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         return output.signature as SignatureBytes;
     }
 
+    async function signOffchainMessage(
+        input: WalletSignOffchainMessageInput,
+        options?: WalletActionOptions,
+    ): Promise<OffchainMessageEnvelope> {
+        options?.abortSignal?.throwIfAborted();
+        const { message, version } = input;
+        const { account, connectedWallet } = state;
+        if (!connectedWallet || !account) {
+            throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signOffchainMessage' });
+        }
+        // getWalletAccountFeature throws a WalletStandardError when either the wallet or the account does not
+        // support it, before any state is touched.
+        const signOffchainMessageFeature = getWalletAccountFeature(
+            account,
+            SolanaSignOffchainMessage,
+        ) as SolanaSignOffchainMessageFeature[typeof SolanaSignOffchainMessage];
+
+        const signerAddress = account.address as Address;
+        const requiredSigners = input.requiredSigners ?? [signerAddress];
+        if (!requiredSigners.includes(signerAddress)) {
+            // The feature requires the signing account's key to appear in
+            // `requiredSigners`
+            throw new SolanaError(SOLANA_ERROR__OFFCHAIN_MESSAGE__ADDRESSES_CANNOT_SIGN_OFFCHAIN_MESSAGE, {
+                expectedAddresses: requiredSigners,
+                unexpectedAddresses: [signerAddress],
+            });
+        }
+
+        // Dematerialize the UiWalletAccount handle into the wallet's own
+        // WalletAccount object: the handle is a copy made by the wallet-ui
+        // registry, and wallets may compare the input account by reference
+        // against their own account.
+        const walletAccount = getWalletAccountForUiWalletAccount(account);
+
+        // Compile the message we expect the wallet to sign before calling it.
+        // This rejects invalid input (e.g. an empty message or duplicate
+        // signers) before the user is prompted.
+        const expectedMessage = {
+            content: message,
+            requiredSignatories: requiredSigners.map(address => ({ address })),
+            version,
+        };
+        const expectedEnvelope = compileOffchainMessageV1Envelope(expectedMessage);
+
+        const addressEncoder = getAddressEncoder();
+        const outputs = await signOffchainMessageFeature.signOffchainMessage({
+            account: walletAccount,
+            message,
+            messageVersion: version,
+            requiredSigners: requiredSigners.map(signer => addressEncoder.encode(signer)),
+        });
+        if (outputs.length !== 1) {
+            throw new SolanaError(SOLANA_ERROR__WALLET__INVALID_NUMBER_OF_OUTPUTS, {
+                actual: outputs.length,
+                expected: 1,
+                featureName: SolanaSignOffchainMessage,
+                walletName: connectedWallet.name,
+            });
+        }
+
+        // We verify the message content and signature before returning the
+        // result to the app. Read each output value exactly once and copy it.
+        const { signature: walletSignature, signedOffchainMessage } = outputs[0];
+        const signedBytes = copyBytes(signedOffchainMessage);
+        const signature = copyBytes(walletSignature);
+
+        // Require the exact bytes we compiled.
+        if (!signedBytes || !bytesEqual(signedBytes, expectedEnvelope.content)) {
+            // Decode the wallet's bytes to throw the most specific error we can.
+            // This is best-effort: bytes that aren't a well-formed offchain
+            // message fall through to the generic mismatch error.
+            let receivedMessage: OffchainMessage | undefined;
+            if (signedBytes) {
+                try {
+                    receivedMessage = getOffchainMessageDecoder().decode(signedBytes);
+                } catch {
+                    // Not a decodable offchain message.
+                }
+            }
+            if (receivedMessage) {
+                if (receivedMessage.version !== version) {
+                    throw new SolanaError(SOLANA_ERROR__OFFCHAIN_MESSAGE__UNEXPECTED_VERSION, {
+                        actualVersion: receivedMessage.version,
+                        expectedVersion: version,
+                    });
+                }
+                assertOffchainMessageV1Equal(receivedMessage, expectedMessage);
+            }
+            throw new SolanaError(SOLANA_ERROR__OFFCHAIN_MESSAGE__CONTENT_DOES_NOT_MATCH_EXPECTED, {
+                actualBytes: signedBytes?.length ?? 0,
+                expectedBytes: expectedEnvelope.content.length,
+            });
+        }
+
+        // Verify the signature returned by the wallet
+        const signerPublicKey = await getPublicKeyFromAddress(signerAddress);
+        if (
+            !signature ||
+            !isSignatureBytes(signature) ||
+            !(await verifySignature(signerPublicKey, signature, expectedEnvelope.content))
+        ) {
+            throw new SolanaError(SOLANA_ERROR__OFFCHAIN_MESSAGE__SIGNATURE_VERIFICATION_FAILURE, {
+                signatoriesWithInvalidSignatures: [signerAddress],
+                signatoriesWithMissingSignatures: [],
+            });
+        }
+
+        // Return our own compiled envelope with the signer's signature added;
+        // any other required signer's signature stays `null`
+        return Object.freeze({
+            content: expectedEnvelope.content,
+            signatures: Object.freeze({ ...expectedEnvelope.signatures, [signerAddress]: signature }),
+        });
+    }
+
     // -- Sign In With Solana (SIWS-as-connect) ------------------------------
 
     async function signIn(
@@ -1078,6 +1216,7 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         selectAccount,
         signIn,
         signMessage,
+        signOffchainMessage,
         subscribe: (listener: () => void) => {
             listeners.add(listener);
             return () => {
