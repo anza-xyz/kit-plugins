@@ -6,8 +6,10 @@
 '@solana/kit-plugin-wallet': minor
 ---
 
-Upgrade all packages to `@solana/kit@^8.5.0`.
+Upgrade all packages to `@solana/kit@^8.6.0`.
 
 **BREAKING CHANGES**
 
-**Kit 8.5 is now required.** Upgrade `@solana/kit` from `^8.2.0` to `^8.5.0`.
+**Kit 8.6 is now required.** Upgrade `@solana/kit` from `^8.2.0` to `^8.6.0`.
+
+The wallet plugin's optional `@solana/react` peer dependency also moves to `^8.6.0`.
