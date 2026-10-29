@@ -15,7 +15,9 @@ import {
     SOLANA_ERROR__OFFCHAIN_MESSAGE__CONTENT_DOES_NOT_MATCH_EXPECTED,
     SOLANA_ERROR__OFFCHAIN_MESSAGE__SIGNATURE_VERIFICATION_FAILURE,
     SOLANA_ERROR__OFFCHAIN_MESSAGE__UNEXPECTED_VERSION,
+    SOLANA_ERROR__OFFCHAIN_MESSAGE__VERSION_NUMBER_NOT_SUPPORTED,
     SOLANA_ERROR__WALLET__ACCOUNT_NOT_AVAILABLE,
+    SOLANA_ERROR__WALLET__FEATURE_VERSION_UNSUPPORTED,
     SOLANA_ERROR__WALLET__INVALID_NUMBER_OF_OUTPUTS,
     SOLANA_ERROR__WALLET__NOT_CONNECTED,
     SolanaError,
@@ -55,7 +57,14 @@ import {
     getWalletForHandle,
 } from '@wallet-standard/ui-registry';
 
-import { copyBytes, hardenUiWallet, publicKeyMatches } from './harden';
+import {
+    copyBytes,
+    hardenUiWallet,
+    isOffchainSignInVersion,
+    OFFCHAIN_SIGN_IN_VERSION,
+    publicKeyMatches,
+    verifySignInOutputFormat,
+} from './harden';
 import { isWalletWarmingUp } from './status';
 import type {
     WalletActionOptions,
@@ -966,6 +975,31 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
         // no-op that never tears down an existing connection.
         const signInFeature = getWalletFeature(uiWallet, SolanaSignIn) as SolanaSignInFeature[typeof SolanaSignIn];
 
+        // Reject `useOffchainMessage` before prompting the user if it can't
+        // succeed: only version 1 offchain messages are supported, and a wallet
+        // that predates version 1.1.0 of the feature would ignore the option
+        // and sign the plain text.
+        const offchainMessageConfig = input.useOffchainMessage;
+        const useOffchainMessage = !!offchainMessageConfig;
+        if (offchainMessageConfig) {
+            const { messageVersion } = offchainMessageConfig;
+            if (messageVersion !== 1) {
+                throw new SolanaError(SOLANA_ERROR__OFFCHAIN_MESSAGE__VERSION_NUMBER_NOT_SUPPORTED, {
+                    unsupportedVersion: Number(messageVersion),
+                });
+            }
+            // Read the version once, so the value checked is the value reported.
+            const { version } = signInFeature;
+            if (!isOffchainSignInVersion(version)) {
+                throw new SolanaError(SOLANA_ERROR__WALLET__FEATURE_VERSION_UNSUPPORTED, {
+                    actualVersion: String(version),
+                    featureName: SolanaSignIn,
+                    requiredVersion: OFFCHAIN_SIGN_IN_VERSION,
+                    walletName: uiWallet.name,
+                });
+            }
+        }
+
         userHasSelected = true;
         cancelReconnect();
         const generation = ++connectGeneration;
@@ -978,40 +1012,70 @@ export function createWalletStore(config: WalletPluginConfig): WalletStore {
             // with an `AbortError` (matching the abort-signal contract) so the
             // superseded call settles in the standard, ignorable way while the
             // newer request owns the connection.
-            if (generation !== connectGeneration) {
-                throw new DOMException('Wallet sign-in was superseded by a newer connect or sign-in', 'AbortError');
-            }
+            const throwIfSuperseded = () => {
+                if (generation !== connectGeneration) {
+                    throw new DOMException('Wallet sign-in was superseded by a newer connect or sign-in', 'AbortError');
+                }
+            };
+            // Check before reading the output, so a superseded call rejects
+            // with an `AbortError` whatever the wallet returned.
+            throwIfSuperseded();
 
-            // The wallet may have unregistered (or dropped a required
-            // feature/chain) while its sign-in prompt was open. Throw rather than
-            // resolving while the store is left connected to no wallet (or a
-            // different one); the `catch` below reverts to any prior connection.
-            if (!isWalletStillAvailable(uiWallet)) {
-                throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signIn' });
-            }
-
-            // Set up full connection state using the account from the sign-in response.
             // Read the wallet's account once, so the values checked are the
             // values used.
             const { address: signedInAddress, publicKey: signedInPublicKey } = result.account;
-            const refreshedWallet = refreshUiWallet(uiWallet);
-            const activeAccount = refreshedWallet.accounts.find(a => a.address === signedInAddress);
 
-            // The wallet signed in with an account it doesn't expose (or whose
-            // public key doesn't encode its address, so was dropped), or with a
-            // different public key than the account it exposes for that
-            // address. Apps verify the sign-in signature against the output's
-            // `publicKey`, so a mismatch would let a signature by one key pass as
-            // proof of another account. Throw so the failure surfaces as a
-            // rejection; the `catch` reverts to any prior connection.
-            if (!activeAccount || !publicKeyMatches(signedInPublicKey, activeAccount.publicKey)) {
-                throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signIn' });
-            }
+            // Checks that this sign-in can still connect, and resolves the
+            // account it signed in with. Run again after any further await.
+            const resolveSignedInConnection = () => {
+                throwIfSuperseded();
 
+                // The wallet may have unregistered (or dropped a required
+                // feature/chain) while its sign-in prompt was open. Throw rather
+                // than resolving while the store is left connected to no wallet
+                // (or a different one); the `catch` below reverts to any prior
+                // connection.
+                if (!isWalletStillAvailable(uiWallet)) {
+                    throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signIn' });
+                }
+
+                const refreshedWallet = refreshUiWallet(uiWallet);
+                const activeAccount = refreshedWallet.accounts.find(a => a.address === signedInAddress);
+
+                // The wallet signed in with an account it doesn't expose (or
+                // whose public key doesn't encode its address, so was dropped),
+                // or with a different public key than the account it exposes for
+                // that address. Apps verify the sign-in signature against the
+                // output's `publicKey`, so a mismatch would let a signature by
+                // one key pass as proof of another account. Throw so the failure
+                // surfaces as a rejection; the `catch` reverts to any prior
+                // connection.
+                if (!activeAccount || !publicKeyMatches(signedInPublicKey, activeAccount.publicKey)) {
+                    throw new SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED, { operation: 'signIn' });
+                }
+                return { activeAccount, refreshedWallet };
+            };
+
+            const { activeAccount: signedInAccount } = resolveSignedInConnection();
+
+            // Verify an offchain message output (requested, or reported by the
+            // wallet), keeping copies of the verified bytes.
+            const verifiedFormat = await verifySignInOutputFormat(
+                result,
+                useOffchainMessage,
+                signedInAccount.address,
+                uiWallet.name,
+            );
+
+            // Verification awaited, so check again before connecting.
+            const { activeAccount, refreshedWallet } = resolveSignedInConnection();
             setConnected(activeAccount, refreshedWallet);
-            // Return the hardened account rather than the wallet's own, so the
-            // app never sees an unverified `publicKey`.
-            return { ...result, account: activeAccount };
+            // Return our own copies of the account and the message format,
+            // which we have checked, rather than the wallet's. Leave out the
+            // message format if the wallet didn't give one.
+            const output = { ...result, ...verifiedFormat, account: activeAccount };
+            if (!verifiedFormat.signedMessageFormat) Reflect.deleteProperty(output, 'signedMessageFormat');
+            return output;
         } catch (error) {
             if (generation === connectGeneration) {
                 revertToPreviousConnectionOrDisconnect();

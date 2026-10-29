@@ -174,6 +174,10 @@ export const supportedTransactionVersions: {
     'solana:signTransaction': ['legacy', 0],
 };
 
+// Version reported by the `solana:signIn` feature mock. Version `1.1.0` and
+// later support `useOffchainMessage`; reset in `beforeEach`.
+export const signInFeature: { version: unknown } = { version: '1.0.0' };
+
 // When set, the transaction-signing feature mocks throw this instead of
 // resolving. Simulates a malformed wallet whose account advertises a feature
 // the wallet itself does not implement, which is what makes the real
@@ -200,7 +204,7 @@ function resolveFeatureImpl(feature: IdentifierString, walletName?: string): unk
         };
     }
     if (feature === 'solana:signIn') {
-        return { signIn: signInMock, version: '1.0.0' };
+        return { signIn: signInMock, version: signInFeature.version };
     }
     if (feature === 'solana:signMessage') {
         return { signMessage: signMessageMock, version: '1.0.0' };
@@ -324,6 +328,7 @@ beforeEach(() => {
     supportedTransactionVersions['solana:signAndSendTransaction'] = ['legacy', 0];
     supportedTransactionVersions['solana:signTransaction'] = ['legacy', 0];
     transactionFeatureFailure.error = null;
+    signInFeature.version = '1.0.0';
     eventListenerCleanup = vi.fn<() => void>();
 });
 

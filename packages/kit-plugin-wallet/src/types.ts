@@ -373,11 +373,38 @@ export type WalletNamespace = {
      * Like {@link connect}, a failed sign-in to a different wallet rejects and
      * leaves any existing connection in place rather than disconnecting it.
      *
+     * Pass `useOffchainMessage: { messageVersion: 1 }` to have the wallet sign
+     * the SIWS text wrapped in a version 1 Solana offchain message, which
+     * hardware wallets can sign. Only wallets with version `1.1.0` or a later
+     * `1.x` version of `solana:signIn` support this; check with
+     * {@link supportsSignInWithOffchainMessage}. The plugin verifies the
+     * wallet's offchain message before resolving: it must be the canonical
+     * encoding of a version 1 offchain message whose only required signer is
+     * the signed-in account, and the signature must be valid for it. The same
+     * checks apply whenever the wallet reports an offchain message in
+     * `signedMessageFormat`, even if one wasn't requested. The SIWS text inside
+     * is not checked against `input`; verify it as you would a plain sign-in.
+     *
      * @returns The wallet's sign-in output, once the connection is established.
      *   Its `account` is the plugin's verified copy of the connected account,
-     *   not the wallet's own object.
+     *   not the wallet's own object. For an offchain message, `signedMessage`
+     *   is the full offchain message, `signedMessageFormat` is always
+     *   `{ kind: 'offchainMessage', messageVersion: 1 }` (even if the wallet
+     *   left it out, which the feature allows), and both `signedMessage` and
+     *   `signature` are copies of the verified bytes.
      * @throws `WalletStandardError(WALLET_STANDARD_ERROR__FEATURES__WALLET_ACCOUNT_FEATURE_UNIMPLEMENTED)`
      *   if the wallet does not support `solana:signIn`.
+     * @throws `SolanaError(SOLANA_ERROR__OFFCHAIN_MESSAGE__VERSION_NUMBER_NOT_SUPPORTED)`
+     *   if `input.useOffchainMessage.messageVersion` is not `1`, before the
+     *   wallet is called.
+     * @throws `SolanaError(SOLANA_ERROR__WALLET__FEATURE_VERSION_UNSUPPORTED)`
+     *   if `input.useOffchainMessage` is set and the wallet's `solana:signIn`
+     *   feature is older than version `1.1.0`, before the wallet is called.
+     *   Any existing connection is left in place.
+     * @throws `SolanaError(SOLANA_ERROR__WALLET__INVALID_SIGN_IN_OUTPUT)` if
+     *   `input.useOffchainMessage` is set, or the wallet reports an offchain
+     *   message, and the wallet's output is not a version 1 offchain message
+     *   signed by the signed-in account.
      * @throws `SolanaError(SOLANA_ERROR__WALLET__NOT_CONNECTED)` if the wallet
      *   unregisters (or drops a required feature/chain) while its sign-in prompt
      *   is open, or signs in with an account it does not expose (or with a
@@ -390,6 +417,16 @@ export type WalletNamespace = {
      * @throws `options.abortSignal.reason` if the signal is already aborted
      *   when the action is called. Aborts after the wallet call has been
      *   dispatched do not take effect.
+     *
+     * @example
+     * ```ts
+     * const output = await client.wallet.signIn(wallet, {
+     *     domain: 'example.com',
+     *     useOffchainMessage: { messageVersion: 1 },
+     * });
+     * ```
+     *
+     * @see {@link supportsSignInWithOffchainMessage}
      */
     signIn: (wallet: UiWallet, input: SolanaSignInInput, options?: WalletActionOptions) => Promise<SolanaSignInOutput>;
 
