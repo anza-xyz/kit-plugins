@@ -111,7 +111,8 @@ export type SignerFromFileConfig = {
      * When `true` and no file exists at the given path, a new keypair is generated and
      * written there (using `solana-keygen`'s JSON format and `0600` permissions) before
      * being loaded. Useful for local scripts that should bootstrap their own wallet on the
-     * first run. Existing files are never overwritten.
+     * first run. Existing files are never overwritten. Concurrent calls creating the same
+     * file are not supported.
      *
      * @defaultValue `false`
      */
@@ -121,11 +122,7 @@ export type SignerFromFileConfig = {
 async function getKeyPairSignerFromFile(rawPath: string, config: SignerFromFileConfig) {
     const path = expandHomeDir(rawPath);
     if (config.createIfMissing && !existsSync(path)) {
-        try {
-            await writeKeyPairSigner(await generateKeyPairSigner(true), path);
-        } catch (error) {
-            if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
-        }
+        await writeKeyPairSigner(await generateKeyPairSigner(true), path);
     }
     const bytes = JSON.parse(readFileSync(path, 'utf-8')) as number[];
     return await createKeyPairSignerFromBytes(new Uint8Array(bytes));
