@@ -28,7 +28,7 @@ export function getBuildConfig(options: BuildOptions): TsupConfig {
                 'process.env.NODE_ENV': 'process.env.NODE_ENV',
             };
         },
-        external: ['node:fs', 'node:path'],
+        external: ['node:fs', 'node:os', 'node:path'],
         format,
         name: platform,
         outExtension({ format }) {
@@ -49,7 +49,7 @@ export function getBuildConfig(options: BuildOptions): TsupConfig {
                 // This prevents tsup/Rollup from keeping bare `import 'fs'` in browser/RN builds.
                 // @see https://github.com/anza-xyz/kit-plugins/pull/95
                 const bare = id.startsWith('node:') ? id.slice(5) : id;
-                return !['fs', 'path'].includes(bare);
+                return !['fs', 'os', 'path'].includes(bare);
             },
         },
     };

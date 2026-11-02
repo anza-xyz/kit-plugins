@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 
 import { createKeyPairSignerFromBytes } from '@solana/kit';
 
@@ -94,6 +95,16 @@ export function identityFromFile(path: string) {
 }
 
 async function getKeyPairSignerFromFile(path: string) {
-    const bytes = JSON.parse(readFileSync(path, 'utf-8')) as number[];
+    const bytes = JSON.parse(readFileSync(expandHomeDir(path), 'utf-8')) as number[];
     return await createKeyPairSignerFromBytes(new Uint8Array(bytes));
+}
+
+// Node's `fs` does not expand `~`, so `~/.config/solana/id.json` would otherwise be read relative to the cwd.
+function expandHomeDir(path: string): string {
+    if (!/^~(?=$|[\\/])/.test(path)) return path;
+    const home = homedir();
+    if (!home) {
+        throw new Error(`Cannot expand \`~\` in \`${path}\`: the home directory could not be determined.`);
+    }
+    return home + path.slice(1);
 }

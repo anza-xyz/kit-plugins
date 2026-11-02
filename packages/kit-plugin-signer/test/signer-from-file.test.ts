@@ -1,7 +1,15 @@
+import { homedir } from 'node:os';
+import { resolve } from 'node:path';
+
 import { createClient, KeyPairSigner } from '@solana/kit';
-import { describe, expect, expectTypeOf, it } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 import { identityFromFile, payerFromFile, signerFromFile } from '../src';
+
+vi.mock('node:os', async () => {
+    const actual = await vi.importActual<typeof import('node:os')>('node:os');
+    return { ...actual, homedir: vi.fn(actual.homedir) };
+});
 
 const MOCK_KEYPAIR_PATH = 'test/mock_payer.json';
 const EXPECTED_ADDRESS = '3b7YkAKJ9H2qAAaQp3xYeTWguN9Cha52SegAZLZUWQsZ';
@@ -17,6 +25,24 @@ describe('signerFromFile', () => {
             expectTypeOf(client.payer).toEqualTypeOf<KeyPairSigner>();
             expect(client.payer.address).toBe(EXPECTED_ADDRESS);
             expect(client.identity.address).toBe(EXPECTED_ADDRESS);
+        });
+
+        it('expands a leading `~` to the home directory', async () => {
+            vi.stubEnv('HOME', resolve('test'));
+            vi.stubEnv('USERPROFILE', resolve('test'));
+            try {
+                const client = await createClient().use(signerFromFile('~/mock_payer.json'));
+                expect(client.payer.address).toBe(EXPECTED_ADDRESS);
+            } finally {
+                vi.unstubAllEnvs();
+            }
+        });
+
+        it('throws when `~` cannot be expanded because the home directory is unknown', async () => {
+            vi.mocked(homedir).mockReturnValueOnce('');
+            await expect(createClient().use(signerFromFile('~/mock_payer.json'))).rejects.toThrow(
+                'Cannot expand `~` in `~/mock_payer.json`: the home directory could not be determined.',
+            );
         });
     } else {
         it('throws an error when used in non-Node.js environments', () => {
