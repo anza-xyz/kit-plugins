@@ -21,7 +21,7 @@
         "oxlint-tsgolint": "^7.0.2006",
         "rimraf": "6.1.4",
         "tsup": "^9.0.0",
-        "turbo": "^2.11.10",
+        "turbo": "^2.11.11",
         "typescript": "^7.0.2",
         "vitest": "^5.1.0",
         "ws": "^8.22.2"
