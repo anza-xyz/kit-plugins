@@ -16,7 +16,7 @@
         "@types/node": "^26",
         "agadoo": "^3.0.0",
         "happy-dom": "^21.0.4",
-        "oxfmt": "^0.79.0",
+        "oxfmt": "^0.80.0",
         "oxlint": "^1.94.0",
         "oxlint-tsgolint": "^7.0.2008",
         "rimraf": "6.1.4",
